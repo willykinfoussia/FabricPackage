@@ -10,6 +10,8 @@
 - **Auto-detected SparkSession** — uses `SparkSession.builder.getOrCreate()`, works seamlessly inside Fabric notebooks
 - **Auto-detected format** on read — tries Delta → Parquet → CSV automatically
 - **Delta merge (upsert)** — one-liner upsert into any Lakehouse Delta table
+- **Generic data cleaning** — standard cleaning with one helper function
+- **Data quality scan** — detect nulls, blank strings, duplicates, and naming collisions
 - **Built-in logging** — every operation logs its resolved path, detected format, and row/column count
 
 ---
@@ -74,6 +76,41 @@ ft.merge_lakehouse(
 )
 ```
 
+### Clean data (generic)
+
+```python
+clean_df = ft.clean_data(df)
+```
+
+By default it:
+- normalizes columns to unique `snake_case`
+- trims string values
+- converts blank strings to `null`
+- removes exact duplicates
+- drops rows where all fields are `null`
+
+### Scan data quality issues
+
+```python
+report = ft.scan_data_errors(df, include_samples=True)
+
+print(report["duplicate_row_count"])
+print(report["null_counts"])
+```
+
+### Read -> clean -> write in one call
+
+```python
+clean_df = ft.clean_and_write_data(
+    source_lakehouse_name="RawLakehouse",
+    source_relative_path="sales/raw",
+    target_lakehouse_name="CuratedLakehouse",
+    target_relative_path="sales/clean",
+    mode="overwrite",
+    partition_by=["year"],  # optional
+)
+```
+
 With explicit column mappings:
 
 ```python
@@ -116,6 +153,9 @@ ft.write_warehouse(
 | `read_lakehouse(lakehouse_name, relative_path, spark=None)` | Read a dataset — auto-detects Delta / Parquet / CSV |
 | `write_lakehouse(df, lakehouse_name, relative_path, mode, partition_by, format, spark=None)` | Write a DataFrame (default: Delta, overwrite) |
 | `merge_lakehouse(source_df, lakehouse_name, relative_path, merge_condition, update_set, insert_set, spark=None)` | Upsert via Delta merge |
+| `clean_data(df, drop_duplicates, drop_all_null_rows)` | Apply standard generic cleaning to a DataFrame |
+| `scan_data_errors(df, include_samples)` | Report common data-quality issues |
+| `clean_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, mode, partition_by, spark=None)` | Read, clean, and write in one helper |
 
 ### Warehouse
 

@@ -8,14 +8,13 @@ the warehouse display name through ``notebookutils``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
+
+from pyspark.sql import DataFrame, SparkSession
 
 from fabrictools._logger import log
 from fabrictools._paths import get_warehouse_jdbc_url
 from fabrictools._spark import get_spark
-
-if TYPE_CHECKING:
-    from pyspark.sql import DataFrame, SparkSession
 
 # The JDBC driver class bundled with Fabric / Azure Databricks runtimes.
 _JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
@@ -27,8 +26,8 @@ _JDBC_DRIVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
 def read_warehouse(
     warehouse_name: str,
     query: str,
-    spark: Optional["SparkSession"] = None,
-) -> "DataFrame":
+    spark: Optional[SparkSession] = None,
+) -> DataFrame:
     """
     Execute a SQL query against a Fabric Warehouse and return the result.
 
@@ -74,12 +73,12 @@ def read_warehouse(
 
 
 def write_warehouse(
-    df: "DataFrame",
+    df: DataFrame,
     warehouse_name: str,
     table: str,
     mode: str = "overwrite",
     batch_size: int = 10_000,
-    spark: Optional["SparkSession"] = None,
+    spark: Optional[SparkSession] = None,
 ) -> None:
     """
     Write a DataFrame to a table in a Fabric Warehouse via JDBC.

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession
 
 
-def get_spark() -> "SparkSession":
+def get_spark() -> SparkSession:
     """
     Return the active SparkSession, creating one if necessary.
 
@@ -20,6 +17,4 @@ def get_spark() -> "SparkSession":
     -------
     SparkSession
     """
-    from pyspark.sql import SparkSession  # noqa: PLC0415
-
     return SparkSession.builder.getOrCreate()

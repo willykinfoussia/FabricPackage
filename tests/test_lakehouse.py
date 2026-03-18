@@ -7,9 +7,11 @@ are mocked so the tests run without a live Spark / Fabric environment.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pyspark.sql.types import IntegerType, StringType
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -196,3 +198,126 @@ class TestMergeLakehouse:
             )
 
             merge_builder.execute.assert_called_once()
+
+
+# ── data_quality helpers ───────────────────────────────────────────────────────
+
+
+class TestDataCleaningAndQuality:
+    def test_clean_data_applies_standard_transforms(self):
+        """clean_data should rename, trim/nullify strings, deduplicate, and drop all-null rows."""
+        source_df = MagicMock()
+        source_df.columns = ["Order ID", " Customer Name ", "Amount"]
+        source_df.count.return_value = 15
+        source_df.schema.fields = [
+            SimpleNamespace(name="order_id", dataType=IntegerType()),
+            SimpleNamespace(name="customer_name", dataType=StringType()),
+            SimpleNamespace(name="amount", dataType=IntegerType()),
+        ]
+
+        cleaned_df = MagicMock()
+        cleaned_df.columns = ["order_id", "customer_name", "amount"]
+        cleaned_df.count.return_value = 12
+        cleaned_df.schema.fields = source_df.schema.fields
+        source_df.toDF.return_value = cleaned_df
+        cleaned_df.withColumn.return_value = cleaned_df
+        cleaned_df.dropDuplicates.return_value = cleaned_df
+        cleaned_df.dropna.return_value = cleaned_df
+
+        from fabrictools.data_quality import clean_data
+
+        result = clean_data(source_df)
+
+        source_df.toDF.assert_called_once_with("order_id", "customer_name", "amount")
+        cleaned_df.withColumn.assert_called_once()
+        cleaned_df.dropDuplicates.assert_called_once()
+        cleaned_df.dropna.assert_called_once_with(how="all")
+        assert result is cleaned_df
+
+    def test_scan_data_errors_reports_counts_and_collisions(self):
+        """scan_data_errors should report nulls, blanks, duplicates, and column-name collisions."""
+        df = MagicMock()
+        df.columns = ["Order ID", "order-id", "customer_name"]
+        df.count.return_value = 10
+        df.schema.fields = [
+            SimpleNamespace(name="Order ID", dataType=IntegerType()),
+            SimpleNamespace(name="order-id", dataType=StringType()),
+            SimpleNamespace(name="customer_name", dataType=StringType()),
+        ]
+
+        null_counts_row = MagicMock()
+        null_counts_row.asDict.return_value = {
+            "Order ID": 1,
+            "order-id": 0,
+            "customer_name": 2,
+        }
+        blank_counts_row = MagicMock()
+        blank_counts_row.asDict.return_value = {
+            "order-id": 3,
+            "customer_name": 0,
+        }
+        agg_null = MagicMock()
+        agg_null.collect.return_value = [null_counts_row]
+        agg_blank = MagicMock()
+        agg_blank.collect.return_value = [blank_counts_row]
+        df.agg.side_effect = [agg_null, agg_blank]
+
+        distinct_df = MagicMock()
+        distinct_df.count.return_value = 8
+        df.distinct.return_value = distinct_df
+
+        sample_row = MagicMock()
+        sample_row.asDict.return_value = {"Order ID": 1, "order-id": "A-1", "customer_name": "Acme"}
+        limited_df = MagicMock()
+        limited_df.collect.return_value = [sample_row]
+        df.limit.return_value = limited_df
+
+        from fabrictools.data_quality import scan_data_errors
+
+        report = scan_data_errors(df, include_samples=True)
+
+        assert report["row_count"] == 10
+        assert report["column_count"] == 3
+        assert report["duplicate_row_count"] == 2
+        assert report["null_counts"]["customer_name"] == 2
+        assert report["blank_string_counts"]["order-id"] == 3
+        assert report["normalized_name_collisions"] == {"order_id": ["Order ID", "order-id"]}
+        assert len(report["sample_rows"]) == 1
+
+    @patch("fabrictools.data_quality.write_lakehouse")
+    @patch("fabrictools.data_quality.clean_data")
+    @patch("fabrictools.data_quality.read_lakehouse")
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_data_orchestration(
+        self, mock_get_spark, mock_read, mock_clean, mock_write
+    ):
+        """clean_and_write_data should orchestrate read -> clean -> write."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+        source_df = MagicMock()
+        cleaned_df = MagicMock()
+        mock_read.return_value = source_df
+        mock_clean.return_value = cleaned_df
+
+        from fabrictools.data_quality import clean_and_write_data
+
+        result = clean_and_write_data(
+            source_lakehouse_name="RawLakehouse",
+            source_relative_path="sales/raw",
+            target_lakehouse_name="CuratedLakehouse",
+            target_relative_path="sales/clean",
+            mode="append",
+            partition_by=["year"],
+        )
+
+        mock_read.assert_called_once_with("RawLakehouse", "sales/raw", spark=spark)
+        mock_clean.assert_called_once_with(source_df)
+        mock_write.assert_called_once_with(
+            cleaned_df,
+            lakehouse_name="CuratedLakehouse",
+            relative_path="sales/clean",
+            mode="append",
+            partition_by=["year"],
+            spark=spark,
+        )
+        assert result is cleaned_df

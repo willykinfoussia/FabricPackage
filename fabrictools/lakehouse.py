@@ -8,15 +8,13 @@ display name using ``notebookutils``, and obtain the SparkSession via
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
+
+from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
 
 from fabrictools._logger import log
 from fabrictools._paths import get_lakehouse_abfs_path
 from fabrictools._spark import get_spark
-
-if TYPE_CHECKING:
-    from pyspark.sql import DataFrame, SparkSession
-
 
 # ── Read ─────────────────────────────────────────────────────────────────────
 
@@ -24,8 +22,8 @@ if TYPE_CHECKING:
 def read_lakehouse(
     lakehouse_name: str,
     relative_path: str,
-    spark: Optional["SparkSession"] = None,
-) -> "DataFrame":
+    spark: Optional[SparkSession] = None,
+) -> DataFrame:
     """
     Read a dataset from a Fabric Lakehouse.
 
@@ -66,7 +64,7 @@ def read_lakehouse(
     return df
 
 
-def _try_read_formats(spark: "SparkSession", full_path: str) -> "DataFrame":
+def _try_read_formats(spark: SparkSession, full_path: str) -> DataFrame:
     """Attempt Delta → Parquet → CSV, return the first successful DataFrame."""
     # Delta (preferred in Fabric)
     try:
@@ -105,13 +103,13 @@ def _try_read_formats(spark: "SparkSession", full_path: str) -> "DataFrame":
 
 
 def write_lakehouse(
-    df: "DataFrame",
+    df: DataFrame,
     lakehouse_name: str,
     relative_path: str,
     mode: str = "overwrite",
     partition_by: Optional[List[str]] = None,
     format: str = "delta",
-    spark: Optional["SparkSession"] = None,
+    spark: Optional[SparkSession] = None,
 ) -> None:
     """
     Write a DataFrame to a Fabric Lakehouse as a Delta table (default).
@@ -159,13 +157,13 @@ def write_lakehouse(
 
 
 def merge_lakehouse(
-    source_df: "DataFrame",
+    source_df: DataFrame,
     lakehouse_name: str,
     relative_path: str,
     merge_condition: str,
     update_set: Optional[dict] = None,
     insert_set: Optional[dict] = None,
-    spark: Optional["SparkSession"] = None,
+    spark: Optional[SparkSession] = None,
 ) -> None:
     """
     Upsert (merge) a DataFrame into an existing Delta table in a Lakehouse.
