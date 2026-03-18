@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fabrictools"
-version = "0.1.1"
+dynamic = ["version"]
 description = "User-friendly PySpark helpers for Microsoft Fabric Lakehouses and Warehouses"
 readme = "README.md"
 license = { text = "MIT" }
@@ -50,6 +50,9 @@ Issues = "https://github.com/willykinfoussia/FabricPackage/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fabrictools*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "fabrictools._version.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

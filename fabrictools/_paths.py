@@ -40,6 +40,7 @@ def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
 
         lh = notebookutils.lakehouse.get(lakehouse_name)
+        log(f"Lakehouse properties: {lh.properties}")
         path: str = lh.properties.abfsPath
         log(f"Resolved Lakehouse '{lakehouse_name}' → {path}")
         return path
