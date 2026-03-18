@@ -12,6 +12,24 @@ from __future__ import annotations
 from fabrictools._logger import log
 
 
+def _read_property(container: object, key: str) -> str:
+    """
+    Read a property from an object or a dictionary-like container.
+
+    Fabric runtime objects can expose properties either as attributes
+    (``obj.key``) or as dictionary items (``obj["key"]``).
+    """
+    if isinstance(container, dict):
+        value = container.get(key)
+    else:
+        value = getattr(container, key, None)
+
+    if value is None:
+        raise AttributeError(f"Missing property '{key}'")
+
+    return str(value)
+
+
 def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
     """
     Return the full ABFS path for a Fabric Lakehouse.
@@ -40,8 +58,11 @@ def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
 
         lh = notebookutils.lakehouse.get(lakehouse_name)
-        log(f"Lakehouse properties: {lh.properties}")
-        path: str = lh.properties.abfsPath
+        properties = (
+            lh.get("properties", {}) if isinstance(lh, dict) else lh.properties
+        )
+        log(f"Lakehouse properties: {properties}")
+        path = _read_property(properties, "abfsPath")
         log(f"Resolved Lakehouse '{lakehouse_name}' → {path}")
         return path
     except ImportError as exc:
@@ -83,8 +104,11 @@ def get_warehouse_jdbc_url(warehouse_name: str) -> str:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
 
         wh = notebookutils.warehouse.get(warehouse_name)
-        sql_endpoint: str = wh.properties.connectionString
-        database: str = wh.properties.databaseName
+        properties = (
+            wh.get("properties", {}) if isinstance(wh, dict) else wh.properties
+        )
+        sql_endpoint = _read_property(properties, "connectionString")
+        database = _read_property(properties, "databaseName")
         jdbc_url = (
             f"jdbc:sqlserver://{sql_endpoint};"
             f"database={database};"
