@@ -15,6 +15,8 @@
 - **Generic data cleaning** — standard cleaning with one helper function
 - **Silver metadata enrichment** — add ingestion/source metadata + `year/month/day` partitions
 - **Data quality scan** — detect nulls, blank strings, duplicates, and naming collisions
+- **Bulk lakehouse cleaning** — iterate all tables and copy cleaned outputs to another Lakehouse
+- **Dimension generators** — build `dimension_date`, `dimension_country`, and `dimension_city` with Lakehouse/Warehouse writes
 - **Built-in logging** — every operation logs its resolved path, detected format, and row/column count
 
 ---
@@ -157,6 +159,64 @@ clean_df = ft.clean_and_write_data(
 When `partition_by` is omitted, the helper writes with default partitions:
 `["year", "month", "day"]`.
 
+### Bulk clean all Lakehouse tables
+
+```python
+bulk_result = ft.clean_and_write_all_tables(
+    source_lakehouse_name="RawLakehouse",
+    target_lakehouse_name="CuratedLakehouse",
+    mode="overwrite",
+    include_schemas=["dbo", "sales"],   # optional
+    exclude_tables=["dbo.audit_log"],   # optional: accepts "table" or "schema.table"
+    continue_on_error=True,             # optional
+)
+
+print(bulk_result["successful_tables"], bulk_result["failed_tables"])
+```
+
+The helper scans `Tables/<schema>/<table>` in the source Lakehouse and writes to
+the same relative path in the target Lakehouse.
+
+You can also drive the orchestration with an explicit `TABLES_CONFIG`:
+
+```python
+TABLES_CONFIG = [
+    {
+        "bronze_path": "Tables/dbo/fact_sale",
+        "silver_table": "Tables/dbo/fact_sale",
+        "partition_by": [],
+        "mode": "overwrite",  # overwrite | append | merge
+    },
+    {
+        "bronze_path": "Tables/dbo/dimension_customer",
+        "silver_table": "Tables/dbo/dimension_customer",
+        "partition_by": [],
+        "mode": "append",
+    },
+    {
+        "bronze_path": "Tables/dbo/fact_sale_updates",
+        "silver_table": "Tables/dbo/fact_sale",
+        "partition_by": [],
+        "mode": "merge",
+        "merge_condition": "src.sale_id = tgt.sale_id",  # required when mode='merge'
+    },
+]
+
+bulk_result = ft.clean_and_write_all_tables(
+    source_lakehouse_name="RawLakehouse",
+    target_lakehouse_name="CuratedLakehouse",
+    tables_config=TABLES_CONFIG,
+    continue_on_error=True,
+)
+```
+
+`tables_config` keys:
+- `bronze_path` (required): source relative path in Lakehouse.
+- `silver_table` (required): target relative path in Lakehouse.
+- `partition_by` (optional): partition columns used by overwrite/append writes.
+- `mode` (required): `overwrite`, `append`, or `merge`.
+- `merge_condition` (required when `mode="merge"`): join condition used by Delta merge.
+
 With explicit column mappings:
 
 ```python
@@ -188,6 +248,30 @@ ft.write_warehouse(
 )
 ```
 
+### Generate dimension tables
+
+```python
+dims = ft.generate_dimensions(
+    lakehouse_name="CuratedLakehouse",
+    warehouse_name="MyWarehouse",
+    include_date=True,
+    include_country=True,
+    include_city=True,
+    # Optional range for dimension_date; defaults to rolling -10y / +2y
+    start_date="2015-01-01",
+    end_date="2030-12-31",
+    # Optional controls for countrystatecity-countries source
+    countries_limit=None,
+    include_states_metadata=True,
+    fail_on_source_error=True,
+)
+
+# Access generated DataFrames
+dims["dimension_date"].show(5)
+dims["dimension_country"].show(5)
+dims["dimension_city"].show(5)
+```
+
 ---
 
 ## API reference
@@ -203,6 +287,7 @@ ft.write_warehouse(
 | `add_silver_metadata(df, source_lakehouse_name, source_relative_path, source_layer, ingestion_timestamp_col, source_layer_col, source_path_col, year_col, month_col, day_col, spark=None)` | Add Silver metadata and date partition columns, with resolved source path |
 | `scan_data_errors(df, include_samples)` | Report common data-quality issues |
 | `clean_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, mode, partition_by, spark=None)` | Read, clean, add Silver metadata, and write in one helper |
+| `clean_and_write_all_tables(source_lakehouse_name, target_lakehouse_name, mode, partition_by, tables_config, include_schemas, exclude_tables, continue_on_error, spark=None)` | Discover tables or use config entries, then clean/write or merge per table |
 
 ### Warehouse
 
@@ -210,6 +295,15 @@ ft.write_warehouse(
 |---|---|
 | `read_warehouse(warehouse_name, query, spark=None)` | Run a SQL query, return a DataFrame |
 | `write_warehouse(df, warehouse_name, table, mode, batch_size, spark=None)` | Write to a Warehouse table via JDBC |
+
+### Dimensions
+
+| Function | Description |
+|---|---|
+| `build_dimension_date(start_date=None, end_date=None, spark=None)` | Build a date dimension DataFrame |
+| `build_dimension_country(countries_limit=None, fail_on_source_error=True, spark=None)` | Build country dimension from `countrystatecity-countries` |
+| `build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, spark=None)` | Build city dimension from `countrystatecity-countries` |
+| `generate_dimensions(lakehouse_name, warehouse_name, include_date, include_country, include_city, ...)` | Build and write selected dimensions to Lakehouse and Warehouse |
 
 ---
 

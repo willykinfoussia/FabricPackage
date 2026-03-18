@@ -8,7 +8,7 @@ are mocked so the tests run without a live Spark / Fabric environment.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from pyspark.sql.types import IntegerType, StringType
@@ -674,3 +674,320 @@ class TestDataCleaningAndQuality:
             partition_by=None,
             spark=spark,
         )
+
+    @patch("fabrictools.data_quality.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_list_lakehouse_table_paths_discovers_all_schemas(self, mock_abfs_path):
+        """_list_lakehouse_table_paths should scan Tables/<schema>/<table> across schemas."""
+        tables_root = f"{ABFS_BASE}/Tables"
+        dbo_path = f"{tables_root}/dbo"
+        sales_path = f"{tables_root}/sales"
+
+        fake_nb = MagicMock()
+        fake_nb.fs.ls.side_effect = lambda path: {
+            tables_root: [
+                SimpleNamespace(name="dbo/", path=f"{dbo_path}/"),
+                SimpleNamespace(name="sales/", path=f"{sales_path}/"),
+            ],
+            dbo_path: [
+                SimpleNamespace(name="customers/", path=f"{dbo_path}/customers/"),
+                SimpleNamespace(name="orders/", path=f"{dbo_path}/orders/"),
+            ],
+            sales_path: [
+                SimpleNamespace(name="invoices/", path=f"{sales_path}/invoices/"),
+            ],
+        }[path]
+
+        with patch.dict("sys.modules", {"notebookutils": fake_nb}):
+            from fabrictools.data_quality import _list_lakehouse_table_paths
+
+            discovered = _list_lakehouse_table_paths(
+                lakehouse_name=LH_NAME,
+                include_schemas=None,
+                exclude_tables=["customers", "sales.ignored"],
+            )
+
+        assert discovered == ["Tables/dbo/orders", "Tables/sales/invoices"]
+        mock_abfs_path.assert_called_once_with(LH_NAME)
+        assert fake_nb.fs.ls.call_args_list == [
+            call(tables_root),
+            call(dbo_path),
+            call(sales_path),
+        ]
+
+    @patch("fabrictools.data_quality.clean_and_write_data")
+    @patch(
+        "fabrictools.data_quality._list_lakehouse_table_paths",
+        return_value=["Tables/dbo/customers", "Tables/sales/invoices"],
+    )
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_all_tables_orchestrates_for_each_table(
+        self, mock_get_spark, mock_list_tables, mock_clean_and_write
+    ):
+        """clean_and_write_all_tables should call clean_and_write_data for each table path."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+
+        from fabrictools.data_quality import clean_and_write_all_tables
+
+        result = clean_and_write_all_tables(
+            source_lakehouse_name="RawLakehouse",
+            target_lakehouse_name="CuratedLakehouse",
+            mode="append",
+            partition_by=["_year"],
+            include_schemas=["dbo", "sales"],
+            exclude_tables=["dbo.ignored"],
+        )
+
+        mock_list_tables.assert_called_once_with(
+            lakehouse_name="RawLakehouse",
+            include_schemas=["dbo", "sales"],
+            exclude_tables=["dbo.ignored"],
+        )
+        assert mock_clean_and_write.call_args_list == [
+            call(
+                source_lakehouse_name="RawLakehouse",
+                source_relative_path="Tables/dbo/customers",
+                target_lakehouse_name="CuratedLakehouse",
+                target_relative_path="Tables/dbo/customers",
+                mode="append",
+                partition_by=["_year"],
+                spark=spark,
+            ),
+            call(
+                source_lakehouse_name="RawLakehouse",
+                source_relative_path="Tables/sales/invoices",
+                target_lakehouse_name="CuratedLakehouse",
+                target_relative_path="Tables/sales/invoices",
+                mode="append",
+                partition_by=["_year"],
+                spark=spark,
+            ),
+        ]
+        assert result["total_tables"] == 2
+        assert result["successful_tables"] == 2
+        assert result["failed_tables"] == 0
+        assert len(result["tables"]) == 2
+        assert result["failures"] == []
+
+    @patch("fabrictools.data_quality._list_lakehouse_table_paths", return_value=[])
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_all_tables_returns_empty_when_no_tables(
+        self, mock_get_spark, mock_list_tables
+    ):
+        """clean_and_write_all_tables should return an empty report when no table is found."""
+        mock_get_spark.return_value = MagicMock()
+
+        from fabrictools.data_quality import clean_and_write_all_tables
+
+        result = clean_and_write_all_tables(
+            source_lakehouse_name="RawLakehouse",
+            target_lakehouse_name="CuratedLakehouse",
+        )
+
+        mock_list_tables.assert_called_once()
+        assert result == {
+            "total_tables": 0,
+            "successful_tables": 0,
+            "failed_tables": 0,
+            "tables": [],
+            "failures": [],
+        }
+
+    @patch("fabrictools.data_quality.clean_and_write_data")
+    @patch(
+        "fabrictools.data_quality._list_lakehouse_table_paths",
+        return_value=["Tables/dbo/customers", "Tables/dbo/orders"],
+    )
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_all_tables_continue_on_error_collects_failures(
+        self, mock_get_spark, mock_list_tables, mock_clean_and_write
+    ):
+        """When continue_on_error=True, failures should be collected and processing continues."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+        mock_clean_and_write.side_effect = [None, RuntimeError("boom")]
+
+        from fabrictools.data_quality import clean_and_write_all_tables
+
+        result = clean_and_write_all_tables(
+            source_lakehouse_name="RawLakehouse",
+            target_lakehouse_name="CuratedLakehouse",
+            continue_on_error=True,
+        )
+
+        assert mock_clean_and_write.call_count == 2
+        assert result["total_tables"] == 2
+        assert result["successful_tables"] == 1
+        assert result["failed_tables"] == 1
+        assert result["tables"] == [
+            {
+                "source_relative_path": "Tables/dbo/customers",
+                "target_relative_path": "Tables/dbo/customers",
+                "mode": "overwrite",
+            }
+        ]
+        assert result["failures"] == [
+            {
+                "source_relative_path": "Tables/dbo/orders",
+                "target_relative_path": "Tables/dbo/orders",
+                "mode": "overwrite",
+                "error": "boom",
+            }
+        ]
+
+    @patch("fabrictools.data_quality._list_lakehouse_table_paths")
+    @patch("fabrictools.data_quality.clean_and_write_data")
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_all_tables_uses_tables_config_for_append_overwrite(
+        self, mock_get_spark, mock_clean_and_write, mock_list_tables
+    ):
+        """tables_config should drive per-table overwrite/append and bypass discovery."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+
+        from fabrictools.data_quality import clean_and_write_all_tables
+
+        tables_config = [
+            {
+                "bronze_path": "Tables/dbo/fact_sale",
+                "silver_table": "Tables/dbo/fact_sale",
+                "partition_by": [],
+                "mode": "overwrite",
+            },
+            {
+                "bronze_path": "Tables/dbo/dimension_customer",
+                "silver_table": "Tables/dbo/dimension_customer",
+                "partition_by": ["_year"],
+                "mode": "append",
+            },
+        ]
+
+        result = clean_and_write_all_tables(
+            source_lakehouse_name="RawLakehouse",
+            target_lakehouse_name="CuratedLakehouse",
+            tables_config=tables_config,
+        )
+
+        mock_list_tables.assert_not_called()
+        assert mock_clean_and_write.call_args_list == [
+            call(
+                source_lakehouse_name="RawLakehouse",
+                source_relative_path="Tables/dbo/fact_sale",
+                target_lakehouse_name="CuratedLakehouse",
+                target_relative_path="Tables/dbo/fact_sale",
+                mode="overwrite",
+                partition_by=[],
+                spark=spark,
+            ),
+            call(
+                source_lakehouse_name="RawLakehouse",
+                source_relative_path="Tables/dbo/dimension_customer",
+                target_lakehouse_name="CuratedLakehouse",
+                target_relative_path="Tables/dbo/dimension_customer",
+                mode="append",
+                partition_by=["_year"],
+                spark=spark,
+            ),
+        ]
+        assert result["total_tables"] == 2
+        assert result["successful_tables"] == 2
+        assert result["failed_tables"] == 0
+        assert result["tables"] == [
+            {
+                "source_relative_path": "Tables/dbo/fact_sale",
+                "target_relative_path": "Tables/dbo/fact_sale",
+                "mode": "overwrite",
+            },
+            {
+                "source_relative_path": "Tables/dbo/dimension_customer",
+                "target_relative_path": "Tables/dbo/dimension_customer",
+                "mode": "append",
+            },
+        ]
+
+    @patch("fabrictools.data_quality.merge_lakehouse")
+    @patch("fabrictools.data_quality.add_silver_metadata")
+    @patch("fabrictools.data_quality.clean_data")
+    @patch("fabrictools.data_quality.read_lakehouse")
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_all_tables_tables_config_merge_mode(
+        self,
+        mock_get_spark,
+        mock_read_lakehouse,
+        mock_clean_data,
+        mock_add_silver_metadata,
+        mock_merge_lakehouse,
+    ):
+        """tables_config mode=merge should route through merge_lakehouse."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+        source_df = MagicMock()
+        cleaned_df = MagicMock()
+        silver_df = MagicMock()
+        mock_read_lakehouse.return_value = source_df
+        mock_clean_data.return_value = cleaned_df
+        mock_add_silver_metadata.return_value = silver_df
+
+        from fabrictools.data_quality import clean_and_write_all_tables
+
+        result = clean_and_write_all_tables(
+            source_lakehouse_name="RawLakehouse",
+            target_lakehouse_name="CuratedLakehouse",
+            tables_config=[
+                {
+                    "bronze_path": "Tables/dbo/fact_sale",
+                    "silver_table": "Tables/dbo/fact_sale",
+                    "partition_by": [],
+                    "mode": "merge",
+                    "merge_condition": "src.sale_id = tgt.sale_id",
+                }
+            ],
+        )
+
+        mock_read_lakehouse.assert_called_once_with(
+            "RawLakehouse",
+            "Tables/dbo/fact_sale",
+            spark=spark,
+        )
+        mock_clean_data.assert_called_once_with(source_df)
+        mock_add_silver_metadata.assert_called_once_with(
+            cleaned_df,
+            source_lakehouse_name="RawLakehouse",
+            source_relative_path="Tables/dbo/fact_sale",
+            spark=spark,
+        )
+        mock_merge_lakehouse.assert_called_once_with(
+            source_df=silver_df,
+            lakehouse_name="CuratedLakehouse",
+            relative_path="Tables/dbo/fact_sale",
+            merge_condition="src.sale_id = tgt.sale_id",
+            spark=spark,
+        )
+        assert result["tables"] == [
+            {
+                "source_relative_path": "Tables/dbo/fact_sale",
+                "target_relative_path": "Tables/dbo/fact_sale",
+                "mode": "merge",
+            }
+        ]
+
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_all_tables_merge_requires_merge_condition(self, mock_get_spark):
+        """tables_config mode=merge should fail without merge_condition."""
+        mock_get_spark.return_value = MagicMock()
+
+        from fabrictools.data_quality import clean_and_write_all_tables
+
+        with pytest.raises(ValueError, match="requires 'merge_condition'"):
+            clean_and_write_all_tables(
+                source_lakehouse_name="RawLakehouse",
+                target_lakehouse_name="CuratedLakehouse",
+                tables_config=[
+                    {
+                        "bronze_path": "Tables/dbo/fact_sale",
+                        "silver_table": "Tables/dbo/fact_sale",
+                        "partition_by": [],
+                        "mode": "merge",
+                    }
+                ],
+            )

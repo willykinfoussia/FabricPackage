@@ -67,7 +67,6 @@ def read_lakehouse(
     failures: list[str] = []
     for candidate_relative_path in candidate_relative_paths:
         full_path = f"{base}/{candidate_relative_path}"
-        log(f"Reading Lakehouse '{lakehouse_name}' → {full_path}")
         try:
             df = _try_read_formats(_spark, full_path)
             if candidate_relative_path != relative_path:

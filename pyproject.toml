@@ -26,7 +26,9 @@ classifiers = [
 
 # pyspark and delta-spark are listed as optional because Microsoft Fabric
 # already provides them in its Spark runtime environment.
-dependencies = []
+dependencies = [
+    "countrystatecity-countries",
+]
 
 [project.optional-dependencies]
 spark = [
@@ -37,6 +39,7 @@ visualization = [
     "plotly>=5.0",
 ]
 dev = [
+    "countrystatecity-countries",
     "pyspark>=3.3",
     "delta-spark>=2.4",
     "plotly>=5.0",

@@ -15,8 +15,10 @@ from pyspark.sql import DataFrame, SparkSession, functions as F
 from pyspark.sql.types import StringType
 
 from fabrictools._logger import log
+from fabrictools._paths import get_lakehouse_abfs_path
 from fabrictools._spark import get_spark
 from fabrictools.lakehouse import (
+    merge_lakehouse,
     read_lakehouse,
     resolve_lakehouse_read_candidate,
     write_lakehouse,
@@ -192,7 +194,7 @@ def scan_data_errors(
     df: DataFrame,
     include_samples: bool = True,
     display_results: bool = True,
-) -> dict[str, Any]:
+) -> None:
     """
     Scan a DataFrame and return user-friendly data-quality artifacts.
 
@@ -370,7 +372,82 @@ def scan_data_errors(
         )
     else:
         log("  No quality issues detected.")
-    return report
+    #return report
+
+
+def _get_fs_entry_name(fs_entry: Any) -> str:
+    """Extract a clean directory/file name from a notebookutils.fs.ls entry."""
+    raw_name = getattr(fs_entry, "name", "")
+    if raw_name:
+        return str(raw_name).strip().strip("/")
+
+    raw_path = getattr(fs_entry, "path", "")
+    if raw_path:
+        return str(raw_path).strip().strip("/").split("/")[-1]
+
+    return ""
+
+
+def _list_lakehouse_table_paths(
+    lakehouse_name: str,
+    include_schemas: Optional[List[str]] = None,
+    exclude_tables: Optional[List[str]] = None,
+) -> List[str]:
+    """
+    List table relative paths from a Lakehouse as ``Tables/<schema>/<table>``.
+
+    Discovery is file-system based, by scanning ``<abfs>/Tables/<schema>/<table>``.
+    """
+    try:
+        import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
+    except ImportError as exc:
+        raise ValueError(
+            f"notebookutils is not available — are you running inside "
+            f"Microsoft Fabric? ({exc})"
+        ) from exc
+
+    included_schema_names = (
+        {schema_name.strip().lower() for schema_name in include_schemas}
+        if include_schemas
+        else None
+    )
+
+    excluded_table_names = {
+        table_name.strip().lower()
+        for table_name in (exclude_tables or [])
+    }
+
+    base = get_lakehouse_abfs_path(lakehouse_name)
+    tables_root = f"{base}/Tables"
+    discovered_table_paths: List[str] = []
+
+    for schema_entry in notebookutils.fs.ls(tables_root):
+        schema_name = _get_fs_entry_name(schema_entry)
+        if not schema_name:
+            continue
+        schema_name_lower = schema_name.lower()
+        if (
+            included_schema_names is not None
+            and schema_name_lower not in included_schema_names
+        ):
+            continue
+
+        schema_path = getattr(schema_entry, "path", f"{tables_root}/{schema_name}")
+        for table_entry in notebookutils.fs.ls(schema_path):
+            table_name = _get_fs_entry_name(table_entry)
+            if not table_name:
+                continue
+
+            qualified_table_name = f"{schema_name_lower}.{table_name.lower()}"
+            if (
+                table_name.lower() in excluded_table_names
+                or qualified_table_name in excluded_table_names
+            ):
+                continue
+
+            discovered_table_paths.append(f"Tables/{schema_name}/{table_name}")
+
+    return sorted(discovered_table_paths)
 
 
 def clean_and_write_data(
@@ -405,3 +482,207 @@ def clean_and_write_data(
         spark=_spark,
     )
     return silver_df
+
+
+def clean_and_write_all_tables(
+    source_lakehouse_name: str,
+    target_lakehouse_name: str,
+    mode: str = "overwrite",
+    partition_by: Optional[List[str]] = None,
+    tables_config: Optional[List[dict[str, Any]]] = None,
+    include_schemas: Optional[List[str]] = None,
+    exclude_tables: Optional[List[str]] = None,
+    continue_on_error: bool = False,
+    spark: Optional[SparkSession] = None,
+) -> dict[str, Any]:
+    """
+    Clean and replicate all discovered Lakehouse tables from source to target.
+
+    If ``tables_config`` is provided, each config entry drives one table job.
+    Otherwise, tables are discovered under ``Tables/<schema>/<table>`` in the
+    source Lakehouse and replicated with the same relative path in target.
+    """
+    supported_modes = {"overwrite", "append", "merge"}
+    _spark = spark or get_spark()
+
+    table_jobs: List[dict[str, Any]] = []
+    if tables_config is not None:
+        for entry_index, table_config in enumerate(tables_config, start=1):
+            if not isinstance(table_config, dict):
+                raise ValueError(
+                    f"tables_config[{entry_index}] must be a dict, got "
+                    f"{type(table_config).__name__}."
+                )
+
+            source_relative_path = str(table_config.get("bronze_path", "")).strip()
+            if not source_relative_path:
+                raise ValueError(
+                    f"tables_config[{entry_index}] is missing required key "
+                    f"'bronze_path'."
+                )
+
+            target_relative_path = str(table_config.get("silver_table", "")).strip()
+            if not target_relative_path:
+                raise ValueError(
+                    f"tables_config[{entry_index}] is missing required key "
+                    f"'silver_table'."
+                )
+
+            raw_mode = str(table_config.get("mode", "")).strip().lower()
+            if not raw_mode:
+                raise ValueError(
+                    f"tables_config[{entry_index}] is missing required key 'mode'."
+                )
+            if raw_mode not in supported_modes:
+                raise ValueError(
+                    f"tables_config[{entry_index}] has unsupported mode '{raw_mode}'. "
+                    f"Supported modes: overwrite, append, merge."
+                )
+
+            if "partition_by" in table_config:
+                raw_partition_by = table_config["partition_by"]
+                if raw_partition_by is None:
+                    effective_partition_by = None
+                elif isinstance(raw_partition_by, list):
+                    effective_partition_by = raw_partition_by
+                else:
+                    raise ValueError(
+                        f"tables_config[{entry_index}] key 'partition_by' must be "
+                        "a list or None."
+                    )
+            else:
+                effective_partition_by = partition_by
+
+            merge_condition = table_config.get("merge_condition")
+            if raw_mode == "merge" and not str(merge_condition or "").strip():
+                raise ValueError(
+                    f"tables_config[{entry_index}] mode='merge' requires "
+                    f"'merge_condition'."
+                )
+
+            table_jobs.append(
+                {
+                    "source_relative_path": source_relative_path,
+                    "target_relative_path": target_relative_path,
+                    "mode": raw_mode,
+                    "partition_by": effective_partition_by,
+                    "merge_condition": str(merge_condition).strip()
+                    if merge_condition is not None
+                    else None,
+                }
+            )
+    else:
+        table_relative_paths = _list_lakehouse_table_paths(
+            lakehouse_name=source_lakehouse_name,
+            include_schemas=include_schemas,
+            exclude_tables=exclude_tables,
+        )
+        table_jobs = [
+            {
+                "source_relative_path": table_relative_path,
+                "target_relative_path": table_relative_path,
+                "mode": mode,
+                "partition_by": partition_by,
+                "merge_condition": None,
+            }
+            for table_relative_path in table_relative_paths
+        ]
+
+    if not table_jobs:
+        log(
+            f"No tables found in Lakehouse '{source_lakehouse_name}' for bulk clean/write.",
+            level="warning",
+        )
+        return {
+            "total_tables": 0,
+            "successful_tables": 0,
+            "failed_tables": 0,
+            "tables": [],
+            "failures": [],
+        }
+
+    processed_tables: List[dict[str, str]] = []
+    failures: List[dict[str, str]] = []
+    total_tables = len(table_jobs)
+
+    log(
+        f"Bulk clean/write started: {total_tables} table(s) "
+        f"from '{source_lakehouse_name}' to '{target_lakehouse_name}'."
+    )
+
+    for index, table_job in enumerate(table_jobs, start=1):
+        source_relative_path = table_job["source_relative_path"]
+        target_relative_path = table_job["target_relative_path"]
+        table_mode = table_job["mode"]
+        table_partition_by = table_job["partition_by"]
+        merge_condition = table_job["merge_condition"]
+        log(
+            f"[{index}/{total_tables}] Processing '{source_relative_path}' "
+            f"-> '{target_relative_path}' [mode={table_mode}]..."
+        )
+        try:
+            if table_mode in {"overwrite", "append"}:
+                clean_and_write_data(
+                    source_lakehouse_name=source_lakehouse_name,
+                    source_relative_path=source_relative_path,
+                    target_lakehouse_name=target_lakehouse_name,
+                    target_relative_path=target_relative_path,
+                    mode=table_mode,
+                    partition_by=table_partition_by,
+                    spark=_spark,
+                )
+            else:
+                source_df = read_lakehouse(
+                    source_lakehouse_name,
+                    source_relative_path,
+                    spark=_spark,
+                )
+                cleaned_df = clean_data(source_df)
+                silver_df = add_silver_metadata(
+                    cleaned_df,
+                    source_lakehouse_name=source_lakehouse_name,
+                    source_relative_path=source_relative_path,
+                    spark=_spark,
+                )
+                merge_lakehouse(
+                    source_df=silver_df,
+                    lakehouse_name=target_lakehouse_name,
+                    relative_path=target_relative_path,
+                    merge_condition=merge_condition,
+                    spark=_spark,
+                )
+
+            processed_tables.append(
+                {
+                    "source_relative_path": source_relative_path,
+                    "target_relative_path": target_relative_path,
+                    "mode": table_mode,
+                }
+            )
+            log(f"[{index}/{total_tables}] Success for '{source_relative_path}'.")
+        except Exception as exc:
+            failure = {
+                "source_relative_path": source_relative_path,
+                "target_relative_path": target_relative_path,
+                "mode": table_mode,
+                "error": str(exc),
+            }
+            failures.append(failure)
+            log(
+                f"[{index}/{total_tables}] Failed for '{source_relative_path}': {exc}",
+                level="warning",
+            )
+            if not continue_on_error:
+                raise
+
+    log(
+        "Bulk clean/write completed: "
+        f"successful={len(processed_tables)}, failed={len(failures)}."
+    )
+    return {
+        "total_tables": total_tables,
+        "successful_tables": len(processed_tables),
+        "failed_tables": len(failures),
+        "tables": processed_tables,
+        "failures": failures,
+    }
