@@ -9,14 +9,23 @@ Lakehouse read/write utilities.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
 from pyspark.sql.types import StringType
 
 from fabrictools._logger import log
 from fabrictools._spark import get_spark
-from fabrictools.lakehouse import read_lakehouse, write_lakehouse
+from fabrictools.lakehouse import (
+    read_lakehouse,
+    resolve_lakehouse_read_candidate,
+    write_lakehouse,
+)
+
+try:
+    import plotly.express as px
+except ImportError:  # pragma: no cover - optional dependency in runtime.
+    px = None
 
 def _to_snake_case(name: str) -> str:
     """Convert a column name to snake_case."""
@@ -61,6 +70,66 @@ def _normalized_name_collisions(columns: List[str]) -> dict[str, List[str]]:
     }
 
 
+def _replace_empty_strings_with_nulls(df: DataFrame) -> DataFrame:
+    """Trim string columns and replace empty values with null."""
+    string_columns = [
+        field.name for field in df.schema.fields if isinstance(field.dataType, StringType)
+    ]
+    transformed_df = df
+    for col_name in string_columns:
+        transformed_df = transformed_df.withColumn(
+            col_name,
+            F.when(F.trim(F.col(col_name)) == "", F.lit(None)).otherwise(
+                F.trim(F.col(col_name))
+            ),
+        )
+    return transformed_df
+
+
+def add_silver_metadata(
+    df: DataFrame,
+    source_lakehouse_name: str,
+    source_relative_path: str,
+    source_layer: str = "bronze",
+    ingestion_timestamp_col: str = "ingestion_timestamp",
+    source_layer_col: str = "source_layer",
+    source_path_col: str = "source_path",
+    year_col: str = "year",
+    month_col: str = "month",
+    day_col: str = "day",
+    spark: Optional[SparkSession] = None,
+) -> DataFrame:
+    """
+    Add Silver-layer metadata and date partition columns.
+
+    Added columns:
+    - ingestion timestamp
+    - source layer
+    - source path (resolved candidate path used for reading)
+    - date partitions: year, month, day (derived from ingestion timestamp)
+    """
+    resolved_source_path = resolve_lakehouse_read_candidate(
+        lakehouse_name=source_lakehouse_name,
+        relative_path=source_relative_path,
+        spark=spark,
+    )
+
+    metadata_df = (
+        df.withColumn(ingestion_timestamp_col, F.current_timestamp())
+        .withColumn(source_layer_col, F.lit(source_layer))
+        .withColumn(source_path_col, F.lit(resolved_source_path))
+        .withColumn(year_col, F.year(F.col(ingestion_timestamp_col)))
+        .withColumn(month_col, F.month(F.col(ingestion_timestamp_col)))
+        .withColumn(day_col, F.dayofmonth(F.col(ingestion_timestamp_col)))
+    )
+    log(
+        "Silver metadata added: "
+        f"{ingestion_timestamp_col}, {source_layer_col}, {source_path_col}, "
+        f"{year_col}, {month_col}, {day_col}"
+    )
+    return metadata_df
+
+
 def clean_data(
     df: DataFrame,
     drop_duplicates: bool = True,
@@ -83,19 +152,8 @@ def clean_data(
     normalized_columns = _build_unique_column_names(df.columns)
     cleaned_df = df.toDF(*normalized_columns)
 
-    # 2) Trim + blank-to-null on string columns only.
-    string_columns = [
-        field.name
-        for field in cleaned_df.schema.fields
-        if isinstance(field.dataType, StringType)
-    ]
-    for col_name in string_columns:
-        cleaned_df = cleaned_df.withColumn(
-            col_name,
-            F.when(F.trim(F.col(col_name)) == "", F.lit(None)).otherwise(
-                F.trim(F.col(col_name))
-            ),
-        )
+    # 2) Trim + empty-string-to-null on string columns only.
+    cleaned_df = _replace_empty_strings_with_nulls(cleaned_df)
 
     # 3) Optional de-duplication.
     if drop_duplicates:
@@ -114,26 +172,29 @@ def clean_data(
     return cleaned_df
 
 
-def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict:
+def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict[str, Any]:
     """
-    Scan a DataFrame and report common data-quality issues.
+    Scan a DataFrame and return user-friendly data-quality artifacts.
 
-    Report includes:
-    - null count per column
-    - blank-string count per string column
-    - exact duplicate row count
-    - potential collisions after snake_case normalization
+    Returned bundle includes:
+    - summary_df: Spark DataFrame with all scan metrics in tabular form
+    - figure: Plotly chart (auto bar/pie) showing issue totals
+    - issue_totals: compact list of total counts per issue category
+    - collisions: normalized column-name collision details
+    - sample_rows: optional preview rows when include_samples=True
     """
+    log("Scanning data quality issues...")
+    normalized_df = _replace_empty_strings_with_nulls(df)
     total_rows = df.count()
     total_columns = len(df.columns)
 
     null_count_exprs = [
-        F.sum(F.when(F.col(col_name).isNull(), F.lit(1)).otherwise(F.lit(0))).alias(
-            col_name
-        )
-        for col_name in df.columns
+        F.sum(
+            F.when(F.col(col_name).isNull(), F.lit(1)).otherwise(F.lit(0))
+        ).alias(col_name)
+        for col_name in normalized_df.columns
     ]
-    null_counts_row = df.agg(*null_count_exprs).collect()[0].asDict()
+    null_counts_row = normalized_df.agg(*null_count_exprs).collect()[0].asDict()
 
     string_columns = [
         field.name for field in df.schema.fields if isinstance(field.dataType, StringType)
@@ -152,13 +213,103 @@ def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict:
     duplicate_rows = total_rows - distinct_rows
     name_collisions = _normalized_name_collisions(df.columns)
 
-    report = {
-        "row_count": total_rows,
-        "column_count": total_columns,
-        "null_counts": null_counts_row,
-        "blank_string_counts": blank_counts,
-        "duplicate_row_count": duplicate_rows,
-        "normalized_name_collisions": name_collisions,
+    log(
+        "  Metrics collected: "
+        f"rows={total_rows:,}, columns={total_columns}, duplicate_rows={duplicate_rows:,}"
+    )
+
+    summary_records: list[dict[str, Any]] = [
+        {
+            "issue_type": "dataset_rows",
+            "column_name": None,
+            "count": total_rows,
+            "details": "Total number of rows in the dataset",
+        },
+        {
+            "issue_type": "dataset_columns",
+            "column_name": None,
+            "count": total_columns,
+            "details": "Total number of columns in the dataset",
+        },
+        {
+            "issue_type": "duplicate_rows",
+            "column_name": None,
+            "count": duplicate_rows,
+            "details": "Exact duplicate rows found in the dataset",
+        },
+    ]
+
+    summary_records.extend(
+        {
+            "issue_type": "null_values",
+            "column_name": col_name,
+            "count": count,
+            "details": "Null values after string normalization",
+        }
+        for col_name, count in null_counts_row.items()
+    )
+
+    summary_records.extend(
+        {
+            "issue_type": "blank_string_values",
+            "column_name": col_name,
+            "count": count,
+            "details": "Blank string values before normalization",
+        }
+        for col_name, count in blank_counts.items()
+    )
+
+    summary_records.extend(
+        {
+            "issue_type": "normalized_name_collisions",
+            "column_name": normalized_name,
+            "count": len(original_columns),
+            "details": ", ".join(original_columns),
+        }
+        for normalized_name, original_columns in name_collisions.items()
+    )
+
+    summary_df = df.sparkSession.createDataFrame(summary_records)
+    log(f"  Summary DataFrame built with {len(summary_records)} rows")
+
+    issue_totals = [
+        {"issue_type": "duplicate_rows", "count": duplicate_rows},
+        {"issue_type": "null_values", "count": sum(null_counts_row.values())},
+        {"issue_type": "blank_string_values", "count": sum(blank_counts.values())},
+        {"issue_type": "normalized_name_collisions", "count": len(name_collisions)},
+    ]
+    non_zero_issue_totals = [item for item in issue_totals if item["count"] > 0]
+    figure = None
+    if px is None:
+        log(
+            "  Plotly is not installed; figure is omitted. "
+            "Install with `pip install plotly` to enable charts.",
+            level="warning",
+        )
+    else:
+        chart_data = non_zero_issue_totals or issue_totals
+        issue_labels = [item["issue_type"] for item in chart_data]
+        issue_values = [item["count"] for item in chart_data]
+        if len(chart_data) <= 3:
+            figure = px.pie(
+                names=issue_labels,
+                values=issue_values,
+                title="Data quality issues distribution",
+            )
+        else:
+            figure = px.bar(
+                x=issue_labels,
+                y=issue_values,
+                title="Data quality issues overview",
+                labels={"x": "Issue type", "y": "Count"},
+            )
+        log(f"  Plotly figure built (chart_points={len(chart_data)})")
+
+    report: dict[str, Any] = {
+        "summary_df": summary_df,
+        "figure": figure,
+        "issue_totals": issue_totals,
+        "collisions": name_collisions,
     }
 
     if include_samples:
@@ -175,6 +326,17 @@ def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict:
         f"string_columns_with_blanks={blank_columns}, "
         f"normalized_name_collisions={collision_count}"
     )
+    if non_zero_issue_totals:
+        log(
+            "  Quality issues detected: "
+            + ", ".join(
+                f"{item['issue_type']}={item['count']:,}"
+                for item in non_zero_issue_totals
+            ),
+            level="warning",
+        )
+    else:
+        log("  No quality issues detected.")
     return report
 
 
@@ -188,19 +350,26 @@ def clean_and_write_data(
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """
-    Read data, apply standard cleaning, and write it to a target path.
+    Read data, clean it, add Silver metadata columns, and write to target path.
 
-    Returns the cleaned DataFrame for downstream reuse.
+    Returns the Silver-enriched DataFrame for downstream reuse.
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
     cleaned_df = clean_data(source_df)
-    write_lakehouse(
+    silver_df = add_silver_metadata(
         cleaned_df,
+        source_lakehouse_name=source_lakehouse_name,
+        source_relative_path=source_relative_path,
+        spark=_spark,
+    )
+    effective_partitions = partition_by or ["year", "month", "day"]
+    write_lakehouse(
+        silver_df,
         lakehouse_name=target_lakehouse_name,
         relative_path=target_relative_path,
         mode=mode,
-        partition_by=partition_by,
+        partition_by=effective_partitions,
         spark=_spark,
     )
-    return cleaned_df
+    return silver_df

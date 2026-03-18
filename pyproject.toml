@@ -33,9 +33,13 @@ spark = [
     "pyspark>=3.3",
     "delta-spark>=2.4",
 ]
+visualization = [
+    "plotly>=5.0",
+]
 dev = [
     "pyspark>=3.3",
     "delta-spark>=2.4",
+    "plotly>=5.0",
     "pytest>=7.4",
     "pytest-mock>=3.12",
     "build>=1.0",

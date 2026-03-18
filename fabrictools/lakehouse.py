@@ -81,6 +81,46 @@ def read_lakehouse(
     )
 
 
+def resolve_lakehouse_read_candidate(
+    lakehouse_name: str,
+    relative_path: str,
+    spark: Optional[SparkSession] = None,
+) -> str:
+    """
+    Resolve the best candidate relative path for a Lakehouse read.
+
+    Rules:
+    - If candidate generation yields a single path, return it directly.
+    - If multiple candidates exist, try each path and return the first readable one.
+    """
+    _spark = spark or get_spark()
+    base = get_lakehouse_abfs_path(lakehouse_name)
+    candidate_relative_paths = build_lakehouse_read_path_candidates(relative_path)
+
+    if len(candidate_relative_paths) == 1:
+        return candidate_relative_paths[0]
+
+    failures: list[str] = []
+    for candidate_relative_path in candidate_relative_paths:
+        full_path = f"{base}/{candidate_relative_path}"
+        try:
+            _try_read_formats(_spark, full_path)
+            if candidate_relative_path != relative_path:
+                log(
+                    f"  Resolved relative_path '{relative_path}' -> "
+                    f"'{candidate_relative_path}'"
+                )
+            return candidate_relative_path
+        except RuntimeError as exc:
+            failures.append(f"{full_path} ({exc})")
+
+    attempted_paths = ", ".join(f"'{base}/{candidate}'" for candidate in candidate_relative_paths)
+    raise RuntimeError(
+        f"Could not resolve a readable candidate for relative_path='{relative_path}'. "
+        f"Tried: {attempted_paths}. Details: {' | '.join(failures)}"
+    )
+
+
 def _try_read_formats(spark: SparkSession, full_path: str) -> DataFrame:
     """Attempt Delta → Parquet → CSV, return the first successful DataFrame."""
     # Delta (preferred in Fabric)

@@ -33,6 +33,48 @@ def _make_df(rows: int = 5, cols: int = 3) -> MagicMock:
 
 
 class TestReadLakehouse:
+    @patch("fabrictools.lakehouse._try_read_formats")
+    @patch("fabrictools.lakehouse.build_lakehouse_read_path_candidates", return_value=["sales/raw"])
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.lakehouse.get_spark")
+    def test_resolve_candidate_single_path_returns_directly(
+        self, mock_get_spark, mock_path, mock_candidates, mock_try_read
+    ):
+        """Single candidate should be returned directly without probing formats."""
+        from fabrictools.lakehouse import resolve_lakehouse_read_candidate
+
+        resolved = resolve_lakehouse_read_candidate(LH_NAME, "sales/raw")
+
+        assert resolved == "sales/raw"
+        mock_try_read.assert_not_called()
+
+    @patch("fabrictools.lakehouse._try_read_formats")
+    @patch(
+        "fabrictools.lakehouse.build_lakehouse_read_path_candidates",
+        return_value=["sales/raw", "Tables/dbo/sales/raw", "Files/sales/raw"],
+    )
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.lakehouse.get_spark")
+    def test_resolve_candidate_fallbacks_to_first_readable(
+        self, mock_get_spark, mock_path, mock_candidates, mock_try_read
+    ):
+        """Multiple candidates should be tried until the first readable path."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+        mock_try_read.side_effect = [RuntimeError("missing"), _make_df()]
+
+        from fabrictools.lakehouse import resolve_lakehouse_read_candidate
+
+        resolved = resolve_lakehouse_read_candidate(LH_NAME, "sales/raw")
+
+        assert resolved == "Tables/dbo/sales/raw"
+        assert mock_try_read.call_count == 2
+        assert mock_try_read.call_args_list[0].args == (spark, f"{ABFS_BASE}/sales/raw")
+        assert mock_try_read.call_args_list[1].args == (
+            spark,
+            f"{ABFS_BASE}/Tables/dbo/sales/raw",
+        )
+
     @patch("fabrictools.lakehouse.get_spark")
     @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_bare_name_prefers_tables_dbo_before_files(self, mock_path, mock_spark):
@@ -332,8 +374,9 @@ class TestDataCleaningAndQuality:
         cleaned_df.dropna.assert_called_once_with(how="all")
         assert result is cleaned_df
 
-    def test_scan_data_errors_reports_counts_and_collisions(self):
-        """scan_data_errors should report nulls, blanks, duplicates, and column-name collisions."""
+    @patch("fabrictools.data_quality.px")
+    def test_scan_data_errors_returns_summary_dataframe_and_figure(self, mock_px):
+        """scan_data_errors should return a summary DataFrame, totals, collisions, and chart."""
         df = MagicMock()
         df.columns = ["Order ID", "order-id", "customer_name"]
         df.count.return_value = 10
@@ -359,6 +402,9 @@ class TestDataCleaningAndQuality:
         agg_blank = MagicMock()
         agg_blank.collect.return_value = [blank_counts_row]
         df.agg.side_effect = [agg_null, agg_blank]
+        df.withColumn.return_value = df
+        summary_df = MagicMock()
+        df.sparkSession.createDataFrame.return_value = summary_df
 
         distinct_df = MagicMock()
         distinct_df.count.return_value = 8
@@ -369,33 +415,96 @@ class TestDataCleaningAndQuality:
         limited_df = MagicMock()
         limited_df.collect.return_value = [sample_row]
         df.limit.return_value = limited_df
+        chart_figure = MagicMock()
+        mock_px.bar.return_value = chart_figure
 
         from fabrictools.data_quality import scan_data_errors
 
         report = scan_data_errors(df, include_samples=True)
 
-        assert report["row_count"] == 10
-        assert report["column_count"] == 3
-        assert report["duplicate_row_count"] == 2
-        assert report["null_counts"]["customer_name"] == 2
-        assert report["blank_string_counts"]["order-id"] == 3
-        assert report["normalized_name_collisions"] == {"order_id": ["Order ID", "order-id"]}
+        assert report["summary_df"] is summary_df
+        assert report["figure"] is chart_figure
+        assert report["collisions"] == {"order_id": ["Order ID", "order-id"]}
+        assert report["issue_totals"] == [
+            {"issue_type": "duplicate_rows", "count": 2},
+            {"issue_type": "null_values", "count": 3},
+            {"issue_type": "blank_string_values", "count": 3},
+            {"issue_type": "normalized_name_collisions", "count": 1},
+        ]
         assert len(report["sample_rows"]) == 1
+        records = df.sparkSession.createDataFrame.call_args.args[0]
+        assert any(
+            record["issue_type"] == "null_values"
+            and record["column_name"] == "customer_name"
+            and record["count"] == 2
+            for record in records
+        )
+        assert any(
+            record["issue_type"] == "blank_string_values"
+            and record["column_name"] == "order-id"
+            and record["count"] == 3
+            for record in records
+        )
+        assert any(
+            record["issue_type"] == "normalized_name_collisions"
+            and record["column_name"] == "order_id"
+            and record["count"] == 2
+            for record in records
+        )
+        mock_px.bar.assert_called_once()
+        mock_px.pie.assert_not_called()
+
+    @patch(
+        "fabrictools.data_quality.resolve_lakehouse_read_candidate",
+        return_value="Tables/dbo/sales/raw",
+    )
+    def test_add_silver_metadata_adds_columns(self, mock_resolve_candidate):
+        """add_silver_metadata should add ingestion/source metadata and date partitions."""
+        df = MagicMock()
+        df.withColumn.return_value = df
+
+        from fabrictools.data_quality import add_silver_metadata
+
+        result = add_silver_metadata(
+            df,
+            source_lakehouse_name="RawLakehouse",
+            source_relative_path="sales/raw",
+        )
+
+        assert df.withColumn.call_count == 6
+        added_columns = [call.args[0] for call in df.withColumn.call_args_list]
+        assert added_columns == [
+            "ingestion_timestamp",
+            "source_layer",
+            "source_path",
+            "year",
+            "month",
+            "day",
+        ]
+        mock_resolve_candidate.assert_called_once_with(
+            lakehouse_name="RawLakehouse",
+            relative_path="sales/raw",
+            spark=None,
+        )
+        assert result is df
 
     @patch("fabrictools.data_quality.write_lakehouse")
+    @patch("fabrictools.data_quality.add_silver_metadata")
     @patch("fabrictools.data_quality.clean_data")
     @patch("fabrictools.data_quality.read_lakehouse")
     @patch("fabrictools.data_quality.get_spark")
     def test_clean_and_write_data_orchestration(
-        self, mock_get_spark, mock_read, mock_clean, mock_write
+        self, mock_get_spark, mock_read, mock_clean, mock_add_metadata, mock_write
     ):
-        """clean_and_write_data should orchestrate read -> clean -> write."""
+        """clean_and_write_data should orchestrate read -> clean -> metadata -> write."""
         spark = MagicMock()
         mock_get_spark.return_value = spark
         source_df = MagicMock()
         cleaned_df = MagicMock()
+        silver_df = MagicMock()
         mock_read.return_value = source_df
         mock_clean.return_value = cleaned_df
+        mock_add_metadata.return_value = silver_df
 
         from fabrictools.data_quality import clean_and_write_data
 
@@ -410,12 +519,55 @@ class TestDataCleaningAndQuality:
 
         mock_read.assert_called_once_with("RawLakehouse", "sales/raw", spark=spark)
         mock_clean.assert_called_once_with(source_df)
-        mock_write.assert_called_once_with(
+        mock_add_metadata.assert_called_once_with(
             cleaned_df,
+            source_lakehouse_name="RawLakehouse",
+            source_relative_path="sales/raw",
+            spark=spark,
+        )
+        mock_write.assert_called_once_with(
+            silver_df,
             lakehouse_name="CuratedLakehouse",
             relative_path="sales/clean",
             mode="append",
             partition_by=["year"],
             spark=spark,
         )
-        assert result is cleaned_df
+        assert result is silver_df
+
+    @patch("fabrictools.data_quality.write_lakehouse")
+    @patch("fabrictools.data_quality.add_silver_metadata")
+    @patch("fabrictools.data_quality.clean_data")
+    @patch("fabrictools.data_quality.read_lakehouse")
+    @patch("fabrictools.data_quality.get_spark")
+    def test_clean_and_write_data_defaults_to_date_partitions(
+        self, mock_get_spark, mock_read, mock_clean, mock_add_metadata, mock_write
+    ):
+        """clean_and_write_data should default partitioning to year/month/day."""
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+        source_df = MagicMock()
+        cleaned_df = MagicMock()
+        silver_df = MagicMock()
+        mock_read.return_value = source_df
+        mock_clean.return_value = cleaned_df
+        mock_add_metadata.return_value = silver_df
+
+        from fabrictools.data_quality import clean_and_write_data
+
+        clean_and_write_data(
+            source_lakehouse_name="RawLakehouse",
+            source_relative_path="sales/raw",
+            target_lakehouse_name="CuratedLakehouse",
+            target_relative_path="sales/clean",
+            mode="overwrite",
+        )
+
+        mock_write.assert_called_once_with(
+            silver_df,
+            lakehouse_name="CuratedLakehouse",
+            relative_path="sales/clean",
+            mode="overwrite",
+            partition_by=["year", "month", "day"],
+            spark=spark,
+        )

@@ -12,6 +12,7 @@
 - **Auto-corrected Lakehouse read paths** — supports bare or partial paths (e.g. `customers`, `dbo/customers`) with fallback to `Tables/dbo/...` then `Files/...`
 - **Delta merge (upsert)** — one-liner upsert into any Lakehouse Delta table
 - **Generic data cleaning** — standard cleaning with one helper function
+- **Silver metadata enrichment** — add ingestion/source metadata + `year/month/day` partitions
 - **Data quality scan** — detect nulls, blank strings, duplicates, and naming collisions
 - **Built-in logging** — every operation logs its resolved path, detected format, and row/column count
 
@@ -97,11 +98,37 @@ By default it:
 ### Scan data quality issues
 
 ```python
-report = ft.scan_data_errors(df, include_samples=True)
+scan_output = ft.scan_data_errors(df, include_samples=True)
 
-print(report["duplicate_row_count"])
-print(report["null_counts"])
+# Spark DataFrame with all scan information (dataset metrics, per-column details, collisions)
+scan_output["summary_df"].show(truncate=False)
+
+# Plotly figure (auto bar/pie depending on issue categories)
+scan_output["figure"].show()
+
+# Optional helpers
+print(scan_output["issue_totals"])
+print(scan_output["collisions"])
 ```
+
+`scan_data_errors` now returns a user-friendly bundle with a tabular summary DataFrame and a Plotly chart.
+
+### Add Silver metadata + date partitions
+
+```python
+silver_df = ft.add_silver_metadata(
+    df,
+    source_lakehouse_name="RawLakehouse",
+    source_relative_path="sales/raw",
+    source_layer="bronze",  # optional
+)
+```
+
+By default this adds:
+- `ingestion_timestamp`
+- `source_layer`
+- `source_path` (resolved candidate path actually used for source read)
+- `year`, `month`, `day`
 
 ### Read -> clean -> write in one call
 
@@ -112,9 +139,12 @@ clean_df = ft.clean_and_write_data(
     target_lakehouse_name="CuratedLakehouse",
     target_relative_path="sales/clean",
     mode="overwrite",
-    partition_by=["year"],  # optional
+    partition_by=["year"],  # optional override
 )
 ```
+
+When `partition_by` is omitted, the helper writes with default partitions:
+`["year", "month", "day"]`.
 
 With explicit column mappings:
 
@@ -159,8 +189,9 @@ ft.write_warehouse(
 | `write_lakehouse(df, lakehouse_name, relative_path, mode, partition_by, format, spark=None)` | Write a DataFrame (default: Delta, overwrite) |
 | `merge_lakehouse(source_df, lakehouse_name, relative_path, merge_condition, update_set, insert_set, spark=None)` | Upsert via Delta merge |
 | `clean_data(df, drop_duplicates, drop_all_null_rows)` | Apply standard generic cleaning to a DataFrame |
+| `add_silver_metadata(df, source_lakehouse_name, source_relative_path, source_layer, ingestion_timestamp_col, source_layer_col, source_path_col, year_col, month_col, day_col, spark=None)` | Add Silver metadata and date partition columns, with resolved source path |
 | `scan_data_errors(df, include_samples)` | Report common data-quality issues |
-| `clean_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, mode, partition_by, spark=None)` | Read, clean, and write in one helper |
+| `clean_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, mode, partition_by, spark=None)` | Read, clean, add Silver metadata, and write in one helper |
 
 ### Warehouse
 
