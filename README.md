@@ -9,6 +9,7 @@
 - **Auto-resolved paths** — pass a Lakehouse or Warehouse *name*, no ABFS URL configuration required
 - **Auto-detected SparkSession** — uses `SparkSession.builder.getOrCreate()`, works seamlessly inside Fabric notebooks
 - **Auto-detected format** on read — tries Delta → Parquet → CSV automatically
+- **Auto-corrected Lakehouse read paths** — supports bare or partial paths (e.g. `customers`, `dbo/customers`) with fallback to `Tables/dbo/...` then `Files/...`
 - **Delta merge (upsert)** — one-liner upsert into any Lakehouse Delta table
 - **Generic data cleaning** — standard cleaning with one helper function
 - **Data quality scan** — detect nulls, blank strings, duplicates, and naming collisions
@@ -49,6 +50,10 @@ import fabrictools as ft
 ```python
 # Auto-detects Delta → Parquet → CSV
 df = ft.read_lakehouse("BronzeLakehouse", "sales/2024")
+
+# Also accepts partial paths:
+# - "customers"      -> tries Tables/dbo/customers then Files/customers
+# - "dbo/customers"  -> tries Tables/dbo/customers
 ```
 
 ### Write to a Lakehouse

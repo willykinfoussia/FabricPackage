@@ -9,6 +9,8 @@ callers can handle the missing dependency gracefully.
 
 from __future__ import annotations
 
+from typing import List
+
 from fabrictools._logger import log
 
 
@@ -28,6 +30,46 @@ def _read_property(container: object, key: str) -> str:
         raise AttributeError(f"Missing property '{key}'")
 
     return str(value)
+
+
+def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
+    """
+    Build ordered candidate relative paths for Lakehouse reads.
+
+    The first candidate is always the user-provided path (normalized with
+    forward slashes). Extra candidates are added for common partial inputs:
+    - bare name -> Tables/dbo/<name>, then Files/<name>
+    - dbo/<name> -> Tables/dbo/<name>
+    - Tables/<name> -> Tables/dbo/<name>
+    """
+    normalized = relative_path.strip().strip("/").replace("\\", "/")
+    if not normalized:
+        return [normalized]
+
+    parts = [part for part in normalized.split("/") if part]
+    first = parts[0].lower()
+    candidates: List[str] = ["/".join(parts)]
+
+    if first == "tables":
+        if len(parts) >= 2 and parts[1].lower() == "dbo":
+            candidates.append(f"Tables/dbo/{'/'.join(parts[2:])}" if len(parts) > 2 else "Tables/dbo")
+        elif len(parts) >= 2:
+            candidates.append(f"Tables/dbo/{'/'.join(parts[1:])}")
+        else:
+            candidates.append("Tables/dbo")
+    elif first == "dbo":
+        candidates.append(f"Tables/dbo/{'/'.join(parts[1:])}" if len(parts) > 1 else "Tables/dbo")
+    elif first == "files":
+        candidates.append(f"Files/{'/'.join(parts[1:])}" if len(parts) > 1 else "Files")
+    else:
+        candidates.append(f"Tables/dbo/{'/'.join(parts)}")
+        candidates.append(f"Files/{'/'.join(parts)}")
+
+    ordered_unique: List[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in ordered_unique:
+            ordered_unique.append(candidate)
+    return ordered_unique
 
 
 def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
@@ -61,7 +103,6 @@ def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
         properties = (
             lh.get("properties", {}) if isinstance(lh, dict) else lh.properties
         )
-        log(f"Lakehouse properties: {properties}")
         path = _read_property(properties, "abfsPath")
         log(f"Resolved Lakehouse '{lakehouse_name}' → {path}")
         return path

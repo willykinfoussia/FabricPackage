@@ -35,6 +35,99 @@ def _make_df(rows: int = 5, cols: int = 3) -> MagicMock:
 class TestReadLakehouse:
     @patch("fabrictools.lakehouse.get_spark")
     @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_bare_name_prefers_tables_dbo_before_files(self, mock_path, mock_spark):
+        """For ambiguous names, Tables/dbo should be attempted before Files."""
+        mock_df = _make_df()
+        spark = MagicMock()
+        attempts = []
+
+        def format_reader(fmt):
+            reader = MagicMock()
+
+            def load(path):
+                attempts.append((fmt, path))
+                if path.endswith("/Tables/dbo/customers") and fmt == "delta":
+                    return mock_df
+                raise Exception("not found")
+
+            reader.load.side_effect = load
+            return reader
+
+        csv_chain = MagicMock()
+        csv_chain.option.return_value = csv_chain
+        csv_chain.csv.side_effect = Exception("not csv")
+
+        spark.read.format.side_effect = format_reader
+        spark.read.option.return_value = csv_chain
+        mock_spark.return_value = spark
+
+        from fabrictools.lakehouse import read_lakehouse
+
+        result = read_lakehouse(LH_NAME, "customers")
+
+        assert result is mock_df
+        assert attempts[0][1].endswith("/customers")
+        assert attempts[1][1].endswith("/customers")
+        assert attempts[2][1].endswith("/Tables/dbo/customers")
+        assert not any(path.endswith("/Files/customers") for _, path in attempts)
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_dbo_prefix_is_corrected_to_tables_dbo(self, mock_path, mock_spark):
+        """dbo/<name> should be corrected to Tables/dbo/<name> when needed."""
+        mock_df = _make_df()
+        spark = MagicMock()
+        attempts = []
+
+        def format_reader(fmt):
+            reader = MagicMock()
+
+            def load(path):
+                attempts.append((fmt, path))
+                if path.endswith("/Tables/dbo/customers") and fmt == "delta":
+                    return mock_df
+                raise Exception("not found")
+
+            reader.load.side_effect = load
+            return reader
+
+        csv_chain = MagicMock()
+        csv_chain.option.return_value = csv_chain
+        csv_chain.csv.side_effect = Exception("not csv")
+
+        spark.read.format.side_effect = format_reader
+        spark.read.option.return_value = csv_chain
+        mock_spark.return_value = spark
+
+        from fabrictools.lakehouse import read_lakehouse
+
+        result = read_lakehouse(LH_NAME, "dbo/customers")
+
+        assert result is mock_df
+        assert any(path.endswith("/dbo/customers") for _, path in attempts)
+        assert any(path.endswith("/Tables/dbo/customers") for _, path in attempts)
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_explicit_tables_path_still_works_directly(self, mock_path, mock_spark):
+        """Explicit full path should continue to work without fallback."""
+        mock_df = _make_df()
+        spark = MagicMock()
+        spark.read.format.return_value.load.return_value = mock_df
+        mock_spark.return_value = spark
+
+        from fabrictools.lakehouse import read_lakehouse
+
+        result = read_lakehouse(LH_NAME, "Tables/dbo/customers")
+
+        spark.read.format.assert_called_once_with("delta")
+        spark.read.format.return_value.load.assert_called_once_with(
+            f"{ABFS_BASE}/Tables/dbo/customers"
+        )
+        assert result is mock_df
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_reads_delta_first(self, mock_path, mock_spark):
         """Delta is the preferred format and should be tried first."""
         mock_df = _make_df()
@@ -111,8 +204,13 @@ class TestReadLakehouse:
 
         from fabrictools.lakehouse import read_lakehouse
 
-        with pytest.raises(RuntimeError, match="Delta, Parquet, or CSV"):
+        with pytest.raises(RuntimeError, match="candidate path") as exc_info:
             read_lakehouse(LH_NAME, REL_PATH)
+
+        msg = str(exc_info.value)
+        assert f"{ABFS_BASE}/{REL_PATH}" in msg
+        assert f"{ABFS_BASE}/Tables/dbo/{REL_PATH}" in msg
+        assert f"{ABFS_BASE}/Files/{REL_PATH}" in msg
 
     @patch("fabrictools.lakehouse.get_spark")
     @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)

@@ -13,7 +13,10 @@ from typing import List, Optional
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
 
 from fabrictools._logger import log
-from fabrictools._paths import get_lakehouse_abfs_path
+from fabrictools._paths import (
+    build_lakehouse_read_path_candidates,
+    get_lakehouse_abfs_path,
+)
 from fabrictools._spark import get_spark
 
 # ── Read ─────────────────────────────────────────────────────────────────────
@@ -56,12 +59,26 @@ def read_lakehouse(
     """
     _spark = spark or get_spark()
     base = get_lakehouse_abfs_path(lakehouse_name)
-    full_path = f"{base}/{relative_path}"
-    log(f"Reading Lakehouse '{lakehouse_name}' → {full_path}")
+    candidate_relative_paths = build_lakehouse_read_path_candidates(relative_path)
 
-    df = _try_read_formats(_spark, full_path)
-    log(f"  {df.count():,} rows · {len(df.columns)} columns")
-    return df
+    failures: list[str] = []
+    for candidate_relative_path in candidate_relative_paths:
+        full_path = f"{base}/{candidate_relative_path}"
+        log(f"Reading Lakehouse '{lakehouse_name}' → {full_path}")
+        try:
+            df = _try_read_formats(_spark, full_path)
+            if candidate_relative_path != relative_path:
+                log(f"  Resolved relative_path '{relative_path}' -> '{candidate_relative_path}'")
+            log(f"  {df.count():,} rows · {len(df.columns)} columns")
+            return df
+        except RuntimeError as exc:
+            failures.append(f"{full_path} ({exc})")
+
+    attempted_paths = ", ".join(f"'{base}/{candidate}'" for candidate in candidate_relative_paths)
+    raise RuntimeError(
+        f"Could not read from any candidate path for relative_path='{relative_path}'. "
+        f"Tried: {attempted_paths}. Details: {' | '.join(failures)}"
+    )
 
 
 def _try_read_formats(spark: SparkSession, full_path: str) -> DataFrame:
