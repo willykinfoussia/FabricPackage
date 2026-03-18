@@ -344,7 +344,8 @@ def scan_data_errors(
 
     if display_results:
         log("  Displaying summary DataFrame and figure...")
-        summary_df.show(truncate=False)
+        #summary_df.show(truncate=False)
+        display(summary_df)
         if figure is not None:
             figure.show()
         else:
