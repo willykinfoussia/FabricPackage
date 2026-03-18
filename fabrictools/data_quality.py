@@ -91,12 +91,12 @@ def add_silver_metadata(
     source_lakehouse_name: str,
     source_relative_path: str,
     source_layer: str = "bronze",
-    ingestion_timestamp_col: str = "ingestion_timestamp",
-    source_layer_col: str = "source_layer",
-    source_path_col: str = "source_path",
-    year_col: str = "year",
-    month_col: str = "month",
-    day_col: str = "day",
+    ingestion_timestamp_col: str = "_ingestion_timestamp",
+    source_layer_col: str = "_source_layer",
+    source_path_col: str = "_source_path",
+    year_col: str = "_year",
+    month_col: str = "_month",
+    day_col: str = "_day",
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """
@@ -106,26 +106,42 @@ def add_silver_metadata(
     - ingestion timestamp
     - source layer
     - source path (resolved candidate path used for reading)
-    - date partitions: year, month, day (derived from ingestion timestamp)
+    - date partitions: year, month, day (derived from first date/timestamp column
+      in source data, fallback to ingestion timestamp)
     """
+    partition_source_col = next(
+        (
+            field.name
+            for field in df.schema.fields
+            if field.dataType.typeName()
+            in {"date", "timestamp", "timestamp_ntz", "timestamp_ltz"}
+            and field.name != ingestion_timestamp_col
+        ),
+        None,
+    )
+
     resolved_source_path = resolve_lakehouse_read_candidate(
         lakehouse_name=source_lakehouse_name,
         relative_path=source_relative_path,
         spark=spark,
     )
 
+    partition_expression = F.col(partition_source_col or ingestion_timestamp_col)
+
     metadata_df = (
         df.withColumn(ingestion_timestamp_col, F.current_timestamp())
         .withColumn(source_layer_col, F.lit(source_layer))
         .withColumn(source_path_col, F.lit(resolved_source_path))
-        .withColumn(year_col, F.year(F.col(ingestion_timestamp_col)))
-        .withColumn(month_col, F.month(F.col(ingestion_timestamp_col)))
-        .withColumn(day_col, F.dayofmonth(F.col(ingestion_timestamp_col)))
+        .withColumn(year_col, F.year(partition_expression))
+        .withColumn(month_col, F.month(partition_expression))
+        .withColumn(day_col, F.dayofmonth(partition_expression))
     )
+    partition_source_label = partition_source_col or ingestion_timestamp_col
     log(
         "Silver metadata added: "
         f"{ingestion_timestamp_col}, {source_layer_col}, {source_path_col}, "
-        f"{year_col}, {month_col}, {day_col}"
+        f"{year_col}, {month_col}, {day_col} "
+        f"(partition source: {partition_source_label})"
     )
     return metadata_df
 
@@ -172,7 +188,11 @@ def clean_data(
     return cleaned_df
 
 
-def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict[str, Any]:
+def scan_data_errors(
+    df: DataFrame,
+    include_samples: bool = True,
+    display_results: bool = True,
+) -> dict[str, Any]:
     """
     Scan a DataFrame and return user-friendly data-quality artifacts.
 
@@ -182,6 +202,11 @@ def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict[str, A
     - issue_totals: compact list of total counts per issue category
     - collisions: normalized column-name collision details
     - sample_rows: optional preview rows when include_samples=True
+
+    Parameters
+    ----------
+    display_results:
+        If True (default), display the summary DataFrame and figure immediately.
     """
     log("Scanning data quality issues...")
     normalized_df = _replace_empty_strings_with_nulls(df)
@@ -315,6 +340,14 @@ def scan_data_errors(df: DataFrame, include_samples: bool = True) -> dict[str, A
     if include_samples:
         report["sample_rows"] = [row.asDict(recursive=True) for row in df.limit(10).collect()]
 
+    if display_results:
+        log("  Displaying summary DataFrame and figure...")
+        summary_df.show(truncate=False)
+        if figure is not None:
+            figure.show()
+        else:
+            log("  Figure display skipped (plotly figure unavailable).", level="warning")
+
     null_columns = sum(1 for value in null_counts_row.values() if value > 0)
     blank_columns = sum(1 for value in blank_counts.values() if value > 0)
     collision_count = len(name_collisions)
@@ -363,13 +396,12 @@ def clean_and_write_data(
         source_relative_path=source_relative_path,
         spark=_spark,
     )
-    effective_partitions = partition_by or ["year", "month", "day"]
     write_lakehouse(
         silver_df,
         lakehouse_name=target_lakehouse_name,
         relative_path=target_relative_path,
         mode=mode,
-        partition_by=effective_partitions,
+        partition_by=partition_by,
         spark=_spark,
     )
     return silver_df

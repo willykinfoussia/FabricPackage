@@ -275,7 +275,7 @@ class TestWriteLakehouse:
     @patch("fabrictools.lakehouse.get_spark")
     @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_writes_delta_by_default(self, mock_path, mock_spark):
-        """Default format should be delta."""
+        """Default format should be delta and bare paths map to Tables/dbo."""
         mock_df = _make_df()
         writer = MagicMock()
         writer.format.return_value = writer
@@ -288,7 +288,55 @@ class TestWriteLakehouse:
 
         writer.format.assert_called_once_with("delta")
         writer.mode.assert_called_once_with("overwrite")
-        writer.save.assert_called_once_with(f"{ABFS_BASE}/output/table")
+        writer.save.assert_called_once_with(f"{ABFS_BASE}/Tables/dbo/output/table")
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_write_corrects_dbo_prefix(self, mock_path, mock_spark):
+        """dbo/<name> should be normalized to Tables/dbo/<name>."""
+        mock_df = _make_df()
+        writer = MagicMock()
+        writer.format.return_value = writer
+        writer.mode.return_value = writer
+        mock_df.write = writer
+
+        from fabrictools.lakehouse import write_lakehouse
+
+        write_lakehouse(mock_df, LH_NAME, "dbo/customers")
+
+        writer.save.assert_called_once_with(f"{ABFS_BASE}/Tables/dbo/customers")
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_write_corrects_tables_without_dbo(self, mock_path, mock_spark):
+        """Tables/<name> should be normalized to Tables/dbo/<name>."""
+        mock_df = _make_df()
+        writer = MagicMock()
+        writer.format.return_value = writer
+        writer.mode.return_value = writer
+        mock_df.write = writer
+
+        from fabrictools.lakehouse import write_lakehouse
+
+        write_lakehouse(mock_df, LH_NAME, "Tables/customers")
+
+        writer.save.assert_called_once_with(f"{ABFS_BASE}/Tables/dbo/customers")
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_write_keeps_explicit_files_path(self, mock_path, mock_spark):
+        """Explicit Files path should be preserved."""
+        mock_df = _make_df()
+        writer = MagicMock()
+        writer.format.return_value = writer
+        writer.mode.return_value = writer
+        mock_df.write = writer
+
+        from fabrictools.lakehouse import write_lakehouse
+
+        write_lakehouse(mock_df, LH_NAME, "Files/export/customers")
+
+        writer.save.assert_called_once_with(f"{ABFS_BASE}/Files/export/customers")
 
     @patch("fabrictools.lakehouse.get_spark")
     @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
@@ -306,6 +354,58 @@ class TestWriteLakehouse:
         write_lakehouse(mock_df, LH_NAME, "output/table", partition_by=["year", "month"])
 
         writer.partitionBy.assert_called_once_with("year", "month")
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_partitions_merge_explicit_and_detected_without_duplicates(
+        self, mock_path, mock_spark
+    ):
+        """Explicit partition_by should be extended by auto-detection with deduplication."""
+        mock_df = MagicMock()
+        mock_df.columns = ["client_id", "annee", "mois", "jour", "value"]
+        mock_df.schema.fields = [
+            SimpleNamespace(name="client_id", dataType=StringType()),
+            SimpleNamespace(name="annee", dataType=IntegerType()),
+            SimpleNamespace(name="mois", dataType=IntegerType()),
+            SimpleNamespace(name="jour", dataType=IntegerType()),
+            SimpleNamespace(name="value", dataType=IntegerType()),
+        ]
+        writer = MagicMock()
+        writer.format.return_value = writer
+        writer.mode.return_value = writer
+        writer.partitionBy.return_value = writer
+        mock_df.write = writer
+
+        from fabrictools.lakehouse import write_lakehouse
+
+        write_lakehouse(
+            mock_df,
+            LH_NAME,
+            "output/table",
+            partition_by=["client_id", "mois"],
+        )
+
+        writer.partitionBy.assert_called_once_with("client_id", "mois", "annee", "jour")
+
+    @patch("fabrictools.lakehouse.get_spark")
+    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    def test_no_partition_applied_when_no_detectable_columns(self, mock_path, mock_spark):
+        """No partitionBy should be applied when nothing is explicit or auto-detectable."""
+        mock_df = _make_df()
+        mock_df.schema.fields = [
+            SimpleNamespace(name="col0", dataType=IntegerType()),
+            SimpleNamespace(name="col1", dataType=StringType()),
+        ]
+        writer = MagicMock()
+        writer.format.return_value = writer
+        writer.mode.return_value = writer
+        mock_df.write = writer
+
+        from fabrictools.lakehouse import write_lakehouse
+
+        write_lakehouse(mock_df, LH_NAME, "output/table")
+
+        writer.partitionBy.assert_not_called()
 
 
 # ── merge_lakehouse ────────────────────────────────────────────────────────────
@@ -453,6 +553,8 @@ class TestDataCleaningAndQuality:
         )
         mock_px.bar.assert_called_once()
         mock_px.pie.assert_not_called()
+        summary_df.show.assert_called_once_with(truncate=False)
+        chart_figure.show.assert_called_once()
 
     @patch(
         "fabrictools.data_quality.resolve_lakehouse_read_candidate",
@@ -461,6 +563,7 @@ class TestDataCleaningAndQuality:
     def test_add_silver_metadata_adds_columns(self, mock_resolve_candidate):
         """add_silver_metadata should add ingestion/source metadata and date partitions."""
         df = MagicMock()
+        df.schema.fields = [SimpleNamespace(name="event_date", dataType=IntegerType())]
         df.withColumn.return_value = df
 
         from fabrictools.data_quality import add_silver_metadata
@@ -474,12 +577,12 @@ class TestDataCleaningAndQuality:
         assert df.withColumn.call_count == 6
         added_columns = [call.args[0] for call in df.withColumn.call_args_list]
         assert added_columns == [
-            "ingestion_timestamp",
-            "source_layer",
-            "source_path",
-            "year",
-            "month",
-            "day",
+            "_ingestion_timestamp",
+            "_source_layer",
+            "_source_path",
+            "_year",
+            "_month",
+            "_day",
         ]
         mock_resolve_candidate.assert_called_once_with(
             lakehouse_name="RawLakehouse",
@@ -543,7 +646,7 @@ class TestDataCleaningAndQuality:
     def test_clean_and_write_data_defaults_to_date_partitions(
         self, mock_get_spark, mock_read, mock_clean, mock_add_metadata, mock_write
     ):
-        """clean_and_write_data should default partitioning to year/month/day."""
+        """clean_and_write_data should let write_lakehouse auto-detect partitions."""
         spark = MagicMock()
         mock_get_spark.return_value = spark
         source_df = MagicMock()
@@ -568,6 +671,6 @@ class TestDataCleaningAndQuality:
             lakehouse_name="CuratedLakehouse",
             relative_path="sales/clean",
             mode="overwrite",
-            partition_by=["year", "month", "day"],
+            partition_by=None,
             spark=spark,
         )

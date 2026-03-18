@@ -8,13 +8,16 @@ display name using ``notebookutils``, and obtain the SparkSession via
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
+from pyspark.sql.types import IntegralType  # type: ignore[reportMissingImports]
 
 from fabrictools._logger import log
 from fabrictools._paths import (
     build_lakehouse_read_path_candidates,
+    build_lakehouse_write_path,
     get_lakehouse_abfs_path,
 )
 from fabrictools._spark import get_spark
@@ -159,6 +162,61 @@ def _try_read_formats(spark: SparkSession, full_path: str) -> DataFrame:
 # ── Write ────────────────────────────────────────────────────────────────────
 
 
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    """Return a list without duplicates while preserving insertion order."""
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            deduped.append(value)
+    return deduped
+
+
+def _detect_partition_columns(df: DataFrame) -> list[str]:
+    """
+    Auto-detect year/month/day partition columns.
+
+    Detection order:
+    1) standard names with underscore: _year/_month/_day
+    2) standard names without underscore: year/month/day
+    3) fallback on integer-like columns whose names match
+       year|annee, month|mois, day|jour
+    """
+    standard_with_underscore = ["_year", "_month", "_day"]
+    standard_without_underscore = ["year", "month", "day"]
+
+    if all(col_name in df.columns for col_name in standard_with_underscore):
+        return standard_with_underscore
+    if all(col_name in df.columns for col_name in standard_without_underscore):
+        return standard_without_underscore
+
+    schema_fields = getattr(getattr(df, "schema", None), "fields", [])
+    year_regex = re.compile(r"(?:^|_)(year|annee)(?:$|_)")
+    month_regex = re.compile(r"(?:^|_)(month|mois)(?:$|_)")
+    day_regex = re.compile(r"(?:^|_)(day|jour)(?:$|_)")
+
+    detected: dict[str, str] = {}
+    for field in schema_fields:
+        if not isinstance(field.dataType, IntegralType):
+            continue
+
+        normalized_name = field.name.lower()
+        if "year" not in detected and year_regex.search(normalized_name):
+            detected["year"] = field.name
+            continue
+        if "month" not in detected and month_regex.search(normalized_name):
+            detected["month"] = field.name
+            continue
+        if "day" not in detected and day_regex.search(normalized_name):
+            detected["day"] = field.name
+
+    ordered_detected = [detected[key] for key in ["year", "month", "day"] if key in detected]
+    if len(ordered_detected) == 3:
+        return ordered_detected
+    return []
+
+
 def write_lakehouse(
     df: DataFrame,
     lakehouse_name: str,
@@ -185,6 +243,7 @@ def write_lakehouse(
         ``"ignore"``, or ``"error"``.
     partition_by:
         Optional list of column names to partition the output by.
+        Auto-detected date partitions are appended when found in the DataFrame.
     format:
         Output format — ``"delta"`` (default), ``"parquet"``, or ``"csv"``.
     spark:
@@ -197,15 +256,30 @@ def write_lakehouse(
     """
     _ = spark or get_spark()  # validates spark availability early
     base = get_lakehouse_abfs_path(lakehouse_name)
-    full_path = f"{base}/{relative_path}"
+    resolved_relative_path = build_lakehouse_write_path(relative_path)
+    full_path = f"{base}/{resolved_relative_path}"
+    if resolved_relative_path != relative_path:
+        log(
+            f"Auto-corrected write relative_path '{relative_path}' "
+            f"-> '{resolved_relative_path}'"
+        )
     log(
         f"Writing to Lakehouse '{lakehouse_name}' → {full_path} "
         f"[format={format}, mode={mode}]"
     )
 
-    writer = df.write.format(format).mode(mode)
-    if partition_by:
-        writer = writer.partitionBy(*partition_by)
+    user_partitions = list(partition_by or [])
+    auto_detected_partitions = _detect_partition_columns(df)
+    effective_partition_by = _dedupe_preserve_order(
+        user_partitions + auto_detected_partitions
+    )
+
+    writer = df.write.format(format).option("overwriteSchema", "true").mode(mode)
+    if effective_partition_by:
+        writer = writer.partitionBy(*effective_partition_by)
+        if auto_detected_partitions:
+            log("  Auto-detected partitions: " + ", ".join(auto_detected_partitions))
+        log("  Partition columns: " + ", ".join(effective_partition_by))
     writer.save(full_path)
     log(f"  Write complete → {full_path}")
 

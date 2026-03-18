@@ -15,7 +15,7 @@ clean_data(df, drop_duplicates=True, drop_all_null_rows=True)
     Apply standard generic cleaning to a DataFrame.
 add_silver_metadata(df, source_lakehouse_name, source_relative_path, source_layer="bronze", ...)
     Add Silver metadata columns and date partitions.
-scan_data_errors(df, include_samples=True)
+scan_data_errors(df, include_samples=True, display_results=True)
     Scan data-quality issues and return a summary DataFrame plus chart.
 clean_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, ...)
     Read, clean, add Silver metadata, and write data in one pipeline helper.

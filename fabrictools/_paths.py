@@ -72,6 +72,33 @@ def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
     return ordered_unique
 
 
+def build_lakehouse_write_path(relative_path: str) -> str:
+    """
+    Build a normalized Lakehouse write path.
+
+    Rules:
+    - bare name -> Tables/dbo/<name>
+    - dbo/<name> -> Tables/dbo/<name>
+    - Tables/<name> -> Tables/dbo/<name>
+    - explicit Files/<...> remains Files/<...>
+    """
+    normalized = relative_path.strip().strip("/").replace("\\", "/")
+    if not normalized:
+        return normalized
+
+    parts = [part for part in normalized.split("/") if part]
+    first = parts[0].lower()
+    if first == "files":
+        return "/".join(["Files", *parts[1:]]) if len(parts) > 1 else "Files"
+    if first == "tables":
+        if len(parts) >= 2 and parts[1].lower() == "dbo":
+            return "/".join(["Tables", "dbo", *parts[2:]]) if len(parts) > 2 else "Tables/dbo"
+        return "/".join(["Tables", "dbo", *parts[1:]]) if len(parts) > 1 else "Tables/dbo"
+    if first == "dbo":
+        return "/".join(["Tables", "dbo", *parts[1:]]) if len(parts) > 1 else "Tables/dbo"
+    return "/".join(["Tables", "dbo", *parts])
+
+
 def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
     """
     Return the full ABFS path for a Fabric Lakehouse.
@@ -104,7 +131,6 @@ def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
             lh.get("properties", {}) if isinstance(lh, dict) else lh.properties
         )
         path = _read_property(properties, "abfsPath")
-        log(f"Resolved Lakehouse '{lakehouse_name}' → {path}")
         return path
     except ImportError as exc:
         raise ValueError(

@@ -10,6 +10,7 @@
 - **Auto-detected SparkSession** — uses `SparkSession.builder.getOrCreate()`, works seamlessly inside Fabric notebooks
 - **Auto-detected format** on read — tries Delta → Parquet → CSV automatically
 - **Auto-corrected Lakehouse read paths** — supports bare or partial paths (e.g. `customers`, `dbo/customers`) with fallback to `Tables/dbo/...` then `Files/...`
+- **Auto-corrected Lakehouse write paths** — partial paths are normalized to `Tables/dbo/...` while explicit `Files/...` paths are preserved
 - **Delta merge (upsert)** — one-liner upsert into any Lakehouse Delta table
 - **Generic data cleaning** — standard cleaning with one helper function
 - **Silver metadata enrichment** — add ingestion/source metadata + `year/month/day` partitions
@@ -67,6 +68,12 @@ ft.write_lakehouse(
     mode="overwrite",
     partition_by=["year", "month"],   # optional
 )
+
+# Write path normalization:
+# - "sales_clean"      -> Tables/dbo/sales_clean
+# - "dbo/sales_clean"  -> Tables/dbo/sales_clean
+# - "Tables/sales_clean" -> Tables/dbo/sales_clean
+# - "Files/archive/sales_clean" stays unchanged
 ```
 
 ### Merge (upsert) into a Delta table
@@ -99,6 +106,10 @@ By default it:
 
 ```python
 scan_output = ft.scan_data_errors(df, include_samples=True)
+
+# The function displays the summary DataFrame and chart automatically by default.
+# You can disable rendering with display_results=False.
+scan_output = ft.scan_data_errors(df, include_samples=True, display_results=False)
 
 # Spark DataFrame with all scan information (dataset metrics, per-column details, collisions)
 scan_output["summary_df"].show(truncate=False)
