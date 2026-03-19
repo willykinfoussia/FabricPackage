@@ -11,12 +11,16 @@ This module provides:
 from __future__ import annotations
 
 import datetime as dt
+import json
+import os
 from typing import Any, Optional
+from urllib import parse, request
 
 from pyspark.sql import DataFrame, SparkSession, Window, functions as F
 from pyspark.sql.types import (
     BooleanType,
     DateType,
+    DoubleType,
     IntegerType,
     StringType,
     StructField,
@@ -38,6 +42,8 @@ def _country_schema() -> StructType:
             StructField("country_name", StringType(), True),
             StructField("region", StringType(), True),
             StructField("subregion", StringType(), True),
+            StructField("latitude", DoubleType(), True),
+            StructField("longitude", DoubleType(), True),
         ]
     )
 
@@ -54,6 +60,9 @@ def _city_schema() -> StructType:
             StructField("country_key", IntegerType(), True),
             StructField("region", StringType(), True),
             StructField("subregion", StringType(), True),
+            StructField("latitude", DoubleType(), True),
+            StructField("longitude", DoubleType(), True),
+            StructField("population", IntegerType(), True),
         ]
     )
 
@@ -98,6 +107,147 @@ def _normalize_code(code: Any) -> Optional[str]:
     return normalized or None
 
 
+def _normalize_coordinate(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_population(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_name(value: Any) -> str:
+    return " ".join(str(value or "").strip().upper().split())
+
+
+def _get_geodb_api_key() -> Optional[str]:
+    return os.getenv("GEODB_API_KEY") or os.getenv("FABRICTOOLS_GEODB_API_KEY")
+
+
+def _get_geodb_base_url() -> str:
+    return os.getenv("GEODB_BASE_URL", "https://geodb-free-service.wirefreethought.com/v1/geo/cities")
+
+
+def _query_geodb_cities(country_code_2: str, city_name: str) -> list[dict[str, Any]]:
+    api_key = _get_geodb_api_key()
+    if not api_key:
+        return []
+
+    query = parse.urlencode(
+        {
+            "countryIds": country_code_2,
+            "namePrefix": city_name,
+            "limit": 10,
+            "sort": "-population",
+        }
+    )
+    url = f"{_get_geodb_base_url()}?{query}"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        # Keep compatibility with environments that expect a custom key header.
+        "X-GeoDB-Api-Key": api_key,
+    }
+    req = request.Request(url=url, headers=headers, method="GET")
+    with request.urlopen(req, timeout=10) as response:  # nosec B310
+        payload = json.loads(response.read().decode("utf-8"))
+    data = payload.get("data")
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    return []
+
+
+def _select_geodb_city_match(
+    candidates: list[dict[str, Any]],
+    city_name: str,
+    state_name: Optional[str] = None,
+    state_code: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    if not candidates:
+        return None
+
+    city_name_norm = _normalize_name(city_name)
+    exact_city_matches = [
+        row for row in candidates if _normalize_name(row.get("name")) == city_name_norm
+    ]
+    city_candidates = exact_city_matches or candidates
+    if len(city_candidates) == 1:
+        return city_candidates[0]
+
+    state_identifiers = {
+        _normalize_name(state_name),
+        _normalize_name(state_code),
+    } - {""}
+    if state_identifiers:
+        narrowed = [
+            row
+            for row in city_candidates
+            if _normalize_name(row.get("region")) in state_identifiers
+            or _normalize_name(row.get("regionCode")) in state_identifiers
+        ]
+        if len(narrowed) == 1:
+            return narrowed[0]
+        if narrowed:
+            city_candidates = narrowed
+
+    return max(
+        city_candidates,
+        key=lambda row: _normalize_population(row.get("population")) or -1,
+    )
+
+
+def _fetch_geodb_city_population(
+    country_code_2: str,
+    city_name: str,
+    state_name: Optional[str] = None,
+    state_code: Optional[str] = None,
+    cache: Optional[dict[tuple[str, str, str], Optional[int]]] = None,
+) -> Optional[int]:
+    city_norm = _normalize_name(city_name)
+    state_norm = _normalize_name(state_name) or _normalize_name(state_code)
+    cache_key = (country_code_2, city_norm, state_norm)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
+    population: Optional[int] = None
+    try:
+        candidates = _query_geodb_cities(country_code_2=country_code_2, city_name=city_name)
+        best_match = _select_geodb_city_match(
+            candidates=candidates,
+            city_name=city_name,
+            state_name=state_name,
+            state_code=state_code,
+        )
+        if best_match is not None:
+            population = _normalize_population(best_match.get("population"))
+    except Exception as exc:
+        log(
+            f"GeoDB lookup failed for city='{city_name}' country='{country_code_2}': {exc}",
+            level="warning",
+        )
+
+    if cache is not None:
+        cache[cache_key] = population
+    return population
+
+
 def build_dimension_date(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -108,6 +258,7 @@ def build_dimension_date(
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "dimension_date",
     mode: str = "overwrite",
+    batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """
@@ -189,6 +340,7 @@ def build_dimension_date(
         warehouse_table=warehouse_table,
         default_relative_path=default_relative_path,
         mode=mode,
+        batch_size=batch_size,
         spark=_spark,
     )
     return date_df
@@ -203,6 +355,7 @@ def build_dimension_country(
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "dimension_country",
     mode: str = "overwrite",
+    batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """Build `dimension_country` from `countrystatecity-countries`."""
@@ -254,6 +407,7 @@ def build_dimension_country(
             warehouse_table=warehouse_table,
             default_relative_path=default_relative_path,
             mode=mode,
+            batch_size=batch_size,
             spark=_spark,
         )
         return country_df
@@ -269,8 +423,11 @@ def build_dimension_country(
             df=empty_df,
             lakehouse_name=lakehouse_name,
             lakehouse_relative_path=lakehouse_relative_path,
-            default_relative_path="dimension_country",
+            warehouse_name=warehouse_name,
+            warehouse_table=warehouse_table,
+            default_relative_path=default_relative_path,
             mode=mode,
+            batch_size=batch_size,
             spark=_spark,
         )
         return empty_df
@@ -321,6 +478,7 @@ def build_dimension_city(
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "dimension_city",
     mode: str = "overwrite",
+    batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """Build `dimension_city` from `countrystatecity-countries`.
@@ -335,6 +493,7 @@ def build_dimension_city(
     regions_filter = _normalize_filter_set(regions)
     subregions_filter = _normalize_filter_set(subregions)
     countries_filter = _normalize_filter_set(countries)
+    geodb_cache: dict[tuple[str, str, str], Optional[int]] = {}
 
     try:
         get_countries, get_cities_of_country, get_states_of_country = _import_csc_package()
@@ -381,6 +540,13 @@ def build_dimension_city(
 
                 state_code = _normalize_code(city_payload.get("state_code"))
                 state_name = state_name_by_code.get(state_code) if state_code else None
+                population = _fetch_geodb_city_population(
+                    country_code_2=country_code_2,
+                    city_name=city_name,
+                    state_name=state_name,
+                    state_code=state_code,
+                    cache=geodb_cache,
+                )
                 city_rows.append(
                     {
                         "city_key": city_payload.get("id"),
@@ -392,6 +558,9 @@ def build_dimension_city(
                         "country_key": country_key,
                         "region": region,
                         "subregion": subregion,
+                        "latitude": _normalize_coordinate(city_payload.get("latitude")),
+                        "longitude": _normalize_coordinate(city_payload.get("longitude")),
+                        "population": population,
                     }
                 )
 
@@ -422,6 +591,7 @@ def build_dimension_city(
             warehouse_table=warehouse_table,
             default_relative_path=default_relative_path,
             mode=mode,
+            batch_size=batch_size,
             spark=_spark,
         )
         return city_df
@@ -441,6 +611,7 @@ def build_dimension_city(
             warehouse_table=warehouse_table,
             default_relative_path=default_relative_path,
             mode=mode,
+            batch_size=batch_size,
             spark=_spark,
         )
         return empty_df

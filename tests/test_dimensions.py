@@ -294,7 +294,11 @@ class TestBuildDimensionCity:
 
         from fabrictools.dimensions import build_dimension_city
 
-        result = build_dimension_city(include_states_metadata=True)
+        with patch(
+            "fabrictools.dimensions._fetch_geodb_city_population",
+            side_effect=[3898747, 8467513, 961855],
+        ) as mock_population_lookup:
+            result = build_dimension_city(include_states_metadata=True)
 
         args, kwargs = spark.createDataFrame.call_args
         rows = args[0]
@@ -305,8 +309,11 @@ class TestBuildDimensionCity:
         assert rows[0]["region"] == "Americas"
         assert rows[0]["subregion"] == "Northern America"
         assert rows[0]["state_name"] == "California"
+        assert rows[0]["population"] == 3898747
         assert rows[2]["state_name"] is None
+        assert rows[2]["population"] == 961855
         assert kwargs["schema"] is not None
+        assert mock_population_lookup.call_count == 3
         city_df.dropDuplicates.assert_called_once_with(["country_code_2", "state_name", "city_name"])
         assert result is city_df
 
@@ -584,6 +591,80 @@ class TestBuildDimensionCity:
 
         rows = spark.createDataFrame.call_args.args[0]
         assert len(rows) == 2
+
+    @patch("fabrictools.dimensions._query_geodb_cities")
+    def test_geodb_population_fallback_uses_state_for_ambiguous_city(self, mock_query):
+        """When city name is ambiguous, resolver should use state metadata."""
+        mock_query.return_value = [
+            {
+                "name": "Springfield",
+                "region": "Illinois",
+                "regionCode": "IL",
+                "population": 114394,
+            },
+            {
+                "name": "Springfield",
+                "region": "Missouri",
+                "regionCode": "MO",
+                "population": 169176,
+            },
+        ]
+        from fabrictools.dimensions import _fetch_geodb_city_population
+
+        value = _fetch_geodb_city_population(
+            country_code_2="US",
+            city_name="Springfield",
+            state_name="Missouri",
+            cache={},
+        )
+
+        assert value == 169176
+
+    @patch("fabrictools.dimensions._query_geodb_cities", side_effect=RuntimeError("api down"))
+    def test_geodb_population_returns_none_on_api_error(self, mock_query):
+        """GeoDB failures must degrade gracefully to None population."""
+        from fabrictools.dimensions import _fetch_geodb_city_population
+
+        value = _fetch_geodb_city_population(
+            country_code_2="US",
+            city_name="Paris",
+            state_name="Texas",
+            cache={},
+        )
+
+        assert value is None
+        mock_query.assert_called_once()
+
+    @patch("fabrictools.dimensions._query_geodb_cities")
+    def test_geodb_population_uses_cache_for_duplicate_lookups(self, mock_query):
+        """Duplicate city lookups should be served from in-memory cache."""
+        mock_query.return_value = [
+            {
+                "name": "Lyon",
+                "region": "Auvergne-Rhone-Alpes",
+                "regionCode": "ARA",
+                "population": 522228,
+            }
+        ]
+        from fabrictools.dimensions import _fetch_geodb_city_population
+
+        cache: dict[tuple[str, str, str], int | None] = {}
+        first = _fetch_geodb_city_population(
+            country_code_2="FR",
+            city_name="Lyon",
+            state_name="Auvergne-Rhone-Alpes",
+            cache=cache,
+        )
+        second = _fetch_geodb_city_population(
+            country_code_2="FR",
+            city_name="Lyon",
+            state_name="Auvergne-Rhone-Alpes",
+            cache=cache,
+        )
+
+        assert first == 522228
+        assert second == 522228
+        mock_query.assert_called_once()
 
 
 class TestGenerateDimensions:
