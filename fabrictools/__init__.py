@@ -31,12 +31,12 @@ write_warehouse(df, warehouse_name, table, mode, batch_size, spark=None)
 
 Dimensions
 ~~~~~~~~~~
-build_dimension_date(start_date=None, end_date=None, spark=None)
-    Build a date dimension DataFrame.
-build_dimension_country(countries_limit=None, fail_on_source_error=True, spark=None)
-    Build a country dimension DataFrame from countrystatecity-countries.
-build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, spark=None)
-    Build a city dimension DataFrame from countrystatecity-countries.
+build_dimension_date(start_date=None, end_date=None, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)
+    Build a date dimension DataFrame and optionally write it to a Lakehouse path.
+build_dimension_country(countries_limit=None, fail_on_source_error=True, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)
+    Build a country dimension DataFrame and optionally write it to a Lakehouse path.
+build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)
+    Build a city dimension DataFrame and optionally write it to a Lakehouse path.
 generate_dimensions(lakehouse_name, warehouse_name, ...)
     Build and write dimension tables to Lakehouse and Warehouse.
 """

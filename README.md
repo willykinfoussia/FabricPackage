@@ -260,10 +260,16 @@ dims = ft.generate_dimensions(
     # Optional range for dimension_date; defaults to rolling -10y / +2y
     start_date="2015-01-01",
     end_date="2030-12-31",
+    # Optional fiscal year start month for dimension_date (1=Jan ... 12=Dec)
+    fiscal_year_start_month=1,
     # Optional controls for countrystatecity-countries source
     countries_limit=None,
     include_states_metadata=True,
     fail_on_source_error=True,
+    # Optional city filters (narrow down which cities are generated)
+    city_regions=["Europe"],                   # filter by region
+    city_subregions=["Western Europe"],        # filter by subregion
+    city_countries=["FR", "DEU", "Belgium"],   # filter by code2/code3/name
 )
 
 # Access generated DataFrames
@@ -271,6 +277,27 @@ dims["dimension_date"].show(5)
 dims["dimension_country"].show(5)
 dims["dimension_city"].show(5)
 ```
+
+`dimension_city` now includes country attributes: `country_code_3`, `country_key`, `region`, `subregion`.
+
+You can also filter cities directly via `build_dimension_city`:
+
+```python
+city_df = ft.build_dimension_city(
+    regions=["Americas"],
+    countries=["US", "CAN"],
+)
+```
+
+Filters accept case-insensitive values and are combined with AND logic.
+The `countries` parameter accepts any mix of `country_code_2`, `country_code_3`, or `country_name`.
+
+`dimension_date` also includes calendar/fiscal attributes and labels:
+- `short_month`, `calendar_year`, `calendar_month`
+- `fiscal_year`, `fiscal_month` (from `fiscal_year_start_month`, default `1`)
+- `calendar_year_label`, `calendar_month_label` (format: `CYyyyy-MMM`)
+- `fiscal_year_label`, `fiscal_month_label` (format: `FYyyyy-MMM`)
+- `iso_week_number`
 
 ---
 
@@ -300,10 +327,10 @@ dims["dimension_city"].show(5)
 
 | Function | Description |
 |---|---|
-| `build_dimension_date(start_date=None, end_date=None, spark=None)` | Build a date dimension DataFrame |
-| `build_dimension_country(countries_limit=None, fail_on_source_error=True, spark=None)` | Build country dimension from `countrystatecity-countries` |
-| `build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, spark=None)` | Build city dimension from `countrystatecity-countries` |
-| `generate_dimensions(lakehouse_name, warehouse_name, include_date, include_country, include_city, ...)` | Build and write selected dimensions to Lakehouse and Warehouse |
+| `build_dimension_date(start_date=None, end_date=None, fiscal_year_start_month=1, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build a date dimension DataFrame (with calendar/fiscal columns, labels, ISO week number) and optionally write it to Lakehouse |
+| `build_dimension_country(countries_limit=None, fail_on_source_error=True, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build country dimension and optionally write it to Lakehouse |
+| `build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, regions=None, subregions=None, countries=None, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build city dimension (with country attributes and optional region/subregion/country filters) and optionally write it to Lakehouse |
+| `generate_dimensions(lakehouse_name, warehouse_name, ..., city_regions=None, city_subregions=None, city_countries=None, ...)` | Build and write selected dimensions to Lakehouse and Warehouse |
 
 ---
 
