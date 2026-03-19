@@ -166,8 +166,10 @@ def _query_geodb_cities(country_code_2: str, city_name: str) -> list[dict[str, A
         "X-GeoDB-Api-Key": api_key,
     }
     req = request.Request(url=url, headers=headers, method="GET")
+    log(f"Querying GeoDB API for city='{city_name}' country='{country_code_2}'")
     with request.urlopen(req, timeout=10) as response:  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
+    log(f"GeoDB API response: {payload}")
     data = payload.get("data")
     if isinstance(data, list):
         return [item for item in data if isinstance(item, dict)]
@@ -540,6 +542,7 @@ def build_dimension_city(
 
                 state_code = _normalize_code(city_payload.get("state_code"))
                 state_name = state_name_by_code.get(state_code) if state_code else None
+                log(f"Fetching population for city='{city_name}' state='{state_name}' country='{country_code_2}'")
                 population = _fetch_geodb_city_population(
                     country_code_2=country_code_2,
                     city_name=city_name,
