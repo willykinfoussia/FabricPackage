@@ -54,15 +54,14 @@ def _city_schema() -> StructType:
             StructField("country_key", IntegerType(), True),
             StructField("region", StringType(), True),
             StructField("subregion", StringType(), True),
-            StructField("timezone", StringType(), True),
         ]
     )
 
 
 def _default_date_bounds() -> tuple[str, str]:
     today = dt.date.today()
-    start_date = dt.date(today.year - 10, 1, 1).isoformat()
-    end_date = dt.date(today.year + 2, 12, 31).isoformat()
+    start_date = dt.date(today.year - (today.year % 100), 1, 1).isoformat()
+    end_date = dt.date(today.year + 4, 12, 31).isoformat()
     return start_date, end_date
 
 
@@ -479,8 +478,8 @@ def _write_dimension_targets(
 
 
 def generate_dimensions(
-    lakehouse_name: Optional[str],
-    warehouse_name: Optional[str],
+    lakehouse_name: Optional[str] = None,
+    warehouse_name: Optional[str] = None,
     include_date: bool = True,
     include_country: bool = True,
     include_city: bool = True,

@@ -16,6 +16,7 @@
 - **Silver metadata enrichment** — add ingestion/source metadata + `year/month/day` partitions
 - **Data quality scan** — detect nulls, blank strings, duplicates, and naming collisions
 - **Bulk lakehouse cleaning** — iterate all tables and copy cleaned outputs to another Lakehouse
+- **Source → Prepared pipeline** — profile schema, resolve semantics, transform, optimize, and publish BI assets
 - **Dimension generators** — build `dimension_date`, `dimension_country`, and `dimension_city` with Lakehouse/Warehouse writes
 - **Built-in logging** — every operation logs its resolved path, detected format, and row/column count
 
@@ -177,6 +178,83 @@ print(bulk_result["successful_tables"], bulk_result["failed_tables"])
 The helper scans `Tables/<schema>/<table>` in the source Lakehouse and writes to
 the same relative path in the target Lakehouse.
 
+### Source -> Prepared pipeline (independent steps)
+
+Each phase can be called independently, or orchestrated by helpers.
+
+```python
+# 1) Discovery
+schema_hash = ft.snapshot_source_schema(
+    source_lakehouse_name="CleanLakehouse",
+    source_relative_path="Tables/dbo/orders_clean",
+)
+
+# 2) Resolver (3 layers + unresolved audit)
+source_df = ft.read_lakehouse("CleanLakehouse", "Tables/dbo/orders_clean")
+mappings = ft.resolve_columns(
+    df=source_df,
+    source_lakehouse_name="CleanLakehouse",
+    schema_hash=schema_hash,
+    sample_size=500,
+    profiling_confidence_threshold=0.80,
+)
+
+# 3) Transformation
+prepared_df = ft.transform_to_prepared(
+    df=source_df,
+    resolved_mappings=mappings,
+    source_lakehouse_name="CleanLakehouse",
+)
+
+# 4) Write + optimization
+ft.write_prepared_table(
+    df=prepared_df,
+    resolved_mappings=mappings,
+    target_lakehouse_name="BusinessReadyLakehouse",
+    target_relative_path="Tables/dbo/orders_prepared",
+    mode="overwrite",
+)
+
+# 5) Optional BI outputs
+agg_tables = ft.generate_prepared_aggregations(
+    source_lakehouse_name="CleanLakehouse",
+    target_lakehouse_name="BusinessReadyLakehouse",
+    target_relative_path="Tables/dbo/orders_prepared",
+    resolved_mappings=mappings,
+)
+```
+
+Config tables for this pipeline are stored in the **source lakehouse** under `Tables/config/`:
+- `source_schema_snapshot`
+- `prefix_rules`
+- `profiling_cache`
+- `mapping_rules`
+- `code_labels`
+- `pipeline_audit_log`
+
+Orchestration helpers:
+
+```python
+# Single table
+prepared_df = ft.prepare_and_write_data(
+    source_lakehouse_name="CleanLakehouse",
+    source_relative_path="Tables/dbo/orders_clean",
+    target_lakehouse_name="BusinessReadyLakehouse",
+    target_relative_path="Tables/dbo/orders_prepared",
+    mode="overwrite",
+)
+
+# Bulk mode (same pattern as clean_and_write_all_tables)
+result = ft.prepare_and_write_all_tables(
+    source_lakehouse_name="CleanLakehouse",
+    target_lakehouse_name="BusinessReadyLakehouse",
+    mode="overwrite",
+    include_schemas=["dbo"],
+    continue_on_error=True,
+)
+print(result["successful_tables"], result["failed_tables"])
+```
+
 You can also drive the orchestration with an explicit `TABLES_CONFIG`:
 
 ```python
@@ -331,6 +409,19 @@ The `countries` parameter accepts any mix of `country_code_2`, `country_code_3`,
 | `build_dimension_country(countries_limit=None, fail_on_source_error=True, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build country dimension and optionally write it to Lakehouse |
 | `build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, regions=None, subregions=None, countries=None, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build city dimension (with country attributes and optional region/subregion/country filters) and optionally write it to Lakehouse |
 | `generate_dimensions(lakehouse_name, warehouse_name, ..., city_regions=None, city_subregions=None, city_countries=None, ...)` | Build and write selected dimensions to Lakehouse and Warehouse |
+
+### Source to Prepared
+
+| Function | Description |
+|---|---|
+| `snapshot_source_schema(source_lakehouse_name, source_relative_path, spark=None)` | Passive profiling of source table + schema hash generation |
+| `resolve_columns(df, source_lakehouse_name, schema_hash=None, sample_size=500, profiling_confidence_threshold=0.80, unresolved_webhook_url=None, spark=None)` | 3-layer semantic resolver with confidence score and unresolved fallback audit |
+| `transform_to_prepared(df, resolved_mappings, source_lakehouse_name, spark=None)` | Apply semantic casts, code labels, and date-derived columns in one select pass |
+| `write_prepared_table(df, resolved_mappings, target_lakehouse_name, target_relative_path, mode="overwrite", max_partitions_guard=500, vacuum_retention_hours=168, spark=None)` | Write prepared table with partition strategy and conditional maintenance |
+| `generate_prepared_aggregations(source_lakehouse_name, target_lakehouse_name, target_relative_path, resolved_mappings, spark=None)` | Build default prepared aggregations (`prepared_agg_jour`, `prepared_agg_semaine`, `prepared_agg_region`) |
+| `publish_semantic_model(target_lakehouse_name, agg_tables, resolved_mappings, power_bi_workspace_id, power_bi_token, spark=None)` | Publish/update semantic model via Power BI/Fabric REST API |
+| `prepare_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, ...)` | End-to-end orchestration for one table |
+| `prepare_and_write_all_tables(source_lakehouse_name, target_lakehouse_name, ...)` | Bulk orchestration with discovery or explicit table config |
 
 ---
 

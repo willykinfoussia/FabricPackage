@@ -57,6 +57,16 @@ from fabrictools.dimensions import (
     generate_dimensions,
 )
 from fabrictools.lakehouse import merge_lakehouse, read_lakehouse, write_lakehouse
+from fabrictools.prepare import (
+    generate_prepared_aggregations,
+    prepare_and_write_all_tables,
+    prepare_and_write_data,
+    publish_semantic_model,
+    resolve_columns,
+    snapshot_source_schema,
+    transform_to_prepared,
+    write_prepared_table,
+)
 from fabrictools.warehouse import read_warehouse, write_warehouse
 
 __all__ = [
@@ -74,6 +84,14 @@ __all__ = [
     "build_dimension_country",
     "build_dimension_city",
     "generate_dimensions",
+    "snapshot_source_schema",
+    "resolve_columns",
+    "transform_to_prepared",
+    "write_prepared_table",
+    "generate_prepared_aggregations",
+    "publish_semantic_model",
+    "prepare_and_write_data",
+    "prepare_and_write_all_tables",
 ]
 
 # Expose helpers as true top-level package API in docs/introspection.
@@ -92,6 +110,14 @@ for _exported_function in (
     build_dimension_country,
     build_dimension_city,
     generate_dimensions,
+    snapshot_source_schema,
+    resolve_columns,
+    transform_to_prepared,
+    write_prepared_table,
+    generate_prepared_aggregations,
+    publish_semantic_model,
+    prepare_and_write_data,
+    prepare_and_write_all_tables,
 ):
     _exported_function.__module__ = __name__
 
