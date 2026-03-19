@@ -32,13 +32,13 @@ from fabrictools._spark import get_spark
 from fabrictools.data_quality import _list_lakehouse_table_paths
 from fabrictools.lakehouse import read_lakehouse, resolve_lakehouse_read_candidate, write_lakehouse
 
-CONFIG_SOURCE_SNAPSHOT_PATH = "Tables/config/source_schema_snapshot"
-CONFIG_PREFIX_RULES_PATH = "Tables/config/prefix_rules"
-CONFIG_PROFILING_CACHE_PATH = "Tables/config/profiling_cache"
-CONFIG_MAPPING_RULES_PATH = "Tables/config/mapping_rules"
-CONFIG_CODE_LABELS_PATH = "Tables/config/code_labels"
-CONFIG_AUDIT_LOG_PATH = "Tables/config/pipeline_audit_log"
-CONFIG_DAX_TEMPLATE_PATH = "Tables/config/dax_template"
+CONFIG_SOURCE_SNAPSHOT_PATH = "Tables/dbo/source_schema_snapshot"
+CONFIG_PREFIX_RULES_PATH = "Tables/dbo/prefix_rules"
+CONFIG_PROFILING_CACHE_PATH = "Tables/dbo/profiling_cache"
+CONFIG_MAPPING_RULES_PATH = "Tables/dbo/mapping_rules"
+CONFIG_CODE_LABELS_PATH = "Tables/dbo/code_labels"
+CONFIG_AUDIT_LOG_PATH = "Tables/dbo/pipeline_audit_log"
+CONFIG_DAX_TEMPLATE_PATH = "Tables/dbo/dax_template"
 
 DEFAULT_PREFIX_RULES: list[dict[str, str]] = [
     {"pattern": r"^(nb_|nbre_)", "semantic_type": "QUANTITY"},

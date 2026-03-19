@@ -165,9 +165,15 @@ def _query_geodb_cities(country_code_2: str, city_name: str) -> list[dict[str, A
         # Keep compatibility with environments that expect a custom key header.
         "X-GeoDB-Api-Key": api_key,
     }
-    req = request.Request(url=url, headers=headers, method="GET")
+    log(f"GeoDB API URL: {url}")
+    log(f"GeoDB API headers: {headers}")
+    try:
+        req = request.Request(url=url, headers=headers, method="GET")
+    except Exception as exc:
+        log(f"Error creating GeoDB API request: {exc}", level="warning")
+        return []
     log(f"Querying GeoDB API for city='{city_name}' country='{country_code_2}'")
-    with request.urlopen(req, timeout=10) as response:  # nosec B310
+    with request.urlopen(req, timeout=30) as response:  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
     log(f"GeoDB API response: {payload}")
     data = payload.get("data")
