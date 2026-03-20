@@ -404,19 +404,19 @@ def _write_unresolved_audit(
 
 
 def resolve_columns(
-    df: DataFrame,
     source_lakehouse_name: str,
+    source_relative_path: str,
     schema_hash: Optional[str] = None,
     sample_size: int = 500,
     profiling_confidence_threshold: float = 0.80,
     unresolved_webhook_url: Optional[str] = None,
-    source_relative_path: str = "",
     spark: Optional[SparkSession] = None,
 ) -> List[ResolvedColumn]:
     """
     Resolve source columns to prepared semantic columns through 3 cascade layers.
     """
     _spark = spark or get_spark()
+    df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
     effective_schema_hash = schema_hash or _build_schema_hash(df)
 
     rules_df = _ensure_prefix_rules(source_lakehouse_name, _spark)
@@ -489,14 +489,6 @@ def resolve_columns(
             mode="overwrite",
             spark=_spark,
         )
-    
-    write_lakehouse(
-        resolved,
-        lakehouse_name=source_lakehouse_name,
-        relative_path=f"{source_relative_path}_{CONFIG_RESOLVED_COLUMNS_PATH}",
-        mode="overwrite",
-        spark=_spark,
-    )
 
     _write_unresolved_audit(
         unresolved_columns=unresolved,
@@ -523,15 +515,16 @@ def _semantic_cast_expr(col_name: str, semantic_type: str) -> F.Column:
 
 
 def transform_to_prepared(
-    df: DataFrame,
-    resolved_mappings: List[ResolvedColumn],
     source_lakehouse_name: str,
+    source_relative_path: str,
+    resolved_mappings: List[ResolvedColumn],
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """
     Apply semantic casts, code labels, and date derivations in one select pass.
     """
     _spark = spark or get_spark()
+    df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
     code_labels_df = _safe_read_table(source_lakehouse_name, CONFIG_CODE_LABELS_PATH, spark=_spark)
 
     code_label_maps: dict[str, dict[str, str]] = {}
