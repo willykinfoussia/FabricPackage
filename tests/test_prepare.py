@@ -161,6 +161,25 @@ class TestResolveColumns:
         mock_write_unresolved_audit.assert_called_once()
 
 
+class TestLayer1Rules:
+    def test_layer1_no_longer_detects_month_day_year_by_name(self):
+        from fabrictools.prepare import _layer1_resolve
+
+        rules = [
+            {"pattern": r"^(nb_|nbre_)", "semantic_type": "QUANTITY"},
+            {"pattern": r"^(dt_|date_)", "semantic_type": "DATE"},
+            {"pattern": r"^(mt_|mnt_)", "semantic_type": "AMOUNT"},
+            {"pattern": r"^(cd_|code_)", "semantic_type": "CATEGORY"},
+            {"pattern": r"^(id_)", "semantic_type": "RELATION_ID"},
+            {"pattern": r"(_id)$", "semantic_type": "RELATION_ID"},
+            {"pattern": r"^(tx_|taux_)", "semantic_type": "RATE"},
+        ]
+
+        assert _layer1_resolve("month_number", rules) is None
+        assert _layer1_resolve("jour_vente", rules) is None
+        assert _layer1_resolve("year_value", rules) is None
+
+
 class TestLayer2ProfileResolveTypeAware:
     def test_date_type_is_auto_classified_as_date(self):
         df = MagicMock()
@@ -224,14 +243,172 @@ class TestLayer2ProfileResolveTypeAware:
         assert resolved is not None
         assert resolved["semantic_type"] == "TEXT"
 
+    def test_numeric_range_1_to_12_is_inferred_as_month(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            (1,),
+            (4,),
+            (7,),
+            (12,),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="month_number",
+            col_data_type=IntegerType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "MONTH"
+
+    def test_numeric_range_1_to_31_is_inferred_as_day(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            (1,),
+            (15,),
+            (22,),
+            (31,),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="day_number",
+            col_data_type=IntegerType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "DAY"
+
+    def test_string_numeric_like_month_requires_digits_and_names(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            ("01",),
+            ("02",),
+            ("03",),
+            ("janvier",),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="month_mixed",
+            col_data_type=StringType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "MONTH"
+
+    def test_string_numeric_like_year_is_inferred(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            ("2019",),
+            ("2020",),
+            ("2021",),
+            ("2022",),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="year_string",
+            col_data_type=StringType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "YEAR"
+
+    def test_string_text_like_day_uses_strict_name_match(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            ("monday",),
+            ("tuesday",),
+            ("wednesday",),
+            ("thursday",),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="weekday_name",
+            col_data_type=StringType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "DAY"
+
+    def test_string_text_like_partial_names_are_rejected(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            ("jan",),
+            ("mon",),
+            ("thu",),
+            ("fri",),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="partial_names",
+            col_data_type=StringType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is None
+
+
+class TestAliasLocalization:
+    def test_localize_alias_tokens_preserves_requested_case(self):
+        from fabrictools.prepare import _localize_alias_tokens
+
+        assert _localize_alias_tokens("YEAR") == "ANNEE"
+        assert _localize_alias_tokens("Year") == "Année"
+        assert _localize_alias_tokens("year") == "année"
+        assert _localize_alias_tokens("MONTH") == "MOIS"
+        assert _localize_alias_tokens("Month") == "Mois"
+        assert _localize_alias_tokens("month") == "mois"
+        assert _localize_alias_tokens("DAY") == "JOUR"
+        assert _localize_alias_tokens("Day") == "Jour"
+        assert _localize_alias_tokens("day") == "jour"
+
+    def test_localize_alias_tokens_handles_word_and_camel_boundaries(self):
+        from fabrictools.prepare import _localize_alias_tokens
+
+        assert _localize_alias_tokens("order_year") == "order_année"
+        assert _localize_alias_tokens("OrderYear") == "OrderAnnée"
+        assert _localize_alias_tokens("OrderMONTHValue") == "OrderMOISValue"
+        assert _localize_alias_tokens("monday_count") == "monday_count"
+
 
 class TestTransformToPrepared:
+    @patch("fabrictools.prepare._localize_alias_tokens", side_effect=lambda alias: alias)
+    @patch("fabrictools.prepare.read_lakehouse")
     @patch("fabrictools.prepare._safe_read_table")
     @patch("fabrictools.prepare.get_spark")
     def test_transform_to_prepared_runs_single_select(
         self,
         mock_get_spark,
         mock_safe_read_table,
+        mock_read_lakehouse,
+        mock_localize_alias_tokens,
     ):
         spark = MagicMock()
         mock_get_spark.return_value = spark
@@ -240,6 +417,7 @@ class TestTransformToPrepared:
         df = MagicMock()
         transformed_df = MagicMock()
         df.select.return_value = transformed_df
+        mock_read_lakehouse.return_value = df
 
         resolved_mappings = [
             {
@@ -261,14 +439,16 @@ class TestTransformToPrepared:
         from fabrictools.prepare import transform_to_prepared
 
         result = transform_to_prepared(
-            df=df,
             resolved_mappings=resolved_mappings,
             source_lakehouse_name="SourceLakehouse",
+            source_relative_path="Tables/dbo/orders",
         )
 
         assert result is transformed_df
         df.select.assert_called_once()
         assert len(df.select.call_args.args) == 6
+        assert any(call_args.args[0] == "date_order" for call_args in mock_localize_alias_tokens.call_args_list)
+        assert any(call_args.args[0] == "date_order Year" for call_args in mock_localize_alias_tokens.call_args_list)
 
 
 class TestWritePreparedTable:

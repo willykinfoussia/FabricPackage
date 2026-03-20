@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, TypedDict
 from urllib import request
@@ -44,12 +45,88 @@ CONFIG_DAX_TEMPLATE_PATH = "Tables/dbo/dax_template"
 DEFAULT_PREFIX_RULES: list[dict[str, str]] = [
     {"pattern": r"^(nb_|nbre_)", "semantic_type": "QUANTITY"},
     {"pattern": r"^(dt_|date_)", "semantic_type": "DATE"},
+    {"pattern": r"^(month_|mois_)", "semantic_type": "MONTH"},
+    {"pattern": r"^(day_|jour_)", "semantic_type": "DAY"},
+    {"pattern": r"^(year_|annee_)", "semantic_type": "YEAR"},
     {"pattern": r"^(mt_|mnt_)", "semantic_type": "AMOUNT"},
     {"pattern": r"^(cd_|code_)", "semantic_type": "CATEGORY"},
     {"pattern": r"^(id_)", "semantic_type": "RELATION_ID"},
     {"pattern": r"(_id)$", "semantic_type": "RELATION_ID"},
     {"pattern": r"^(tx_|taux_)", "semantic_type": "RATE"},
 ]
+
+STRICT_MONTH_NAMES = {
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "janvier",
+    "fevrier",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "aout",
+    "septembre",
+    "octobre",
+    "novembre",
+    "decembre",
+}
+
+STRICT_DAY_NAMES = {
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "lundi",
+    "mardi",
+    "mercredi",
+    "jeudi",
+    "vendredi",
+    "samedi",
+    "dimanche",
+}
+
+ALIAS_TOKEN_REPLACEMENTS = {
+    "YEAR": "ANNEE",
+    "Year": "Année",
+    "year": "année",
+    "MONTH": "MOIS",
+    "Month": "Mois",
+    "month": "mois",
+    "DAY": "JOUR",
+    "Day": "Jour",
+    "day": "jour",
+}
+
+
+def _normalize_token(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.strip().lower())
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
+def _localize_alias_tokens(alias: str) -> str:
+    """
+    Localize year/month/day tokens to French while preserving case style.
+    """
+    token_pattern = re.compile(r"(?<![A-Za-z0-9])(YEAR|Year|year|MONTH|Month|month|DAY|Day|day)(?![A-Za-z0-9])")
+    camel_suffix_pattern = re.compile(r"(YEAR|Year|MONTH|Month|DAY|Day)(?=[A-Z]|$)")
+
+    localized = token_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], alias)
+    localized = camel_suffix_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], localized)
+    return localized
 
 
 class ResolvedColumn(TypedDict):
@@ -84,18 +161,11 @@ def _build_schema_hash(df: DataFrame) -> str:
 def _clean_suffix(col_name: str) -> str:
     """Remove common technical prefixes/suffixes and leading/trailing special characters before labeling."""
     cleaned = col_name.lower().strip()
-    print(f"Cleaned lowercased: {cleaned}")
     cleaned = re.sub(r"^(nb_|nbre_|dt_|date_|mt_|mnt_|cd_|code_|id_|tx_|taux_)", "", cleaned)
-    print(f"Cleaned removed prefixes: {cleaned}")
     cleaned = re.sub(r"(_id)$", "", cleaned)
-    print(f"Cleaned removed _id suffix: {cleaned}")
     cleaned = re.sub(r"^[\W_]+|[\W_]+$", "", cleaned)
-    print(f"Cleaned removed special characters: {cleaned}")
     cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
-    print(f"Cleaned replaced non-alphanumeric with space: {cleaned}")
     cleaned = cleaned.strip()
-    print(f"Cleaned stripped: {cleaned}")
-    print(f"Cleaned capitalized: {cleaned.capitalize()}")
     return cleaned
 
 
@@ -281,7 +351,16 @@ def _layer2_profile_resolve(
     date_pattern_slash = re.compile(r"^\d{2}/\d{2}/\d{4}$")
     ref_pattern = re.compile(r"^[A-Z]{2,4}[0-9]+$")
     decimal_2_pattern = re.compile(r"^-?\d+\.\d{2}$")
-    as_str_values = [str(v) for v in sample_values]
+    as_str_values = [str(v).strip() for v in sample_values]
+    strict_tokens = [_normalize_token(value) for value in as_str_values[:50] if value.strip()]
+    month_name_ratio = (
+        sum(1 for token in strict_tokens if token in STRICT_MONTH_NAMES) / max(len(strict_tokens), 1)
+    )
+    day_name_ratio = sum(1 for token in strict_tokens if token in STRICT_DAY_NAMES) / max(len(strict_tokens), 1)
+    if month_name_ratio > 0.5:
+        confidence_by_type["MONTH"] = max(confidence_by_type.get("MONTH", 0.0), 0.86)
+    if day_name_ratio > 0.5:
+        confidence_by_type["DAY"] = max(confidence_by_type.get("DAY", 0.0), 0.84)
     if all(date_pattern_iso.match(v) or date_pattern_slash.match(v) for v in as_str_values[:50]):
         confidence_by_type["DATE"] = max(confidence_by_type.get("DATE", 0.0), 0.9)
     if all(decimal_2_pattern.match(v) for v in as_str_values[:50]):
@@ -289,28 +368,55 @@ def _layer2_profile_resolve(
     if all(ref_pattern.match(v) for v in as_str_values[:50]):
         confidence_by_type["CATEGORY"] = max(confidence_by_type.get("CATEGORY", 0.0), 0.88)
 
-    numeric_values: list[float] = []
-    for value in sample_values:
-        try:
-            numeric_values.append(float(value))
-        except Exception:
-            pass
-    if numeric_values:
-        min_value = min(numeric_values)
-        max_value = max(numeric_values)
-        mean_value = sum(numeric_values) / len(numeric_values)
-        if 0.0 <= min_value and max_value <= 1.0:
-            confidence_by_type["RATE"] = max(confidence_by_type.get("RATE", 0.0), 0.85)
-        if 1900 <= min_value and max_value <= 2100:
-            confidence_by_type["YEAR"] = max(confidence_by_type.get("YEAR", 0.0), 0.8)
-        if mean_value != 0:
-            variance = sum((v - mean_value) ** 2 for v in numeric_values) / len(numeric_values)
-            std_dev = variance ** 0.5
-            if abs(std_dev / mean_value) > 10:
-                confidence_by_type["AMOUNT"] = max(confidence_by_type.get("AMOUNT", 0.0), 0.83)
+    if isinstance(col_data_type, StringType):
+        integer_tokens = [token for token in strict_tokens if re.fullmatch(r"\d{1,4}", token)]
+        numeric_like_ratio = len(integer_tokens) / max(len(strict_tokens), 1)
+        if numeric_like_ratio > 0.5:
+            integer_values = [int(token) for token in integer_tokens]
+            month_digit_ratio = sum(1 for value in integer_values if 1 <= value <= 12) / max(
+                len(integer_values), 1
+            )
+            day_digit_ratio = sum(1 for value in integer_values if 1 <= value <= 31) / max(
+                len(integer_values), 1
+            )
+            year_digit_ratio = sum(1 for value in integer_values if 1900 <= value <= 2100) / max(
+                len(integer_values), 1
+            )
+            if month_digit_ratio > 0.5 and month_name_ratio > 0.0:
+                confidence_by_type["MONTH"] = max(confidence_by_type.get("MONTH", 0.0), 0.88)
+            if day_digit_ratio > 0.5 and day_name_ratio > 0.0:
+                confidence_by_type["DAY"] = max(confidence_by_type.get("DAY", 0.0), 0.86)
+            if year_digit_ratio > 0.5:
+                confidence_by_type["YEAR"] = max(confidence_by_type.get("YEAR", 0.0), 0.82)
+        else:
+            confidence_by_type.pop("YEAR", None)
+    else:
+        numeric_values: list[float] = []
+        for value in sample_values:
+            try:
+                numeric_values.append(float(value))
+            except Exception:
+                pass
+        if numeric_values:
+            min_value = min(numeric_values)
+            max_value = max(numeric_values)
+            mean_value = sum(numeric_values) / len(numeric_values)
+            if 1.0 <= min_value and max_value <= 12.0:
+                confidence_by_type["MONTH"] = max(confidence_by_type.get("MONTH", 0.0), 0.86)
+            if 1.0 <= min_value and max_value <= 31.0:
+                confidence_by_type["DAY"] = max(confidence_by_type.get("DAY", 0.0), 0.84)
+            if 0.0 <= min_value and max_value <= 1.0:
+                confidence_by_type["RATE"] = max(confidence_by_type.get("RATE", 0.0), 0.85)
+            if 1900 <= min_value and max_value <= 2100:
+                confidence_by_type["YEAR"] = max(confidence_by_type.get("YEAR", 0.0), 0.8)
+            if mean_value != 0:
+                variance = sum((v - mean_value) ** 2 for v in numeric_values) / len(numeric_values)
+                std_dev = variance ** 0.5
+                if abs(std_dev / mean_value) > 10:
+                    confidence_by_type["AMOUNT"] = max(confidence_by_type.get("AMOUNT", 0.0), 0.83)
 
     if isinstance(col_data_type, NumericType):
-        for semantic_type in ("AMOUNT", "QUANTITY", "RATE", "YEAR"):
+        for semantic_type in ("AMOUNT", "QUANTITY", "RATE", "YEAR", "MONTH", "DAY"):
             if semantic_type in confidence_by_type:
                 confidence_by_type[semantic_type] += 0.05
         if "DATE" in confidence_by_type:
@@ -475,7 +581,7 @@ def resolve_columns(
                 "col_source": str(row_dict.get("col_source")),
                 "col_prepared": str(row_dict.get("col_prepared")),
                 "semantic_type": str(row_dict.get("semantic_type")),
-                "source_resolution": "PROFILING",
+                "source_resolution": "PROFILING_CACHE",
                 "confidence": float(row_dict.get("confidence") or 0.0),
             }
 
@@ -555,7 +661,7 @@ def _semantic_cast_expr(col_name: str, semantic_type: str) -> F.Column:
         return F.to_date(expression)
     if stype in {"AMOUNT", "RATE"}:
         return expression.cast("decimal(18,2)")
-    if stype in {"QUANTITY", "YEAR"}:
+    if stype in {"QUANTITY", "YEAR", "MONTH", "DAY"}:
         return expression.cast("int")
     return expression
 
@@ -604,15 +710,15 @@ def transform_to_prepared(
                     F.col(src).cast("string"),
                 )
 
-        select_exprs.append(base_expr.alias(prepared))
+        select_exprs.append(base_expr.alias(_localize_alias_tokens(prepared)))
 
         if semantic_type == "DATE":
             select_exprs.extend(
                 [
-                    F.year(F.to_date(F.col(src))).alias(f"{prepared}_annee"),
-                    F.month(F.to_date(F.col(src))).alias(f"{prepared}_mois"),
-                    F.weekofyear(F.to_date(F.col(src))).alias(f"{prepared}_num_semaine"),
-                    F.date_format(F.to_date(F.col(src)), "MMMM").alias(f"{prepared}_libelle_mois"),
+                    F.year(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} Year")),
+                    F.month(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} MonthNumber")),
+                    F.weekofyear(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} WeekNumber")),
+                    F.date_format(F.to_date(F.col(src)), "MMMM").alias(_localize_alias_tokens(f"{prepared} Month")),
                 ]
             )
 
