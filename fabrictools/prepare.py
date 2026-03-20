@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 from urllib import request
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
-from pyspark.sql.types import NumericType
+from pyspark.sql.types import BooleanType, DateType, NumericType, StringType, TimestampType
 
 from fabrictools._logger import log
 from fabrictools._paths import build_lakehouse_write_path, get_lakehouse_abfs_path
@@ -45,7 +45,7 @@ DEFAULT_PREFIX_RULES: list[dict[str, str]] = [
     {"pattern": r"^(nb_|nbre_)", "semantic_type": "QUANTITY"},
     {"pattern": r"^(dt_|date_)", "semantic_type": "DATE"},
     {"pattern": r"^(mt_|mnt_)", "semantic_type": "AMOUNT"},
-    {"pattern": r"^(cd_|code_)", "semantic_type": "CODE_REF"},
+    {"pattern": r"^(cd_|code_)", "semantic_type": "CATEGORY"},
     {"pattern": r"^(id_)", "semantic_type": "RELATION_ID"},
     {"pattern": r"(_id)$", "semantic_type": "RELATION_ID"},
     {"pattern": r"^(tx_|taux_)", "semantic_type": "RATE"},
@@ -84,11 +84,18 @@ def _build_schema_hash(df: DataFrame) -> str:
 def _clean_suffix(col_name: str) -> str:
     """Remove common technical prefixes/suffixes and leading/trailing special characters before labeling."""
     cleaned = col_name.lower().strip()
+    print(f"Cleaned lowercased: {cleaned}")
     cleaned = re.sub(r"^(nb_|nbre_|dt_|date_|mt_|mnt_|cd_|code_|id_|tx_|taux_)", "", cleaned)
+    print(f"Cleaned removed prefixes: {cleaned}")
     cleaned = re.sub(r"(_id)$", "", cleaned)
+    print(f"Cleaned removed _id suffix: {cleaned}")
     cleaned = re.sub(r"^[\W_]+|[\W_]+$", "", cleaned)
+    print(f"Cleaned removed special characters: {cleaned}")
     cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+    print(f"Cleaned replaced non-alphanumeric with space: {cleaned}")
     cleaned = cleaned.strip()
+    print(f"Cleaned stripped: {cleaned}")
+    print(f"Cleaned capitalized: {cleaned.capitalize()}")
     return cleaned
 
 
@@ -227,7 +234,7 @@ def _layer1_resolve(
         if re.search(pattern, col_source, flags=re.IGNORECASE):
             return {
                 "col_source": col_source,
-                "col_prepared": _build_prepared_name(semantic_type, col_source),
+                "col_prepared": _build_prepared_name(col_source),
                 "semantic_type": semantic_type,
                 "source_resolution": "PREFIX_RULE",
                 "confidence": 1.0,
@@ -238,9 +245,19 @@ def _layer1_resolve(
 def _layer2_profile_resolve(
     df: DataFrame,
     col_source: str,
+    col_data_type: Any,
     sample_size: int,
     threshold: float,
 ) -> Optional[ResolvedColumn]:
+    if isinstance(col_data_type, (DateType, TimestampType)):
+        return {
+            "col_source": col_source,
+            "col_prepared": _build_prepared_name(col_source),
+            "semantic_type": "DATE",
+            "source_resolution": "PROFILING",
+            "confidence": 1.0,
+        }
+
     sample_rows = (
         df.select(col_source)
         .where(F.col(col_source).isNotNull())
@@ -256,7 +273,7 @@ def _layer2_profile_resolve(
     avg_len = sum(len(str(v)) for v in sample_values) / max(len(sample_values), 1)
 
     if distinct_ratio < 0.05:
-        confidence_by_type["CODE_REF"] = max(confidence_by_type.get("CODE_REF", 0.0), 0.85)
+        confidence_by_type["CATEGORY"] = max(confidence_by_type.get("CATEGORY", 0.0), 0.85)
     if distinct_ratio > 0.95 and avg_len >= 12:
         confidence_by_type["TECH_ID"] = max(confidence_by_type.get("TECH_ID", 0.0), 0.82)
 
@@ -270,7 +287,7 @@ def _layer2_profile_resolve(
     if all(decimal_2_pattern.match(v) for v in as_str_values[:50]):
         confidence_by_type["AMOUNT"] = max(confidence_by_type.get("AMOUNT", 0.0), 0.82)
     if all(ref_pattern.match(v) for v in as_str_values[:50]):
-        confidence_by_type["CODE_REF"] = max(confidence_by_type.get("CODE_REF", 0.0), 0.88)
+        confidence_by_type["CATEGORY"] = max(confidence_by_type.get("CATEGORY", 0.0), 0.88)
 
     numeric_values: list[float] = []
     for value in sample_values:
@@ -292,6 +309,33 @@ def _layer2_profile_resolve(
             if abs(std_dev / mean_value) > 10:
                 confidence_by_type["AMOUNT"] = max(confidence_by_type.get("AMOUNT", 0.0), 0.83)
 
+    if isinstance(col_data_type, NumericType):
+        for semantic_type in ("AMOUNT", "QUANTITY", "RATE", "YEAR"):
+            if semantic_type in confidence_by_type:
+                confidence_by_type[semantic_type] += 0.05
+        if "DATE" in confidence_by_type:
+            confidence_by_type["DATE"] = max(0.0, confidence_by_type["DATE"] - 0.2)
+
+    if isinstance(col_data_type, StringType):
+        if "TECH_ID" in confidence_by_type:
+            sampled_strings = as_str_values[:50]
+            digit_ratio = (
+                sum(1 for value in sampled_strings if re.search(r"\d", value))
+                / max(len(sampled_strings), 1)
+            )
+            if digit_ratio > 0.5:
+                confidence_by_type["TECH_ID"] += 0.08
+            else:
+                confidence_by_type.pop("TECH_ID", None)
+                confidence_by_type["TEXT"] = max(confidence_by_type.get("TEXT", 0.0), 0.86)
+
+    if isinstance(col_data_type, BooleanType):
+        confidence_by_type["TEXT"] = max(confidence_by_type.get("TEXT", 0.0), 0.8)
+        if "AMOUNT" in confidence_by_type:
+            confidence_by_type["AMOUNT"] = max(0.0, confidence_by_type["AMOUNT"] - 0.2)
+        if "RATE" in confidence_by_type:
+            confidence_by_type["RATE"] = max(0.0, confidence_by_type["RATE"] - 0.2)
+
     if not confidence_by_type:
         return None
 
@@ -300,7 +344,7 @@ def _layer2_profile_resolve(
         return None
     return {
         "col_source": col_source,
-        "col_prepared": _build_prepared_name(semantic_type, col_source),
+        "col_prepared": _build_prepared_name(col_source),
         "semantic_type": semantic_type,
         "source_resolution": "PROFILING",
         "confidence": float(confidence),
@@ -441,6 +485,7 @@ def resolve_columns(
     resolved: list[ResolvedColumn] = []
     unresolved: list[str] = []
     layer2_rows_for_cache: list[dict[str, Any]] = []
+    source_type_by_column = {field.name: field.dataType for field in df.schema.fields}
 
     for col_name in df.columns:
         layer1 = _layer1_resolve(col_name, rule_rows)
@@ -456,6 +501,7 @@ def resolve_columns(
         layer2 = _layer2_profile_resolve(
             df=df,
             col_source=col_name,
+            col_data_type=source_type_by_column.get(col_name),
             sample_size=sample_size,
             threshold=profiling_confidence_threshold,
         )
@@ -545,7 +591,7 @@ def transform_to_prepared(
         semantic_type = mapping["semantic_type"].upper()
         base_expr = _semantic_cast_expr(src, semantic_type)
 
-        if semantic_type == "CODE_REF" and prepared in code_label_maps:
+        if semantic_type == "CATEGORY" and prepared in code_label_maps:
             labels = code_label_maps[prepared]
             map_items: list[F.Column] = []
             for code_value, code_label in labels.items():
@@ -595,7 +641,7 @@ def write_prepared_table(
     code_partitions = [
         mapping["col_prepared"]
         for mapping in resolved_mappings
-        if mapping["semantic_type"].upper() == "CODE_REF" and mapping["col_prepared"] in df.columns
+        if mapping["semantic_type"].upper() == "CATEGORY" and mapping["col_prepared"] in df.columns
     ]
 
     selected_partitions: list[str] = []
@@ -680,7 +726,7 @@ def generate_prepared_aggregations(
     code_cols = [
         mapping["col_prepared"]
         for mapping in resolved_mappings
-        if mapping["col_prepared"] in prepared_df.columns and mapping["semantic_type"].upper() == "CODE_REF"
+        if mapping["col_prepared"] in prepared_df.columns and mapping["semantic_type"].upper() == "CATEGORY"
     ]
 
     numeric_auto_measures = [

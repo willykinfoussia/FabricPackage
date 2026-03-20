@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
-from pyspark.sql.types import IntegerType, StringType
+from pyspark.sql.types import DateType, IntegerType, StringType
 
 
 class TestSnapshotSourceSchema:
@@ -161,6 +161,70 @@ class TestResolveColumns:
         mock_write_unresolved_audit.assert_called_once()
 
 
+class TestLayer2ProfileResolveTypeAware:
+    def test_date_type_is_auto_classified_as_date(self):
+        df = MagicMock()
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="created_on",
+            col_data_type=DateType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "DATE"
+        assert resolved["source_resolution"] == "PROFILING"
+        df.select.assert_not_called()
+
+    def test_string_tech_id_with_majority_digits_stays_tech_id(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            ("ABCD000001234",),
+            ("WXYZ000009876",),
+            ("PQRS000004321",),
+            ("LONGTEXTVALUE",),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="external_key",
+            col_data_type=StringType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "TECH_ID"
+
+    def test_string_tech_id_without_majority_digits_becomes_text(self):
+        df = MagicMock()
+        df.select.return_value.where.return_value.limit.return_value.collect.return_value = [
+            ("LONGSTRINGVALUEA",),
+            ("LONGSTRINGVALUEB",),
+            ("LONGSTRINGVALUEC",),
+            ("NODIGITSVALUEDD",),
+        ]
+
+        from fabrictools.prepare import _layer2_profile_resolve
+
+        resolved = _layer2_profile_resolve(
+            df=df,
+            col_source="reference_name",
+            col_data_type=StringType(),
+            sample_size=50,
+            threshold=0.80,
+        )
+
+        assert resolved is not None
+        assert resolved["semantic_type"] == "TEXT"
+
+
 class TestTransformToPrepared:
     @patch("fabrictools.prepare._safe_read_table")
     @patch("fabrictools.prepare.get_spark")
@@ -241,7 +305,7 @@ class TestWritePreparedTable:
             {
                 "col_source": "cd_region",
                 "col_prepared": "code_region",
-                "semantic_type": "CODE_REF",
+                "semantic_type": "CATEGORY",
                 "source_resolution": "PREFIX_RULE",
                 "confidence": 1.0,
             },
