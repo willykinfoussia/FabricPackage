@@ -101,14 +101,17 @@ STRICT_DAY_NAMES = {
 
 ALIAS_TOKEN_REPLACEMENTS = {
     "YEAR": "ANNEE",
-    "Year": "Année",
-    "year": "année",
+    "Year": "Annee",
+    "year": "annee",
     "MONTH": "MOIS",
     "Month": "Mois",
     "month": "mois",
     "DAY": "JOUR",
     "Day": "Jour",
     "day": "jour",
+    "WEEK": "SEMAINE",
+    "Week": "Semaine",
+    "week": "semaine",
 }
 
 
@@ -119,12 +122,20 @@ def _normalize_token(value: str) -> str:
 
 def _localize_alias_tokens(alias: str) -> str:
     """
-    Localize year/month/day tokens to French while preserving case style.
+    Localize year/month/day/weeknumber/monthnumber tokens to French labels.
     """
     token_pattern = re.compile(r"(?<![A-Za-z0-9])(YEAR|Year|year|MONTH|Month|month|DAY|Day|day)(?![A-Za-z0-9])")
     camel_suffix_pattern = re.compile(r"(YEAR|Year|MONTH|Month|DAY|Day)(?=[A-Z]|$)")
+    weeknumber_pattern = re.compile(r"(?<![A-Za-z0-9])week[\s_-]*number(?![A-Za-z0-9])", flags=re.IGNORECASE)
+    weeknumber_camel_pattern = re.compile(r"weeknumber(?=[A-Z]|$)", flags=re.IGNORECASE)
+    monthnumber_pattern = re.compile(r"(?<![A-Za-z0-9])month[\s_-]*number(?![A-Za-z0-9])", flags=re.IGNORECASE)
+    monthnumber_camel_pattern = re.compile(r"monthnumber(?=[A-Z]|$)", flags=re.IGNORECASE)
 
-    localized = token_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], alias)
+    localized = weeknumber_pattern.sub("Numero de la Semaine", alias)
+    localized = weeknumber_camel_pattern.sub("Numero de la Semaine", localized)
+    localized = monthnumber_pattern.sub("Numero du Mois", localized)
+    localized = monthnumber_camel_pattern.sub("Numero du Mois", localized)
+    localized = token_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], localized)
     localized = camel_suffix_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], localized)
     return localized
 
@@ -174,6 +185,11 @@ def _build_prepared_name(col_source: str) -> str:
     suffix = _clean_suffix(col_source)
     return suffix.capitalize() if suffix else col_source.capitalize()
 
+def _text_contains(text: str, patterns: List[str]) -> bool:
+    for pattern in patterns:
+        if text.lower().contains(pattern.lower()):
+            return True
+    return False
 
 def _ensure_prefix_rules(
     source_lakehouse_name: str,
@@ -337,6 +353,15 @@ def _layer2_profile_resolve(
     sample_values = [row[0] for row in sample_rows if row[0] is not None]
     if not sample_values:
         return None
+
+    if _text_contains(col_source, ["year", "année", "annee"]):
+        confidence_by_type["YEAR"] = max(confidence_by_type.get("YEAR", 0.0), 1)
+    if _text_contains(col_source, ["month", "mois"]):
+        confidence_by_type["MONTH"] = max(confidence_by_type.get("MONTH", 0.0), 1)
+    if _text_contains(col_source, ["day", "jour"]):
+        confidence_by_type["DAY"] = max(confidence_by_type.get("DAY", 0.0), 1)
+    if _text_contains(col_source, ["week", "semaine"]):
+        confidence_by_type["WEEK"] = max(confidence_by_type.get("WEEK", 0.0), 1)
 
     confidence_by_type: dict[str, float] = {}
     distinct_ratio = len(set(sample_values)) / max(len(sample_values), 1)
@@ -716,7 +741,7 @@ def transform_to_prepared(
             select_exprs.extend(
                 [
                     F.year(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} Year")),
-                    F.month(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} MonthNumber")),
+                    F.month(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} Month")),
                     F.weekofyear(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} WeekNumber")),
                     F.date_format(F.to_date(F.col(src)), "MMMM").alias(_localize_alias_tokens(f"{prepared} Month")),
                 ]
