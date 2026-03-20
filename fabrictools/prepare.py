@@ -187,7 +187,7 @@ def _build_prepared_name(col_source: str) -> str:
 
 def _text_contains(text: str, patterns: List[str]) -> bool:
     for pattern in patterns:
-        if text.lower().contains(pattern.lower()):
+        if pattern.lower() in text.lower():
             return True
     return False
 
