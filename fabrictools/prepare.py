@@ -131,8 +131,8 @@ def _localize_alias_tokens(alias: str) -> str:
     monthnumber_pattern = re.compile(r"(?<![A-Za-z0-9])month[\s_-]*number(?![A-Za-z0-9])", flags=re.IGNORECASE)
     monthnumber_camel_pattern = re.compile(r"monthnumber(?=[A-Z]|$)", flags=re.IGNORECASE)
 
-    localized = weeknumber_pattern.sub("Numero de la Semaine", alias)
-    localized = weeknumber_camel_pattern.sub("Numero de la Semaine", localized)
+    localized = weeknumber_pattern.sub("Semaine", alias)
+    localized = weeknumber_camel_pattern.sub("Semaine", localized)
     localized = monthnumber_pattern.sub("Numero du Mois", localized)
     localized = monthnumber_camel_pattern.sub("Numero du Mois", localized)
     localized = token_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], localized)
@@ -716,6 +716,41 @@ def transform_to_prepared(
                 )
 
     select_exprs: list[F.Column] = []
+    used_aliases: set[str] = set()
+
+    def _alias_key(alias: str) -> str:
+        return alias.casefold()
+
+    def _build_unique_derived_alias(alias: str) -> str:
+        base_alias = f"{alias}_derived"
+        candidate = base_alias
+        suffix_index = 2
+        while _alias_key(candidate) in used_aliases:
+            candidate = f"{base_alias}_{suffix_index}"
+            suffix_index += 1
+        return candidate
+
+    def _append_alias(expr: F.Column, alias: str, is_derived: bool) -> None:
+        alias_key = _alias_key(alias)
+        if alias_key in used_aliases:
+            if is_derived:
+                resolved_alias = _build_unique_derived_alias(alias)
+                log(
+                    f"Renamed derived column '{alias}' to '{resolved_alias}' "
+                    "to avoid Delta duplicate column metadata."
+                )
+                alias = resolved_alias
+                alias_key = _alias_key(alias)
+            else:
+                log(
+                    f"Skipped duplicate base column alias '{alias}' "
+                    "to avoid Delta duplicate column metadata.",
+                    level="warning",
+                )
+                return
+        used_aliases.add(alias_key)
+        select_exprs.append(expr.alias(alias))
+
     for mapping in resolved_mappings:
         src = mapping["col_source"]
         prepared = mapping["col_prepared"]
@@ -735,16 +770,28 @@ def transform_to_prepared(
                     F.col(src).cast("string"),
                 )
 
-        select_exprs.append(base_expr.alias(_localize_alias_tokens(prepared)))
+        _append_alias(base_expr, _localize_alias_tokens(prepared), is_derived=False)
 
         if semantic_type == "DATE":
-            select_exprs.extend(
-                [
-                    F.year(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} Year")),
-                    F.month(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} Month")),
-                    F.weekofyear(F.to_date(F.col(src))).alias(_localize_alias_tokens(f"{prepared} WeekNumber")),
-                    F.date_format(F.to_date(F.col(src)), "MMMM").alias(_localize_alias_tokens(f"{prepared} Month")),
-                ]
+            _append_alias(
+                F.year(F.to_date(F.col(src))),
+                _localize_alias_tokens(f"{prepared} Year"),
+                is_derived=True,
+            )
+            _append_alias(
+                F.month(F.to_date(F.col(src))),
+                _localize_alias_tokens(f"{prepared} MonthNumber"),
+                is_derived=True,
+            )
+            _append_alias(
+                F.weekofyear(F.to_date(F.col(src))),
+                _localize_alias_tokens(f"{prepared} WeekNumber"),
+                is_derived=True,
+            )
+            _append_alias(
+                F.date_format(F.to_date(F.col(src)), "MMMM"),
+                _localize_alias_tokens(f"{prepared} Month"),
+                is_derived=True,
             )
 
     return df.select(*select_exprs)
@@ -775,10 +822,17 @@ def write_prepared_table(
         if mapping["semantic_type"].upper() == "CATEGORY" and mapping["col_prepared"] in df.columns
     ]
 
+    excluded_partition_tokens = {"source layer", "source path"}
     selected_partitions: list[str] = []
-    selected_partitions.extend(date_partitions[:1])
+    selected_partitions.extend(
+        partition_col
+        for partition_col in date_partitions[:1]
+        if _normalize_token(partition_col).replace("_", " ") not in excluded_partition_tokens
+    )
     for candidate in code_partitions:
         if candidate in selected_partitions:
+            continue
+        if _normalize_token(candidate).replace("_", " ") in excluded_partition_tokens:
             continue
         distinct_count = df.select(candidate).distinct().count()
         if distinct_count < 50:
