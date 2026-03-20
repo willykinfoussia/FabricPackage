@@ -356,13 +356,7 @@ dims["dimension_country"].show(5)
 dims["dimension_city"].show(5)
 ```
 
-`dimension_city` now includes country attributes: `country_code_3`, `country_key`, `region`, `subregion`, and `population`.
-
-`population` is enriched from GeoDB Cities API using:
-- `GEODB_API_KEY` (preferred), or
-- `FABRICTOOLS_GEODB_API_KEY` (fallback)
-
-When multiple cities share the same name in a country, matching uses `country + city`, then narrows with state/province metadata when available. If GeoDB is unavailable or no match is found, `population` remains `NULL` and generation continues.
+`dimension_city` now includes country attributes: `country_code_3`, `country_key`, `region`, and `subregion`.
 
 You can also filter cities directly via `build_dimension_city`:
 
@@ -413,7 +407,7 @@ The `countries` parameter accepts any mix of `country_code_2`, `country_code_3`,
 |---|---|
 | `build_dimension_date(start_date=None, end_date=None, fiscal_year_start_month=1, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build a date dimension DataFrame (with calendar/fiscal columns, labels, ISO week number) and optionally write it to Lakehouse |
 | `build_dimension_country(countries_limit=None, fail_on_source_error=True, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build country dimension and optionally write it to Lakehouse |
-| `build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, regions=None, subregions=None, countries=None, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build city dimension (with country attributes and `population` from GeoDB, plus optional region/subregion/country filters) and optionally write it to Lakehouse |
+| `build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on_source_error=True, regions=None, subregions=None, countries=None, lakehouse_name=None, lakehouse_relative_path=None, mode="overwrite", spark=None)` | Build city dimension (with country attributes, plus optional region/subregion/country filters) and optionally write it to Lakehouse |
 | `generate_dimensions(lakehouse_name, warehouse_name, ..., city_regions=None, city_subregions=None, city_countries=None, ...)` | Build and write selected dimensions to Lakehouse and Warehouse |
 
 ### Source to Prepared

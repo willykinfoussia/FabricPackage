@@ -32,9 +32,10 @@ from fabrictools._spark import get_spark
 from fabrictools.data_quality import _list_lakehouse_table_paths
 from fabrictools.lakehouse import read_lakehouse, resolve_lakehouse_read_candidate, write_lakehouse
 
-CONFIG_SOURCE_SNAPSHOT_PATH = "Tables/dbo/source_schema_snapshot"
+CONFIG_SOURCE_SNAPSHOT_PATH = "schema_snapshot"
 CONFIG_PREFIX_RULES_PATH = "Tables/dbo/prefix_rules"
 CONFIG_PROFILING_CACHE_PATH = "Tables/dbo/profiling_cache"
+CONFIG_RESOLVED_COLUMNS_PATH = "resolved_columns"
 CONFIG_MAPPING_RULES_PATH = "Tables/dbo/mapping_rules"
 CONFIG_CODE_LABELS_PATH = "Tables/dbo/code_labels"
 CONFIG_AUDIT_LOG_PATH = "Tables/dbo/pipeline_audit_log"
@@ -81,18 +82,20 @@ def _build_schema_hash(df: DataFrame) -> str:
 
 
 def _clean_suffix(col_name: str) -> str:
-    """Remove common technical prefixes/suffixes before labeling."""
+    """Remove common technical prefixes/suffixes and leading/trailing special characters before labeling."""
     cleaned = col_name.lower().strip()
     cleaned = re.sub(r"^(nb_|nbre_|dt_|date_|mt_|mnt_|cd_|code_|id_|tx_|taux_)", "", cleaned)
     cleaned = re.sub(r"(_id)$", "", cleaned)
-    cleaned = re.sub(r"[^a-z0-9]+", "_", cleaned).strip("_")
-    return cleaned or "value"
+    cleaned = re.sub(r"^[\W_]+|[\W_]+$", "", cleaned)
+    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+    cleaned = cleaned.strip()
+    return cleaned
 
 
-def _build_prepared_name(semantic_type: str, col_source: str) -> str:
-    """Build prepared column name from semantic type and cleaned source suffix."""
+def _build_prepared_name(col_source: str) -> str:
+    """Build prepared column name from cleaned source suffix."""
     suffix = _clean_suffix(col_source)
-    return f"{semantic_type.lower()}_{suffix}"
+    return suffix.capitalize() if suffix else col_source.capitalize()
 
 
 def _ensure_prefix_rules(
@@ -194,10 +197,14 @@ def snapshot_source_schema(
         )
 
     snapshot_df = _spark.createDataFrame(snapshot_rows)
+    ordered_snapshot_columns = ["col_source"] + [
+        col_name for col_name in snapshot_df.columns if col_name != "col_source"
+    ]
+    snapshot_df = snapshot_df.select(*ordered_snapshot_columns)
     write_lakehouse(
         snapshot_df,
         lakehouse_name=source_lakehouse_name,
-        relative_path=CONFIG_SOURCE_SNAPSHOT_PATH,
+        relative_path=f"{source_relative_path}_{CONFIG_SOURCE_SNAPSHOT_PATH}",
         mode="overwrite",
         spark=_spark,
     )
@@ -482,6 +489,14 @@ def resolve_columns(
             mode="overwrite",
             spark=_spark,
         )
+    
+    write_lakehouse(
+        resolved,
+        lakehouse_name=source_lakehouse_name,
+        relative_path=f"{source_relative_path}_{CONFIG_RESOLVED_COLUMNS_PATH}",
+        mode="overwrite",
+        spark=_spark,
+    )
 
     _write_unresolved_audit(
         unresolved_columns=unresolved,
