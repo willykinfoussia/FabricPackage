@@ -353,7 +353,8 @@ def _layer2_profile_resolve(
     sample_values = [row[0] for row in sample_rows if row[0] is not None]
     if not sample_values:
         return None
-
+    
+    confidence_by_type: dict[str, float] = {}
     if _text_contains(col_source, ["year", "année", "annee"]):
         confidence_by_type["YEAR"] = max(confidence_by_type.get("YEAR", 0.0), 1)
     if _text_contains(col_source, ["month", "mois"]):
@@ -363,7 +364,6 @@ def _layer2_profile_resolve(
     if _text_contains(col_source, ["week", "semaine"]):
         confidence_by_type["WEEK"] = max(confidence_by_type.get("WEEK", 0.0), 1)
 
-    confidence_by_type: dict[str, float] = {}
     distinct_ratio = len(set(sample_values)) / max(len(sample_values), 1)
     avg_len = sum(len(str(v)) for v in sample_values) / max(len(sample_values), 1)
 
