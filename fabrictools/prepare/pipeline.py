@@ -4,22 +4,22 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 
 from fabrictools.core.logging import log
 from fabrictools.core.spark import get_spark
 from fabrictools.io.discovery import list_lakehouse_tables
+from fabrictools.io import read_lakehouse
+from fabrictools.prepare.schema import snapshot_source_schema
+from fabrictools.prepare.resolve import resolve_columns
+from fabrictools.prepare.transform import transform_to_prepared, write_prepared_table
+from fabrictools.prepare.semantic import publish_semantic_model
+from fabrictools.prepare.aggregations import generate_prepared_aggregations
 from fabrictools.pipelines.config import (
     TableJobConfig,
     build_table_jobs_from_config,
     build_table_jobs_from_discovery,
 )
-from fabrictools.prepare._legacy import get_legacy_module
-
-
-def prepare_and_write_data(*args, **kwargs):
-    """Delegate single-table prepare pipeline to legacy implementation."""
-    return get_legacy_module().prepare_and_write_data(*args, **kwargs)
 
 
 def _build_jobs(
@@ -50,6 +50,75 @@ def _build_jobs(
         partition_by=None,
     )
 
+def prepare_and_write_data(
+    source_lakehouse_name: str,
+    source_relative_path: str,
+    target_lakehouse_name: str,
+    target_relative_path: str,
+    mode: str = "overwrite",
+    sample_size: int = 500,
+    profiling_confidence_threshold: float = 0.80,
+    max_partitions_guard: int = 500,
+    vacuum_retention_hours: int = 168,
+    enable_semantic_model_publish: bool = False,
+    semantic_workspace: Optional[str] = None,
+    semantic_model_name: str = "fabrictools_prepared_dataset",
+    overwrite_semantic_model: bool = True,
+    spark: Optional[SparkSession] = None,
+) -> DataFrame:
+    """
+    Orchestrate source -> prepared processing for one table.
+    """
+    _spark = spark or get_spark()
+    source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
+    schema_hash = snapshot_source_schema(
+        source_lakehouse_name=source_lakehouse_name,
+        source_relative_path=source_relative_path,
+        spark=_spark,
+    )
+    resolved_mappings = resolve_columns(
+        df=source_df,
+        source_lakehouse_name=source_lakehouse_name,
+        schema_hash=schema_hash,
+        sample_size=sample_size,
+        profiling_confidence_threshold=profiling_confidence_threshold,
+        source_relative_path=source_relative_path,
+        spark=_spark,
+    )
+    prepared_df = transform_to_prepared(
+        df=source_df,
+        resolved_mappings=resolved_mappings,
+        source_lakehouse_name=source_lakehouse_name,
+        spark=_spark,
+    )
+    write_prepared_table(
+        df=prepared_df,
+        resolved_mappings=resolved_mappings,
+        target_lakehouse_name=target_lakehouse_name,
+        target_relative_path=target_relative_path,
+        mode=mode,
+        max_partitions_guard=max_partitions_guard,
+        vacuum_retention_hours=vacuum_retention_hours,
+        spark=_spark,
+    )
+    if enable_semantic_model_publish:
+        agg_tables = generate_prepared_aggregations(
+            source_lakehouse_name=source_lakehouse_name,
+            target_lakehouse_name=target_lakehouse_name,
+            target_relative_path=target_relative_path,
+            resolved_mappings=resolved_mappings,
+            spark=_spark,
+        )
+        publish_semantic_model(
+            target_lakehouse_name=target_lakehouse_name,
+            agg_tables=agg_tables,
+            resolved_mappings=resolved_mappings,
+            semantic_workspace=semantic_workspace,
+            semantic_model_name=semantic_model_name,
+            overwrite_model=overwrite_semantic_model,
+            spark=_spark,
+        )
+    return prepared_df
 
 def prepare_and_write_all_tables(
     source_lakehouse_name: str,

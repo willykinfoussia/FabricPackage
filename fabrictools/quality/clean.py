@@ -8,8 +8,8 @@ from typing import List, Optional
 from pyspark.sql import DataFrame, SparkSession, functions as F
 from pyspark.sql.types import StringType
 
-from fabrictools._logger import log
-from fabrictools.lakehouse import resolve_lakehouse_read_candidate
+from fabrictools.core import log
+from fabrictools.io import resolve_lakehouse_read_candidate
 
 
 def _to_snake_case(name: str) -> str:

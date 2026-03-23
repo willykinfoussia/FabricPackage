@@ -7,7 +7,7 @@ from typing import Any
 from pyspark.sql import DataFrame, functions as F
 from pyspark.sql.types import StringType
 
-from fabrictools._logger import log
+from fabrictools.core import log
 from fabrictools.quality.clean import _normalized_name_collisions, _replace_empty_strings_with_nulls
 
 try:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from fabrictools.core.paths import get_lakehouse_abfs_path
+from fabrictools.core import get_lakehouse_abfs_path
 
 
 def get_fs_entry_name(fs_entry: Any) -> str:
