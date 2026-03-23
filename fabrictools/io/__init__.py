@@ -2,6 +2,7 @@
 
 from fabrictools.io.discovery import list_lakehouse_tables
 from fabrictools.io.lakehouse import (
+    delete_all_lakehouse_tables,
     merge_lakehouse,
     read_lakehouse,
     resolve_lakehouse_read_candidate,
@@ -14,6 +15,7 @@ __all__ = [
     "resolve_lakehouse_read_candidate",
     "write_lakehouse",
     "merge_lakehouse",
+    "delete_all_lakehouse_tables",
     "read_warehouse",
     "write_warehouse",
     "list_lakehouse_tables",

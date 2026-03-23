@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Iterable, Optional, TypedDict
 
 
@@ -13,12 +14,40 @@ class TableJobConfig(TypedDict, total=False):
     merge_condition: Optional[str]
 
 
+_TECHNICAL_TABLE_PREFIXES = ("dimension_", "fact_")
+
+
 def _pick_first_non_empty(item: dict[str, Any], keys: Iterable[str]) -> str:
     for key in keys:
         value = item.get(key)
         if value is not None and str(value).strip():
             return str(value).strip()
     return ""
+
+
+def _to_pascal_case_identifier(value: str) -> str:
+    tokens = [token for token in re.split(r"[^0-9A-Za-z]+", value) if token]
+    return "".join(token[:1].upper() + token[1:] for token in tokens)
+
+
+def _strip_technical_table_prefix(table_name: str) -> str:
+    lowered = table_name.lower()
+    for prefix in _TECHNICAL_TABLE_PREFIXES:
+        if lowered.startswith(prefix):
+            return table_name[len(prefix):]
+    return table_name
+
+
+def _to_business_target_relative_path(relative_path: str) -> str:
+    parts = [segment for segment in relative_path.strip().strip("/").split("/") if segment]
+    if not parts:
+        return relative_path
+
+    table_segment = parts[-1]
+    stripped_name = _strip_technical_table_prefix(table_segment)
+    business_table_name = _to_pascal_case_identifier(stripped_name)
+    parts[-1] = business_table_name or table_segment
+    return "/".join(parts)
 
 
 def build_table_jobs_from_config(
@@ -49,7 +78,7 @@ def build_table_jobs_from_config(
         if not target_relative_path:
             if require_target:
                 raise ValueError(f"tables_config[{index}] is missing a target path key.")
-            target_relative_path = source_relative_path
+            target_relative_path = _to_business_target_relative_path(source_relative_path)
 
         if require_mode:
             mode_value = str(table_config.get("mode", "")).strip().lower()
@@ -122,7 +151,7 @@ def build_table_jobs_from_discovery(
     return [
         TableJobConfig(
             source_relative_path=relative_path,
-            target_relative_path=relative_path,
+            target_relative_path=_to_business_target_relative_path(relative_path),
             mode=mode,
             partition_by=partition_by,
             merge_condition=None,

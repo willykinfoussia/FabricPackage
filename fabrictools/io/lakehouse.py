@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
 from pyspark.sql.types import IntegralType  # type: ignore[reportMissingImports]
@@ -15,6 +15,7 @@ from fabrictools.core import (
     get_lakehouse_abfs_path,
 )
 from fabrictools.core import get_spark
+from fabrictools.io.discovery import list_lakehouse_tables
 
 # ── Read ─────────────────────────────────────────────────────────────────────
 
@@ -350,10 +351,95 @@ def merge_lakehouse(
     merge_builder.execute()
     log("  Merge complete")
 
+
+def _table_relative_path_to_qualified_name(table_relative_path: str) -> str:
+    """Convert `Tables/<schema>/<table>` to `<schema>.<table>`."""
+    parts = table_relative_path.strip("/").split("/")
+    if len(parts) != 3 or parts[0].lower() != "tables":
+        raise ValueError(
+            "Expected table path in format 'Tables/<schema>/<table>', "
+            f"got '{table_relative_path}'"
+        )
+    schema_name = parts[1]
+    table_name = parts[2]
+    return f"{schema_name}.{table_name}"
+
+
+def delete_all_lakehouse_tables(
+    lakehouse_name: str,
+    include_schemas: Optional[List[str]] = None,
+    exclude_tables: Optional[List[str]] = None,
+    continue_on_error: bool = False,
+    spark: Optional[SparkSession] = None,
+) -> dict[str, Any]:
+    """
+    Drop all discovered Lakehouse tables with Spark SQL.
+
+    Tables are discovered as ``Tables/<schema>/<table>`` and dropped with
+    ``DROP TABLE IF EXISTS <schema>.<table>``.
+    """
+    _spark = spark or get_spark()
+    table_paths = list_lakehouse_tables(
+        lakehouse_name=lakehouse_name,
+        include_schemas=include_schemas,
+        exclude_tables=exclude_tables,
+    )
+
+    if not table_paths:
+        log(
+            f"No tables found in Lakehouse '{lakehouse_name}' for purge.",
+            level="warning",
+        )
+        return {
+            "total_tables": 0,
+            "deleted_tables": 0,
+            "failed_tables": 0,
+            "tables": [],
+            "failures": [],
+        }
+
+    deleted_entries: list[dict[str, str]] = []
+    failure_entries: list[dict[str, str]] = []
+    total_tables = len(table_paths)
+
+    for index, table_relative_path in enumerate(table_paths, start=1):
+        try:
+            qualified_table_name = _table_relative_path_to_qualified_name(table_relative_path)
+            log(f"[{index}/{total_tables}] Dropping table '{qualified_table_name}'...")
+            _spark.sql(f"DROP TABLE IF EXISTS {qualified_table_name}")
+            deleted_entries.append(
+                {
+                    "relative_path": table_relative_path,
+                    "table": qualified_table_name,
+                }
+            )
+        except Exception as exc:
+            failure_entries.append(
+                {
+                    "relative_path": table_relative_path,
+                    "error": str(exc),
+                }
+            )
+            log(
+                f"[{index}/{total_tables}] Failed to drop '{table_relative_path}': {exc}",
+                level="warning",
+            )
+            if not continue_on_error:
+                raise
+
+    return {
+        "total_tables": total_tables,
+        "deleted_tables": len(deleted_entries),
+        "failed_tables": len(failure_entries),
+        "tables": deleted_entries,
+        "failures": failure_entries,
+    }
+
 __all__ = [
     "read_lakehouse",
     "resolve_lakehouse_read_candidate",
     "write_lakehouse",
     "merge_lakehouse",
+    "delete_all_lakehouse_tables",
 ]
 

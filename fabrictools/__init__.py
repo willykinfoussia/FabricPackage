@@ -49,7 +49,12 @@ from fabrictools.dimensions import (
     build_dimension_date,
     generate_dimensions,
 )
-from fabrictools.io.lakehouse import merge_lakehouse, read_lakehouse, write_lakehouse
+from fabrictools.io.lakehouse import (
+    delete_all_lakehouse_tables,
+    merge_lakehouse,
+    read_lakehouse,
+    write_lakehouse,
+)
 from fabrictools.io.warehouse import read_warehouse, write_warehouse
 from fabrictools.prepare import (
     generate_prepared_aggregations,
@@ -69,6 +74,7 @@ _EXPORT_REGISTRY = {
     "read_lakehouse": read_lakehouse,
     "write_lakehouse": write_lakehouse,
     "merge_lakehouse": merge_lakehouse,
+    "delete_all_lakehouse_tables": delete_all_lakehouse_tables,
     "clean_data": clean_data,
     "add_silver_metadata": add_silver_metadata,
     "scan_data_errors": scan_data_errors,
