@@ -12,7 +12,7 @@ requires-python = ">=3.9"
 authors = [{ name = "Willy Kinfoussia", email = "willy.kinfoussia@gmail.com" }]
 keywords = ["microsoft-fabric", "pyspark", "delta", "lakehouse", "warehouse", "azure"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
