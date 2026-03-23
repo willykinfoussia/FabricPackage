@@ -6,7 +6,6 @@ All Spark/Fabric interactions are mocked to keep tests offline.
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
@@ -561,9 +560,10 @@ class TestOrchestrators:
                 profiling_confidence_threshold=0.80,
                 max_partitions_guard=500,
                 vacuum_retention_hours=168,
-                enable_power_bi_publish=False,
-                power_bi_workspace_id=None,
-                power_bi_token=None,
+                enable_semantic_model_publish=False,
+                semantic_workspace=None,
+                semantic_model_name="fabrictools_prepared_dataset",
+                overwrite_semantic_model=True,
                 spark=spark,
             ),
             call(
@@ -576,9 +576,10 @@ class TestOrchestrators:
                 profiling_confidence_threshold=0.80,
                 max_partitions_guard=500,
                 vacuum_retention_hours=168,
-                enable_power_bi_publish=False,
-                power_bi_workspace_id=None,
-                power_bi_token=None,
+                enable_semantic_model_publish=False,
+                semantic_workspace=None,
+                semantic_model_name="fabrictools_prepared_dataset",
+                overwrite_semantic_model=True,
                 spark=spark,
             ),
         ]
@@ -657,9 +658,10 @@ class TestOrchestrators:
             source_relative_path="Tables/dbo/orders",
             target_lakehouse_name="TargetLakehouse",
             target_relative_path="Tables/dbo/orders_prepared",
-            enable_power_bi_publish=True,
-            power_bi_workspace_id="workspace-id",
-            power_bi_token="token",
+            enable_semantic_model_publish=True,
+            semantic_workspace="workspace-id",
+            semantic_model_name="prepared-semantic-model",
+            overwrite_semantic_model=False,
         )
 
         assert result is prepared_df
@@ -675,12 +677,10 @@ class TestOrchestrators:
         mock_generate_aggs.assert_called_once()
         mock_publish.assert_called_once()
 
-    @patch("fabrictools.prepare.request.urlopen")
     @patch("fabrictools.prepare.get_spark")
-    def test_publish_semantic_model_returns_skipped_without_credentials(
+    def test_publish_semantic_model_returns_skipped_without_workspace(
         self,
         mock_get_spark,
-        mock_urlopen,
     ):
         mock_get_spark.return_value = MagicMock()
 
@@ -690,20 +690,18 @@ class TestOrchestrators:
             target_lakehouse_name="TargetLakehouse",
             agg_tables={"prepared_agg_jour": "Tables/dbo/prepared_agg_jour"},
             resolved_mappings=[],
-            power_bi_workspace_id="",
-            power_bi_token="",
+            semantic_workspace=None,
+            semantic_model_name="model",
         )
 
         assert result["status"] == "skipped"
-        mock_urlopen.assert_not_called()
+        assert result["reason"] == "semantic_workspace_missing"
 
     @patch("fabrictools.prepare.read_lakehouse")
-    @patch("fabrictools.prepare.request.urlopen")
     @patch("fabrictools.prepare.get_spark")
-    def test_publish_semantic_model_builds_business_friendly_payload(
+    def test_publish_semantic_model_creates_model_through_semantic_link(
         self,
         mock_get_spark,
-        mock_urlopen,
         mock_read_lakehouse,
     ):
         spark = MagicMock()
@@ -721,31 +719,43 @@ class TestOrchestrators:
         ]
         mock_read_lakehouse.side_effect = [df_day, df_region]
 
-        response = MagicMock()
-        response.read.return_value = b'{"id":"dataset-1"}'
-        mock_urlopen.return_value.__enter__.return_value = response
+        mock_sempy_pkg = MagicMock()
+        mock_sempy_fabric = MagicMock()
+        mock_sempy_labs = MagicMock()
+        mock_sempy_pkg.fabric = mock_sempy_fabric
+        tom = MagicMock()
+        mock_sempy_fabric.connect_semantic_model.return_value.__enter__.return_value = tom
 
         from fabrictools.prepare import publish_semantic_model
 
-        result = publish_semantic_model(
-            target_lakehouse_name="TargetLakehouse",
-            agg_tables={
-                "prepared_agg_jour": "Tables/dbo/prepared_agg_jour",
-                "prepared_agg_region": "Tables/dbo/prepared_agg_region",
+        with patch.dict(
+            "sys.modules",
+            {
+                "sempy": mock_sempy_pkg,
+                "sempy.fabric": mock_sempy_fabric,
+                "sempy_labs": mock_sempy_labs,
             },
-            resolved_mappings=[
-                {
-                    "col_source": "order_id",
-                    "col_prepared": "order_id",
-                    "semantic_type": "RELATION_ID",
-                    "source_resolution": "PREFIX_RULE",
-                    "confidence": 1.0,
-                }
-            ],
-            power_bi_workspace_id="workspace-id",
-            power_bi_token="token",
-            spark=spark,
-        )
+        ):
+            result = publish_semantic_model(
+                target_lakehouse_name="TargetLakehouse",
+                agg_tables={
+                    "prepared_agg_jour": "Tables/dbo/prepared_agg_jour",
+                    "prepared_agg_region": "Tables/dbo/prepared_agg_region",
+                },
+                resolved_mappings=[
+                    {
+                        "col_source": "order_id",
+                        "col_prepared": "order_id",
+                        "semantic_type": "RELATION_ID",
+                        "source_resolution": "PREFIX_RULE",
+                        "confidence": 1.0,
+                    }
+                ],
+                semantic_workspace="workspace-id",
+                semantic_model_name="prepared-semantic-model",
+                overwrite_model=False,
+                spark=spark,
+            )
 
         assert result["status"] == "published"
         assert result["tables_count"] == 2
@@ -753,20 +763,52 @@ class TestOrchestrators:
             call("TargetLakehouse", "Tables/dbo/prepared_agg_jour", spark=spark),
             call("TargetLakehouse", "Tables/dbo/prepared_agg_region", spark=spark),
         ]
-
-        req = mock_urlopen.call_args.args[0]
-        payload = json.loads(req.data.decode("utf-8"))
-
-        assert payload["tables"][0]["name"] == "Prepared agg jour"
-        assert payload["tables"][1]["name"] == "Prepared agg region"
-        assert payload["tables"][0]["columns"][0] == {"name": "Customer name", "dataType": "String"}
-        assert payload["tables"][0]["columns"][1] == {"name": "Order id", "dataType": "Double"}
-        assert payload["relationships"] == [
-            {
-                "fromTable": "Prepared agg jour",
-                "toTable": "Prepared agg region",
-                "fromColumn": "Order id",
-                "toColumn": "Order id",
-            }
+        mock_sempy_labs.create_blank_semantic_model.assert_called_once_with(
+            dataset="prepared-semantic-model",
+            workspace="workspace-id",
+            overwrite=False,
+        )
+        mock_sempy_fabric.connect_semantic_model.assert_called_once_with(
+            dataset="prepared-semantic-model",
+            workspace="workspace-id",
+            readonly=False,
+        )
+        assert tom.add_table.call_args_list == [
+            call(name="Prepared agg jour"),
+            call(name="Prepared agg region"),
         ]
+        assert tom.add_data_column.call_args_list == [
+            call(
+                table_name="Prepared agg jour",
+                column_name="Customer name",
+                source_column="customer_name",
+                data_type="String",
+            ),
+            call(
+                table_name="Prepared agg jour",
+                column_name="Order id",
+                source_column="order_id",
+                data_type="Double",
+            ),
+            call(
+                table_name="Prepared agg region",
+                column_name="Region name",
+                source_column="region_name",
+                data_type="String",
+            ),
+            call(
+                table_name="Prepared agg region",
+                column_name="Total amount",
+                source_column="total_amount",
+                data_type="Double",
+            ),
+        ]
+        tom.add_relationship.assert_called_once_with(
+            from_table="Prepared agg jour",
+            from_column="Order id",
+            to_table="Prepared agg region",
+            to_column="Order id",
+            from_cardinality="Many",
+            to_cardinality="One",
+        )
 

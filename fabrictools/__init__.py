@@ -43,20 +43,14 @@ generate_dimensions(lakehouse_name, warehouse_name, ...)
 from __future__ import annotations
 
 from fabrictools._version import __version__
-from fabrictools.data_quality import (
-    add_silver_metadata,
-    clean_and_write_all_tables,
-    clean_and_write_data,
-    clean_data,
-    scan_data_errors,
-)
 from fabrictools.dimensions import (
     build_dimension_city,
     build_dimension_country,
     build_dimension_date,
     generate_dimensions,
 )
-from fabrictools.lakehouse import merge_lakehouse, read_lakehouse, write_lakehouse
+from fabrictools.io.lakehouse import merge_lakehouse, read_lakehouse, write_lakehouse
+from fabrictools.io.warehouse import read_warehouse, write_warehouse
 from fabrictools.prepare import (
     generate_prepared_aggregations,
     prepare_and_write_all_tables,
@@ -67,57 +61,37 @@ from fabrictools.prepare import (
     transform_to_prepared,
     write_prepared_table,
 )
-from fabrictools.warehouse import read_warehouse, write_warehouse
+from fabrictools.quality.clean import add_silver_metadata, clean_data
+from fabrictools.quality.pipeline import clean_and_write_all_tables, clean_and_write_data
+from fabrictools.quality.scan import scan_data_errors
 
-__all__ = [
-    "read_lakehouse",
-    "write_lakehouse",
-    "merge_lakehouse",
-    "clean_data",
-    "add_silver_metadata",
-    "scan_data_errors",
-    "clean_and_write_data",
-    "clean_and_write_all_tables",
-    "read_warehouse",
-    "write_warehouse",
-    "build_dimension_date",
-    "build_dimension_country",
-    "build_dimension_city",
-    "generate_dimensions",
-    "snapshot_source_schema",
-    "resolve_columns",
-    "transform_to_prepared",
-    "write_prepared_table",
-    "generate_prepared_aggregations",
-    "publish_semantic_model",
-    "prepare_and_write_data",
-    "prepare_and_write_all_tables",
-]
+_EXPORT_REGISTRY = {
+    "read_lakehouse": read_lakehouse,
+    "write_lakehouse": write_lakehouse,
+    "merge_lakehouse": merge_lakehouse,
+    "clean_data": clean_data,
+    "add_silver_metadata": add_silver_metadata,
+    "scan_data_errors": scan_data_errors,
+    "clean_and_write_data": clean_and_write_data,
+    "clean_and_write_all_tables": clean_and_write_all_tables,
+    "read_warehouse": read_warehouse,
+    "write_warehouse": write_warehouse,
+    "build_dimension_date": build_dimension_date,
+    "build_dimension_country": build_dimension_country,
+    "build_dimension_city": build_dimension_city,
+    "generate_dimensions": generate_dimensions,
+    "snapshot_source_schema": snapshot_source_schema,
+    "resolve_columns": resolve_columns,
+    "transform_to_prepared": transform_to_prepared,
+    "write_prepared_table": write_prepared_table,
+    "generate_prepared_aggregations": generate_prepared_aggregations,
+    "publish_semantic_model": publish_semantic_model,
+    "prepare_and_write_data": prepare_and_write_data,
+    "prepare_and_write_all_tables": prepare_and_write_all_tables,
+}
 
-# Expose helpers as true top-level package API in docs/introspection.
-for _exported_function in (
-    read_lakehouse,
-    write_lakehouse,
-    merge_lakehouse,
-    clean_data,
-    add_silver_metadata,
-    scan_data_errors,
-    clean_and_write_data,
-    clean_and_write_all_tables,
-    read_warehouse,
-    write_warehouse,
-    build_dimension_date,
-    build_dimension_country,
-    build_dimension_city,
-    generate_dimensions,
-    snapshot_source_schema,
-    resolve_columns,
-    transform_to_prepared,
-    write_prepared_table,
-    generate_prepared_aggregations,
-    publish_semantic_model,
-    prepare_and_write_data,
-    prepare_and_write_all_tables,
-):
+__all__ = list(_EXPORT_REGISTRY.keys())
+
+for _exported_function in _EXPORT_REGISTRY.values():
     _exported_function.__module__ = __name__
 

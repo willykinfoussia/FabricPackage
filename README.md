@@ -26,6 +26,7 @@
 
 - Microsoft Fabric Spark runtime (provides `notebookutils`, `pyspark`, and `delta-spark`)
 - Python >= 3.9
+- Semantic Link runtime (`semantic-link-sempy` + `semantic-link-labs`) for semantic model publishing helpers
 
 > **Local development:** install the `spark` extras to get PySpark and delta-spark.
 > `notebookutils` is only available inside Fabric — functions that resolve paths will raise a clear `ValueError` outside Fabric.
@@ -222,6 +223,17 @@ agg_tables = ft.generate_prepared_aggregations(
     target_relative_path="Tables/dbo/orders_prepared",
     resolved_mappings=mappings,
 )
+
+# 6) Optional semantic model publish (Semantic Link/TOM)
+publish_result = ft.publish_semantic_model(
+    target_lakehouse_name="BusinessReadyLakehouse",
+    agg_tables=agg_tables,  # output from generate_prepared_aggregations
+    resolved_mappings=mappings,
+    semantic_workspace="<workspace-id-or-name>",
+    semantic_model_name="fabrictools_prepared_dataset",
+)
+
+print(publish_result["status"])  # published | skipped | failed
 ```
 
 Config tables for this pipeline are stored in the **source lakehouse** under `Tables/config/`:
@@ -419,7 +431,7 @@ The `countries` parameter accepts any mix of `country_code_2`, `country_code_3`,
 | `transform_to_prepared(df, resolved_mappings, source_lakehouse_name, spark=None)` | Apply semantic casts, code labels, and date-derived columns in one select pass |
 | `write_prepared_table(df, resolved_mappings, target_lakehouse_name, target_relative_path, mode="overwrite", max_partitions_guard=500, vacuum_retention_hours=168, spark=None)` | Write prepared table with partition strategy and conditional maintenance |
 | `generate_prepared_aggregations(source_lakehouse_name, target_lakehouse_name, target_relative_path, resolved_mappings, spark=None)` | Build default prepared aggregations (`prepared_agg_jour`, `prepared_agg_semaine`, `prepared_agg_region`) |
-| `publish_semantic_model(target_lakehouse_name, agg_tables, resolved_mappings, power_bi_workspace_id, power_bi_token, spark=None)` | Publish/update semantic model via Power BI/Fabric REST API |
+| `publish_semantic_model(target_lakehouse_name, agg_tables, resolved_mappings, semantic_workspace, semantic_model_name="fabrictools_prepared_dataset", overwrite_model=True, spark=None)` | Publish/replace semantic model via Semantic Link/TOM |
 | `prepare_and_write_data(source_lakehouse_name, source_relative_path, target_lakehouse_name, target_relative_path, ...)` | End-to-end orchestration for one table |
 | `prepare_and_write_all_tables(source_lakehouse_name, target_lakehouse_name, ...)` | Bulk orchestration with discovery or explicit table config |
 

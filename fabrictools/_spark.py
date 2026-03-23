@@ -1,20 +1,5 @@
-"""SparkSession accessor for fabrictools."""
+"""Backward-compatible spark module."""
 
-from __future__ import annotations
+from fabrictools.core.spark import get_spark
 
-from pyspark.sql import SparkSession
-
-
-def get_spark() -> SparkSession:
-    """
-    Return the active SparkSession, creating one if necessary.
-
-    Inside a Microsoft Fabric notebook the runtime already has an active
-    session, so ``getOrCreate()`` simply returns it.  Outside Fabric (e.g.
-    local development) a new local session is started automatically.
-
-    Returns
-    -------
-    SparkSession
-    """
-    return SparkSession.builder.getOrCreate()
+__all__ = ["get_spark"]

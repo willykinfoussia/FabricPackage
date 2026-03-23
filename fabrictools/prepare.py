@@ -123,8 +123,8 @@ def _to_business_sentence_name(value: str) -> str:
     return normalized[0].upper() + normalized[1:]
 
 
-def _to_power_bi_data_type(data_type: Any) -> str:
-    """Map Spark data types to Power BI column data types."""
+def _to_semantic_data_type(data_type: Any) -> str:
+    """Map Spark data types to semantic model TOM data types."""
     if isinstance(data_type, (DateType, TimestampType)):
         return "DateTime"
     if isinstance(data_type, BooleanType):
@@ -949,15 +949,14 @@ def generate_prepared_aggregations(
             agg_df = prepared_df.groupBy(*group_cols).agg(*aggregations)
         else:
             agg_df = prepared_df.agg(*aggregations)
-        output_path = f"Tables/dbo/{table_name}"
         write_lakehouse(
             agg_df,
             lakehouse_name=target_lakehouse_name,
-            relative_path=output_path,
+            relative_path=table_name,
             mode="overwrite",
             spark=_spark,
         )
-        return output_path
+        return table_name
 
     day_dims = date_cols[:1] + code_cols[:1]
     week_key = f"{date_cols[0]}_week_number" if date_cols else ""
@@ -967,9 +966,9 @@ def generate_prepared_aggregations(
         region_dims = code_cols[:1]
 
     outputs: dict[str, str] = {}
-    outputs["prepared_agg_jour"] = _build_agg(day_dims, "prepared_agg_jour")
-    outputs["prepared_agg_semaine"] = _build_agg(week_dims, "prepared_agg_semaine")
-    outputs["prepared_agg_region"] = _build_agg(region_dims, "prepared_agg_region")
+    outputs["prepared_agg_jour"] = _build_agg(day_dims, f"{target_relative_path}_prepared_agg_jour")
+    outputs["prepared_agg_semaine"] = _build_agg(week_dims, f"{target_relative_path}_prepared_agg_semaine")
+    outputs["prepared_agg_region"] = _build_agg(region_dims, f"{target_relative_path}_prepared_agg_region")
 
     # Keep source lakehouse argument explicit in API even if not used right now.
     _ = source_lakehouse_name
@@ -980,38 +979,62 @@ def publish_semantic_model(
     target_lakehouse_name: str,
     agg_tables: dict[str, str],
     resolved_mappings: List[ResolvedColumn],
-    power_bi_workspace_id: str,
-    power_bi_token: str,
+    semantic_workspace: Optional[str],
+    semantic_model_name: str = "fabrictools_prepared_dataset",
+    overwrite_model: bool = True,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
     """
-    Publish or update a semantic model through Fabric/Power BI REST API.
+    Publish or replace a semantic model through Semantic Link (TOM).
 
     This helper is intentionally best-effort and returns a status dictionary.
     """
     _spark = spark or get_spark()
 
-    if not power_bi_workspace_id or not power_bi_token:
+    if not semantic_workspace:
         return {
             "status": "skipped",
-            "reason": "workspace_id_or_token_missing",
+            "reason": "semantic_workspace_missing",
+            "semantic_model_name": semantic_model_name,
+            "tables_count": len(agg_tables),
+        }
+    if not semantic_model_name:
+        return {
+            "status": "skipped",
+            "reason": "semantic_model_name_missing",
+            "tables_count": len(agg_tables),
+        }
+    if not agg_tables:
+        return {
+            "status": "skipped",
+            "reason": "no_aggregation_tables",
+            "semantic_model_name": semantic_model_name,
+            "tables_count": 0,
+        }
+
+    try:
+        import sempy.fabric as sempy_fabric  # type: ignore[import-not-found]
+        import sempy_labs  # type: ignore[import-not-found]
+    except Exception as exc:
+        log(f"Semantic Link runtime unavailable: {exc}", level="warning")
+        return {
+            "status": "failed",
+            "error": f"semantic_link_runtime_unavailable: {exc}",
+            "semantic_model_name": semantic_model_name,
             "tables_count": len(agg_tables),
         }
 
-    headers = {
-        "Authorization": f"Bearer {power_bi_token}",
-        "Content-Type": "application/json",
-    }
     semantic_tables: list[dict[str, Any]] = []
     for technical_table_name, table_path in agg_tables.items():
         table_name = _to_business_sentence_name(technical_table_name)
-        table_columns: list[dict[str, str]] = []
+        table_columns: list[dict[str, Any]] = []
         try:
             table_df = read_lakehouse(target_lakehouse_name, table_path, spark=_spark)
             table_columns = [
                 {
                     "name": _to_business_sentence_name(field.name),
-                    "dataType": _to_power_bi_data_type(field.dataType),
+                    "source_column": field.name,
+                    "dataType": _to_semantic_data_type(field.dataType),
                 }
                 for field in table_df.schema.fields
             ]
@@ -1029,7 +1052,7 @@ def publish_semantic_model(
         if len(semantic_table_names) > 1
         else relation_from_table
     )
-    relations = [
+    raw_relations = [
         {
             "fromTable": relation_from_table,
             "toTable": relation_to_table,
@@ -1040,30 +1063,65 @@ def publish_semantic_model(
         if mapping["col_prepared"].startswith("relation_id_")
         or mapping["col_prepared"].endswith("_id")
     ]
-    payload = {
-        "name": "fabrictools_prepared_dataset",
-        "defaultMode": "Push",
-        "tables": semantic_tables,
-        "relationships": relations,
-    }
-    url = f"https://api.powerbi.com/v1.0/myorg/groups/{power_bi_workspace_id}/datasets"
-    req = request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
+    dedup_relations: list[dict[str, str]] = []
+    relation_keys: set[tuple[str, str, str, str]] = set()
+    for relation in raw_relations:
+        relation_key = (
+            relation["fromTable"],
+            relation["fromColumn"],
+            relation["toTable"],
+            relation["toColumn"],
+        )
+        if relation_key in relation_keys:
+            continue
+        relation_keys.add(relation_key)
+        dedup_relations.append(relation)
+
     try:
-        with request.urlopen(req, timeout=20) as resp:
-            response_payload = resp.read().decode("utf-8")
+        sempy_labs.create_blank_semantic_model(
+            dataset=semantic_model_name,
+            workspace=semantic_workspace,
+            overwrite=overwrite_model,
+        )
+        with sempy_fabric.connect_semantic_model(
+            dataset=semantic_model_name,
+            workspace=semantic_workspace,
+            readonly=False,
+        ) as tom:
+            for table in semantic_tables:
+                table_name = table["name"]
+                tom.add_table(name=table_name)
+                for column in table["columns"]:
+                    tom.add_data_column(
+                        table_name=table_name,
+                        column_name=column["name"],
+                        source_column=column["source_column"],
+                        data_type=column["dataType"],
+                    )
+            for relation in dedup_relations:
+                tom.add_relationship(
+                    from_table=relation["fromTable"],
+                    from_column=relation["fromColumn"],
+                    to_table=relation["toTable"],
+                    to_column=relation["toColumn"],
+                    from_cardinality="Many",
+                    to_cardinality="One",
+                )
         return {
             "status": "published",
-            "response": response_payload,
+            "semantic_model_name": semantic_model_name,
+            "workspace": semantic_workspace,
             "tables_count": len(agg_tables),
+            "relationships_count": len(dedup_relations),
         }
     except Exception as exc:
         log(f"Semantic model publish failed: {exc}", level="warning")
-        return {"status": "failed", "error": str(exc), "tables_count": len(agg_tables)}
+        return {
+            "status": "failed",
+            "error": str(exc),
+            "semantic_model_name": semantic_model_name,
+            "tables_count": len(agg_tables),
+        }
 
 
 def prepare_and_write_data(
@@ -1076,9 +1134,10 @@ def prepare_and_write_data(
     profiling_confidence_threshold: float = 0.80,
     max_partitions_guard: int = 500,
     vacuum_retention_hours: int = 168,
-    enable_power_bi_publish: bool = False,
-    power_bi_workspace_id: Optional[str] = None,
-    power_bi_token: Optional[str] = None,
+    enable_semantic_model_publish: bool = False,
+    semantic_workspace: Optional[str] = None,
+    semantic_model_name: str = "fabrictools_prepared_dataset",
+    overwrite_semantic_model: bool = True,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
     """
@@ -1116,7 +1175,7 @@ def prepare_and_write_data(
         vacuum_retention_hours=vacuum_retention_hours,
         spark=_spark,
     )
-    if enable_power_bi_publish:
+    if enable_semantic_model_publish:
         agg_tables = generate_prepared_aggregations(
             source_lakehouse_name=source_lakehouse_name,
             target_lakehouse_name=target_lakehouse_name,
@@ -1124,15 +1183,15 @@ def prepare_and_write_data(
             resolved_mappings=resolved_mappings,
             spark=_spark,
         )
-        if power_bi_workspace_id and power_bi_token:
-            publish_semantic_model(
-                target_lakehouse_name=target_lakehouse_name,
-                agg_tables=agg_tables,
-                resolved_mappings=resolved_mappings,
-                power_bi_workspace_id=power_bi_workspace_id,
-                power_bi_token=power_bi_token,
-                spark=_spark,
-            )
+        publish_semantic_model(
+            target_lakehouse_name=target_lakehouse_name,
+            agg_tables=agg_tables,
+            resolved_mappings=resolved_mappings,
+            semantic_workspace=semantic_workspace,
+            semantic_model_name=semantic_model_name,
+            overwrite_model=overwrite_semantic_model,
+            spark=_spark,
+        )
     return prepared_df
 
 
@@ -1147,9 +1206,10 @@ def prepare_and_write_all_tables(
     profiling_confidence_threshold: float = 0.80,
     max_partitions_guard: int = 500,
     vacuum_retention_hours: int = 168,
-    enable_power_bi_publish: bool = False,
-    power_bi_workspace_id: Optional[str] = None,
-    power_bi_token: Optional[str] = None,
+    enable_semantic_model_publish: bool = False,
+    semantic_workspace: Optional[str] = None,
+    semantic_model_name: str = "fabrictools_prepared_dataset",
+    overwrite_semantic_model: bool = True,
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
@@ -1240,9 +1300,10 @@ def prepare_and_write_all_tables(
                 profiling_confidence_threshold=profiling_confidence_threshold,
                 max_partitions_guard=max_partitions_guard,
                 vacuum_retention_hours=vacuum_retention_hours,
-                enable_power_bi_publish=enable_power_bi_publish,
-                power_bi_workspace_id=power_bi_workspace_id,
-                power_bi_token=power_bi_token,
+                enable_semantic_model_publish=enable_semantic_model_publish,
+                semantic_workspace=semantic_workspace,
+                semantic_model_name=semantic_model_name,
+                overwrite_semantic_model=overwrite_semantic_model,
                 spark=_spark,
             )
             processed_tables.append(

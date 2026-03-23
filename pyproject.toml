@@ -28,6 +28,8 @@ classifiers = [
 # already provides them in its Spark runtime environment.
 dependencies = [
     "countrystatecity-countries",
+    "semantic-link-sempy",
+    "semantic-link-labs",
 ]
 
 [project.optional-dependencies]
