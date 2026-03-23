@@ -35,7 +35,7 @@ def _make_df(rows: int = 5, cols: int = 3) -> MagicMock:
 class TestReadLakehouse:
     @patch("fabrictools.lakehouse._try_read_formats")
     @patch("fabrictools.lakehouse.build_lakehouse_read_path_candidates", return_value=["sales/raw"])
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     @patch("fabrictools.lakehouse.get_spark")
     def test_resolve_candidate_single_path_returns_directly(
         self, mock_get_spark, mock_path, mock_candidates, mock_try_read
@@ -53,7 +53,7 @@ class TestReadLakehouse:
         "fabrictools.lakehouse.build_lakehouse_read_path_candidates",
         return_value=["sales/raw", "Tables/dbo/sales/raw", "Files/sales/raw"],
     )
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     @patch("fabrictools.lakehouse.get_spark")
     def test_resolve_candidate_fallbacks_to_first_readable(
         self, mock_get_spark, mock_path, mock_candidates, mock_try_read
@@ -76,7 +76,7 @@ class TestReadLakehouse:
         )
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_bare_name_prefers_tables_dbo_before_files(self, mock_path, mock_spark):
         """For ambiguous names, Tables/dbo should be attempted before Files."""
         mock_df = _make_df()
@@ -114,7 +114,7 @@ class TestReadLakehouse:
         assert not any(path.endswith("/Files/customers") for _, path in attempts)
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_dbo_prefix_is_corrected_to_tables_dbo(self, mock_path, mock_spark):
         """dbo/<name> should be corrected to Tables/dbo/<name> when needed."""
         mock_df = _make_df()
@@ -169,7 +169,7 @@ class TestReadLakehouse:
         assert result is mock_df
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_reads_delta_first(self, mock_path, mock_spark):
         """Delta is the preferred format and should be tried first."""
         mock_df = _make_df()
@@ -186,7 +186,7 @@ class TestReadLakehouse:
         assert result is mock_df
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_falls_back_to_parquet(self, mock_path, mock_spark):
         """When Delta read fails, Parquet should be attempted."""
         mock_df = _make_df()
@@ -207,7 +207,7 @@ class TestReadLakehouse:
         assert result is mock_df
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_falls_back_to_csv(self, mock_path, mock_spark):
         """When both Delta and Parquet fail, CSV should be attempted."""
         mock_df = _make_df()
@@ -229,7 +229,7 @@ class TestReadLakehouse:
         assert result is mock_df
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_raises_when_all_formats_fail(self, mock_path, mock_spark):
         """RuntimeError is raised when no format succeeds."""
         spark = MagicMock()
@@ -255,7 +255,7 @@ class TestReadLakehouse:
         assert f"{ABFS_BASE}/Files/{REL_PATH}" in msg
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_accepts_explicit_spark(self, mock_path, mock_spark):
         """Passing `spark` explicitly should bypass get_spark()."""
         mock_df = _make_df()
@@ -273,7 +273,7 @@ class TestReadLakehouse:
 
 class TestWriteLakehouse:
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_writes_delta_by_default(self, mock_path, mock_spark):
         """Default format should be delta and bare paths map to Tables/dbo."""
         mock_df = _make_df()
@@ -291,7 +291,7 @@ class TestWriteLakehouse:
         writer.save.assert_called_once_with(f"{ABFS_BASE}/Tables/dbo/output/table")
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_write_corrects_dbo_prefix(self, mock_path, mock_spark):
         """dbo/<name> should be normalized to Tables/dbo/<name>."""
         mock_df = _make_df()
@@ -307,7 +307,7 @@ class TestWriteLakehouse:
         writer.save.assert_called_once_with(f"{ABFS_BASE}/Tables/dbo/customers")
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_write_corrects_tables_without_dbo(self, mock_path, mock_spark):
         """Tables/<name> should be normalized to Tables/dbo/<name>."""
         mock_df = _make_df()
@@ -323,7 +323,7 @@ class TestWriteLakehouse:
         writer.save.assert_called_once_with(f"{ABFS_BASE}/Tables/dbo/customers")
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_write_keeps_explicit_files_path(self, mock_path, mock_spark):
         """Explicit Files path should be preserved."""
         mock_df = _make_df()
@@ -339,7 +339,7 @@ class TestWriteLakehouse:
         writer.save.assert_called_once_with(f"{ABFS_BASE}/Files/export/customers")
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_partitions_when_requested(self, mock_path, mock_spark):
         """partitionBy should be applied when partition_by is provided."""
         mock_df = _make_df()
@@ -356,7 +356,7 @@ class TestWriteLakehouse:
         writer.partitionBy.assert_called_once_with("year", "month")
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_partitions_merge_explicit_and_detected_without_duplicates(
         self, mock_path, mock_spark
     ):
@@ -388,7 +388,7 @@ class TestWriteLakehouse:
         writer.partitionBy.assert_called_once_with("client_id", "mois", "annee", "jour")
 
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_no_partition_applied_when_no_detectable_columns(self, mock_path, mock_spark):
         """No partitionBy should be applied when nothing is explicit or auto-detectable."""
         mock_df = _make_df()
@@ -413,7 +413,7 @@ class TestWriteLakehouse:
 
 class TestMergeLakehouse:
     @patch("fabrictools.lakehouse.get_spark")
-    @patch("fabrictools.lakehouse.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_merge_calls_execute(self, mock_path, mock_spark):
         """merge_lakehouse should call execute() on the merge builder."""
         source_df = _make_df()
@@ -675,7 +675,7 @@ class TestDataCleaningAndQuality:
             spark=spark,
         )
 
-    @patch("fabrictools.data_quality.get_lakehouse_abfs_path", return_value=ABFS_BASE)
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value=ABFS_BASE)
     def test_list_lakehouse_table_paths_discovers_all_schemas(self, mock_abfs_path):
         """_list_lakehouse_table_paths should scan Tables/<schema>/<table> across schemas."""
         tables_root = f"{ABFS_BASE}/Tables"

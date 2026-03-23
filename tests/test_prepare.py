@@ -466,8 +466,8 @@ class TestTransformToPrepared:
 
 
 class TestWritePreparedTable:
-    @patch("fabrictools.prepare.build_lakehouse_write_path", return_value="Tables/dbo/orders_prepared")
-    @patch("fabrictools.prepare.get_lakehouse_abfs_path", return_value="abfss://container@account.dfs.core.windows.net")
+    @patch("fabrictools.core.build_lakehouse_write_path", return_value="Tables/dbo/orders_prepared")
+    @patch("fabrictools.core.get_lakehouse_abfs_path", return_value="abfss://container@account.dfs.core.windows.net")
     @patch("fabrictools.prepare.write_lakehouse")
     @patch("fabrictools.prepare.get_spark")
     def test_write_prepared_table_writes_with_selected_partitions(

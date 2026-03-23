@@ -10,7 +10,8 @@ from datetime import datetime
 
 from fabrictools.core import log
 from fabrictools.core import get_spark
-from fabrictools.io import read_lakehouse, write_lakehouse, resolve_lakehouse_read_candidate, get_lakehouse_abfs_path
+from fabrictools.io import read_lakehouse, write_lakehouse, resolve_lakehouse_read_candidate
+from fabrictools.core import get_lakehouse_abfs_path
 
 
 CONFIG_SOURCE_SNAPSHOT_PATH = "schema_snapshot"

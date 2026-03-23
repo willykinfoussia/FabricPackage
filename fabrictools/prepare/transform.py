@@ -9,7 +9,8 @@ import unicodedata
 
 from fabrictools.core import log
 from fabrictools.core import get_spark
-from fabrictools.io import read_lakehouse, write_lakehouse, build_lakehouse_write_path, get_lakehouse_abfs_path
+from fabrictools.core import build_lakehouse_write_path, get_lakehouse_abfs_path
+from fabrictools.io import read_lakehouse, write_lakehouse
 from fabrictools.prepare.resolve import _safe_read_table, ResolvedColumn, _normalize_token
 
 
