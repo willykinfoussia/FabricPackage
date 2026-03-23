@@ -115,19 +115,6 @@ ALIAS_TOKEN_REPLACEMENTS = {
 }
 
 
-_DATE_DERIVED_SUFFIXES: dict[str, str] = {
-    "_year": " Annee",
-    "_month_number": " Numero du Mois",
-    "_week_number": " Semaine",
-    "_month_label": " Mois",
-}
-
-
-def _to_display_name(snake_col: str) -> str:
-    """Convert snake_case prepared name to business display label."""
-    return _localize_alias_tokens(snake_col.replace("_", " ").capitalize())
-
-
 def _to_business_sentence_name(value: str) -> str:
     """Convert snake_case/raw identifier to business sentence case label."""
     normalized = re.sub(r"\s+", " ", value.replace("_", " ").strip().lower())
@@ -843,7 +830,6 @@ def write_prepared_table(
     Write prepared table and run conditional Delta maintenance operations.
     """
     _spark = spark or get_spark()
-    df_columns_before_rename = set(df.columns)
     date_partitions = [
         mapping["col_prepared"]
         for mapping in resolved_mappings
@@ -877,23 +863,6 @@ def write_prepared_table(
     if estimated_partitions > max_partitions_guard and selected_partitions:
         selected_partitions = selected_partitions[:1]
 
-    # Apply business display names only after partition detection is completed.
-    rename_map: dict[str, str] = {}
-    for mapping in resolved_mappings:
-        prepared_col = mapping["col_prepared"]
-        if prepared_col in df_columns_before_rename:
-            rename_map[prepared_col] = _to_display_name(prepared_col)
-        if mapping["semantic_type"].upper() == "DATE":
-            base_display = _to_display_name(prepared_col)
-            for tech_suffix, display_suffix in _DATE_DERIVED_SUFFIXES.items():
-                technical_name = f"{prepared_col}{tech_suffix}"
-                if technical_name in df_columns_before_rename:
-                    rename_map[technical_name] = f"{base_display}{display_suffix}"
-
-    if rename_map:
-        df = df.select([F.col(col_name).alias(rename_map.get(col_name, col_name)) for col_name in df.columns])
-        selected_partitions = [rename_map.get(partition_col, partition_col) for partition_col in selected_partitions]
-
     write_lakehouse(
         df,
         lakehouse_name=target_lakehouse_name,
@@ -916,17 +885,16 @@ def write_prepared_table(
             relation_cols = [
                 mapping["col_prepared"]
                 for mapping in resolved_mappings
-                if mapping["col_prepared"] in df_columns_before_rename
+                if mapping["col_prepared"] in df.columns
                 and (
                     mapping["semantic_type"].upper() in {"RELATION_ID", "TECH_ID"}
                     or mapping["col_prepared"].endswith("_id")
                 )
             ]
-            zorder_cols = [rename_map.get(col_name, col_name) for col_name in (date_partitions[:1] + relation_cols[:2])]
+            zorder_cols = date_partitions[:1] + relation_cols[:2]
             if zorder_cols:
-                zorder_by_clause = ", ".join(f"`{col_name}`" for col_name in zorder_cols)
                 _spark.sql(
-                    f"OPTIMIZE delta.`{full_path}` ZORDER BY ({zorder_by_clause})"
+                    f"OPTIMIZE delta.`{full_path}` ZORDER BY ({', '.join(zorder_cols)})"
                 )
             else:
                 _spark.sql(f"OPTIMIZE delta.`{full_path}`")
@@ -948,20 +916,22 @@ def generate_prepared_aggregations(
     _spark = spark or get_spark()
     prepared_df = read_lakehouse(target_lakehouse_name, target_relative_path, spark=_spark)
 
-    measure_cols: list[str] = []
-    date_cols: list[str] = []
-    code_cols: list[str] = []
-    for mapping in resolved_mappings:
-        prepared_display = _to_display_name(mapping["col_prepared"])
-        if prepared_display not in prepared_df.columns:
-            continue
-        semantic_type = mapping["semantic_type"].upper()
-        if semantic_type in {"AMOUNT", "QUANTITY", "RATE"}:
-            measure_cols.append(prepared_display)
-        if semantic_type == "DATE":
-            date_cols.append(prepared_display)
-        if semantic_type == "CATEGORY":
-            code_cols.append(prepared_display)
+    measure_cols = [
+        mapping["col_prepared"]
+        for mapping in resolved_mappings
+        if mapping["col_prepared"] in prepared_df.columns
+        and mapping["semantic_type"].upper() in {"AMOUNT", "QUANTITY", "RATE"}
+    ]
+    date_cols = [
+        mapping["col_prepared"]
+        for mapping in resolved_mappings
+        if mapping["col_prepared"] in prepared_df.columns and mapping["semantic_type"].upper() == "DATE"
+    ]
+    code_cols = [
+        mapping["col_prepared"]
+        for mapping in resolved_mappings
+        if mapping["col_prepared"] in prepared_df.columns and mapping["semantic_type"].upper() == "CATEGORY"
+    ]
 
     numeric_auto_measures = [
         field.name
@@ -990,7 +960,7 @@ def generate_prepared_aggregations(
         return output_path
 
     day_dims = date_cols[:1] + code_cols[:1]
-    week_key = f"{date_cols[0]} Semaine" if date_cols else ""
+    week_key = f"{date_cols[0]}_week_number" if date_cols else ""
     week_dims = [week_key] if week_key and week_key in prepared_df.columns else []
     region_dims = [col_name for col_name in code_cols if "region" in col_name.lower()][:1]
     if not region_dims:
