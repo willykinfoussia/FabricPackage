@@ -352,33 +352,27 @@ def merge_lakehouse(
     log("  Merge complete")
 
 
-def _table_relative_path_to_qualified_name(table_relative_path: str) -> str:
-    """Convert `Tables/<schema>/<table>` to `<schema>.<table>`."""
-    parts = table_relative_path.strip("/").split("/")
-    if len(parts) != 3 or parts[0].lower() != "tables":
-        raise ValueError(
-            "Expected table path in format 'Tables/<schema>/<table>', "
-            f"got '{table_relative_path}'"
-        )
-    schema_name = parts[1]
-    table_name = parts[2]
-    return f"{schema_name}.{table_name}"
-
-
 def delete_all_lakehouse_tables(
     lakehouse_name: str,
     include_schemas: Optional[List[str]] = None,
     exclude_tables: Optional[List[str]] = None,
     continue_on_error: bool = False,
-    spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
     """
-    Drop all discovered Lakehouse tables with Spark SQL.
+    Hard-delete all discovered Lakehouse table folders.
 
-    Tables are discovered as ``Tables/<schema>/<table>`` and dropped with
-    ``DROP TABLE IF EXISTS <schema>.<table>``.
+    Tables are discovered as ``Tables/<schema>/<table>`` and deleted with
+    ``notebookutils.fs.rm(<abfs>/Tables/<schema>/<table>, recurse=True)``.
     """
-    _spark = spark or get_spark()
+    try:
+        import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
+    except ImportError as exc:
+        raise ValueError(
+            "notebookutils is not available — are you running inside "
+            f"Microsoft Fabric? ({exc})"
+        ) from exc
+
+    base = get_lakehouse_abfs_path(lakehouse_name)
     table_paths = list_lakehouse_tables(
         lakehouse_name=lakehouse_name,
         include_schemas=include_schemas,
@@ -404,24 +398,25 @@ def delete_all_lakehouse_tables(
 
     for index, table_relative_path in enumerate(table_paths, start=1):
         try:
-            qualified_table_name = _table_relative_path_to_qualified_name(table_relative_path)
-            log(f"[{index}/{total_tables}] Dropping table '{qualified_table_name}'...")
-            _spark.sql(f"DROP TABLE IF EXISTS {qualified_table_name}")
+            full_path = f"{base}/{table_relative_path}"
+            log(f"[{index}/{total_tables}] Hard-deleting table path '{full_path}'...")
+            notebookutils.fs.rm(full_path, recurse=True)
             deleted_entries.append(
                 {
                     "relative_path": table_relative_path,
-                    "table": qualified_table_name,
+                    "path": full_path,
                 }
             )
         except Exception as exc:
             failure_entries.append(
                 {
                     "relative_path": table_relative_path,
+                    "path": f"{base}/{table_relative_path}",
                     "error": str(exc),
                 }
             )
             log(
-                f"[{index}/{total_tables}] Failed to drop '{table_relative_path}': {exc}",
+                f"[{index}/{total_tables}] Failed to hard-delete '{table_relative_path}': {exc}",
                 level="warning",
             )
             if not continue_on_error:
