@@ -77,8 +77,8 @@ def prepare_and_write_data(
         spark=_spark,
     )
     resolved_mappings = resolve_columns(
-        df=source_df,
         source_lakehouse_name=source_lakehouse_name,
+        source_relative_path=source_relative_path,
         schema_hash=schema_hash,
         sample_size=sample_size,
         profiling_confidence_threshold=profiling_confidence_threshold,
@@ -86,9 +86,9 @@ def prepare_and_write_data(
         spark=_spark,
     )
     prepared_df = transform_to_prepared(
-        df=source_df,
-        resolved_mappings=resolved_mappings,
         source_lakehouse_name=source_lakehouse_name,
+        source_relative_path=source_relative_path,
+        resolved_mappings=resolved_mappings,
         spark=_spark,
     )
     write_prepared_table(
@@ -101,14 +101,14 @@ def prepare_and_write_data(
         vacuum_retention_hours=vacuum_retention_hours,
         spark=_spark,
     )
+    agg_tables = generate_prepared_aggregations(
+        source_lakehouse_name=source_lakehouse_name,
+        target_lakehouse_name=target_lakehouse_name,
+        target_relative_path=target_relative_path,
+        resolved_mappings=resolved_mappings,
+        spark=_spark,
+    )
     if enable_semantic_model_publish:
-        agg_tables = generate_prepared_aggregations(
-            source_lakehouse_name=source_lakehouse_name,
-            target_lakehouse_name=target_lakehouse_name,
-            target_relative_path=target_relative_path,
-            resolved_mappings=resolved_mappings,
-            spark=_spark,
-        )
         publish_semantic_model(
             target_lakehouse_name=target_lakehouse_name,
             agg_tables=agg_tables,
