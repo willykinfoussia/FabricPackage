@@ -128,6 +128,25 @@ def _to_display_name(snake_col: str) -> str:
     return _localize_alias_tokens(snake_col.replace("_", " ").capitalize())
 
 
+def _to_business_sentence_name(value: str) -> str:
+    """Convert snake_case/raw identifier to business sentence case label."""
+    normalized = re.sub(r"\s+", " ", value.replace("_", " ").strip().lower())
+    if not normalized:
+        return ""
+    return normalized[0].upper() + normalized[1:]
+
+
+def _to_power_bi_data_type(data_type: Any) -> str:
+    """Map Spark data types to Power BI column data types."""
+    if isinstance(data_type, (DateType, TimestampType)):
+        return "DateTime"
+    if isinstance(data_type, BooleanType):
+        return "Boolean"
+    if isinstance(data_type, NumericType):
+        return "Double"
+    return "String"
+
+
 def _normalize_token(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value.strip().lower())
     return "".join(char for char in normalized if not unicodedata.combining(char))
@@ -1000,8 +1019,7 @@ def publish_semantic_model(
 
     This helper is intentionally best-effort and returns a status dictionary.
     """
-    _ = spark or get_spark()
-    _ = target_lakehouse_name
+    _spark = spark or get_spark()
 
     if not power_bi_workspace_id or not power_bi_token:
         return {
@@ -1014,12 +1032,39 @@ def publish_semantic_model(
         "Authorization": f"Bearer {power_bi_token}",
         "Content-Type": "application/json",
     }
+    semantic_tables: list[dict[str, Any]] = []
+    for technical_table_name, table_path in agg_tables.items():
+        table_name = _to_business_sentence_name(technical_table_name)
+        table_columns: list[dict[str, str]] = []
+        try:
+            table_df = read_lakehouse(target_lakehouse_name, table_path, spark=_spark)
+            table_columns = [
+                {
+                    "name": _to_business_sentence_name(field.name),
+                    "dataType": _to_power_bi_data_type(field.dataType),
+                }
+                for field in table_df.schema.fields
+            ]
+        except Exception as exc:
+            log(
+                f"Could not infer columns for semantic table '{technical_table_name}': {exc}",
+                level="warning",
+            )
+        semantic_tables.append({"name": table_name, "columns": table_columns})
+
+    semantic_table_names = [table["name"] for table in semantic_tables]
+    relation_from_table = semantic_table_names[0] if semantic_table_names else _to_business_sentence_name("fact")
+    relation_to_table = (
+        semantic_table_names[1]
+        if len(semantic_table_names) > 1
+        else relation_from_table
+    )
     relations = [
         {
-            "fromTable": "fact",
-            "toTable": "dim",
-            "fromColumn": mapping["col_prepared"],
-            "toColumn": mapping["col_prepared"],
+            "fromTable": relation_from_table,
+            "toTable": relation_to_table,
+            "fromColumn": _to_business_sentence_name(mapping["col_prepared"]),
+            "toColumn": _to_business_sentence_name(mapping["col_prepared"]),
         }
         for mapping in resolved_mappings
         if mapping["col_prepared"].startswith("relation_id_")
@@ -1028,7 +1073,7 @@ def publish_semantic_model(
     payload = {
         "name": "fabrictools_prepared_dataset",
         "defaultMode": "Push",
-        "tables": [{"name": table_name} for table_name in agg_tables.keys()],
+        "tables": semantic_tables,
         "relationships": relations,
     }
     url = f"https://api.powerbi.com/v1.0/myorg/groups/{power_bi_workspace_id}/datasets"

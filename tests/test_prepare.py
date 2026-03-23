@@ -6,6 +6,7 @@ All Spark/Fabric interactions are mocked to keep tests offline.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
@@ -695,4 +696,77 @@ class TestOrchestrators:
 
         assert result["status"] == "skipped"
         mock_urlopen.assert_not_called()
+
+    @patch("fabrictools.prepare.read_lakehouse")
+    @patch("fabrictools.prepare.request.urlopen")
+    @patch("fabrictools.prepare.get_spark")
+    def test_publish_semantic_model_builds_business_friendly_payload(
+        self,
+        mock_get_spark,
+        mock_urlopen,
+        mock_read_lakehouse,
+    ):
+        spark = MagicMock()
+        mock_get_spark.return_value = spark
+
+        df_day = MagicMock()
+        df_day.schema.fields = [
+            SimpleNamespace(name="customer_name", dataType=StringType()),
+            SimpleNamespace(name="order_id", dataType=IntegerType()),
+        ]
+        df_region = MagicMock()
+        df_region.schema.fields = [
+            SimpleNamespace(name="region_name", dataType=StringType()),
+            SimpleNamespace(name="total_amount", dataType=IntegerType()),
+        ]
+        mock_read_lakehouse.side_effect = [df_day, df_region]
+
+        response = MagicMock()
+        response.read.return_value = b'{"id":"dataset-1"}'
+        mock_urlopen.return_value.__enter__.return_value = response
+
+        from fabrictools.prepare import publish_semantic_model
+
+        result = publish_semantic_model(
+            target_lakehouse_name="TargetLakehouse",
+            agg_tables={
+                "prepared_agg_jour": "Tables/dbo/prepared_agg_jour",
+                "prepared_agg_region": "Tables/dbo/prepared_agg_region",
+            },
+            resolved_mappings=[
+                {
+                    "col_source": "order_id",
+                    "col_prepared": "order_id",
+                    "semantic_type": "RELATION_ID",
+                    "source_resolution": "PREFIX_RULE",
+                    "confidence": 1.0,
+                }
+            ],
+            power_bi_workspace_id="workspace-id",
+            power_bi_token="token",
+            spark=spark,
+        )
+
+        assert result["status"] == "published"
+        assert result["tables_count"] == 2
+        assert mock_read_lakehouse.call_args_list == [
+            call("TargetLakehouse", "Tables/dbo/prepared_agg_jour", spark=spark),
+            call("TargetLakehouse", "Tables/dbo/prepared_agg_region", spark=spark),
+        ]
+
+        req = mock_urlopen.call_args.args[0]
+        payload = json.loads(req.data.decode("utf-8"))
+
+        assert payload["tables"][0]["name"] == "Prepared agg jour"
+        assert payload["tables"][1]["name"] == "Prepared agg region"
+        assert payload["tables"][0]["columns"][0] == {"name": "Customer name", "dataType": "String"}
+        assert payload["tables"][0]["columns"][1] == {"name": "Order id", "dataType": "Double"}
+        assert payload["relationships"] == [
+            {
+                "fromTable": "Prepared agg jour",
+                "toTable": "Prepared agg region",
+                "fromColumn": "Order id",
+                "toColumn": "Order id",
+            }
+        ]
 
