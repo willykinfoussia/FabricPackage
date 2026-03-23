@@ -82,7 +82,6 @@ def prepare_and_write_data(
         schema_hash=schema_hash,
         sample_size=sample_size,
         profiling_confidence_threshold=profiling_confidence_threshold,
-        source_relative_path=source_relative_path,
         spark=_spark,
     )
     prepared_df = transform_to_prepared(
