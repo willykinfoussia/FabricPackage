@@ -10,7 +10,7 @@ import unicodedata
 from fabrictools.core import log
 from fabrictools.core import get_spark
 from fabrictools.io import read_lakehouse, write_lakehouse, build_lakehouse_write_path, get_lakehouse_abfs_path
-from fabrictools.prepare.resolve import _safe_read_table, ResolvedColumn
+from fabrictools.prepare.resolve import _safe_read_table, ResolvedColumn, _normalize_token
 
 
 CONFIG_CODE_LABELS_PATH = "Tables/dbo/code_labels"
@@ -30,10 +30,6 @@ ALIAS_TOKEN_REPLACEMENTS = {
     "week": "semaine",
 }
 
-
-def _normalize_token(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value.strip().lower())
-    return "".join(char for char in normalized if not unicodedata.combining(char))
 
 def _semantic_cast_expr(col_name: str, semantic_type: str) -> F.Column:
     stype = semantic_type.upper()

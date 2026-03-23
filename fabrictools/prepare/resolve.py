@@ -7,6 +7,7 @@ from pyspark.sql.types import DateType, TimestampType, BooleanType, NumericType,
 
 from typing import Any, Optional, List
 import re
+import unicodedata
 import json
 import requests
 from datetime import date, datetime
@@ -16,7 +17,6 @@ from fabrictools.core import log
 from fabrictools.core import get_spark
 from fabrictools.io import read_lakehouse, write_lakehouse
 from fabrictools.prepare.schema import _build_schema_hash
-from fabrictools.prepare.transform import _normalize_token
 
 
 CONFIG_PREFIX_RULES_PATH = "Tables/dbo/prefix_rules"
@@ -90,6 +90,10 @@ class ResolvedColumn(TypedDict):
     source_resolution: str
     confidence: float
 
+
+def _normalize_token(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.strip().lower())
+    return "".join(char for char in normalized if not unicodedata.combining(char))
 
 def _clean_suffix(col_name: str) -> str:
     """Remove common technical prefixes/suffixes and leading/trailing special characters before labeling."""

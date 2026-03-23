@@ -15,7 +15,7 @@ from pyspark.sql.types import (
 
 from fabrictools.core import log
 from fabrictools.core import get_spark
-from fabrictools.dimensions.pipeline import _write_dimension_targets
+from fabrictools.dimensions._targets import _write_dimension_targets
 
 
 def _country_schema() -> StructType:

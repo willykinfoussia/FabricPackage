@@ -8,8 +8,7 @@ from pyspark.sql import DataFrame, SparkSession
 
 from fabrictools.core.logging import log
 from fabrictools.core.spark import get_spark
-from fabrictools.io.discovery import list_lakehouse_tables
-from fabrictools.io.lakehouse import merge_lakehouse, read_lakehouse, write_lakehouse
+from fabrictools.io import list_lakehouse_tables, merge_lakehouse, read_lakehouse, write_lakehouse
 from fabrictools.pipelines.config import (
     TableJobConfig,
     build_table_jobs_from_config,
