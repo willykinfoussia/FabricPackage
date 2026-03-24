@@ -6,6 +6,36 @@ from typing import Any, List, Optional
 
 from fabrictools.core import get_lakehouse_abfs_path
 
+_PIPELINE_DISCOVERY_EXCLUDED_TABLE_NAMES = frozenset(
+    {
+        "pipeline_audit_log",
+        "prefix_rules",
+        "profiling_cache",
+    }
+)
+_SCHEMA_SNAPSHOT_TABLE_SUFFIX = "_schema_snapshot"
+
+
+def filter_pipeline_discovered_tables(relative_paths: list[str]) -> list[str]:
+    """
+    Drop fabrictools internal tables and schema snapshot folders from discovery.
+
+    Excludes tables whose name ends with ``_schema_snapshot`` and the fixed
+    names ``pipeline_audit_log``, ``prefix_rules``, and ``profiling_cache``.
+    """
+    kept: list[str] = []
+    for relative_path in relative_paths:
+        segments = [s for s in relative_path.strip().strip("/").split("/") if s]
+        if not segments:
+            continue
+        table_name_lower = segments[-1].lower()
+        if table_name_lower.endswith(_SCHEMA_SNAPSHOT_TABLE_SUFFIX):
+            continue
+        if table_name_lower in _PIPELINE_DISCOVERY_EXCLUDED_TABLE_NAMES:
+            continue
+        kept.append(relative_path)
+    return kept
+
 
 def get_fs_entry_name(fs_entry: Any) -> str:
     """Extract a clean directory/file name from a notebookutils.fs.ls entry."""
@@ -78,5 +108,29 @@ def list_lakehouse_tables(
     return sorted(discovered_table_paths)
 
 
-__all__ = ["get_fs_entry_name", "list_lakehouse_tables"]
+def list_lakehouse_tables_for_pipeline(
+    lakehouse_name: str,
+    include_schemas: Optional[List[str]] = None,
+    exclude_tables: Optional[List[str]] = None,
+) -> List[str]:
+    """
+    Discover tables like :func:`list_lakehouse_tables`, then apply
+    :func:`filter_pipeline_discovered_tables` so bulk pipelines skip internal
+    metadata and snapshot paths.
+    """
+    return filter_pipeline_discovered_tables(
+        list_lakehouse_tables(
+            lakehouse_name=lakehouse_name,
+            include_schemas=include_schemas,
+            exclude_tables=exclude_tables,
+        )
+    )
+
+
+__all__ = [
+    "filter_pipeline_discovered_tables",
+    "get_fs_entry_name",
+    "list_lakehouse_tables",
+    "list_lakehouse_tables_for_pipeline",
+]
 

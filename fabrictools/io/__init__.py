@@ -1,6 +1,10 @@
 """I/O adapters for Fabric Lakehouse and Warehouse."""
 
-from fabrictools.io.discovery import list_lakehouse_tables
+from fabrictools.io.discovery import (
+    filter_pipeline_discovered_tables,
+    list_lakehouse_tables,
+    list_lakehouse_tables_for_pipeline,
+)
 from fabrictools.io.lakehouse import (
     delete_all_lakehouse_tables,
     merge_lakehouse,
@@ -18,6 +22,8 @@ __all__ = [
     "delete_all_lakehouse_tables",
     "read_warehouse",
     "write_warehouse",
+    "filter_pipeline_discovered_tables",
     "list_lakehouse_tables",
+    "list_lakehouse_tables_for_pipeline",
 ]
 
