@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import re
 import unicodedata
 
@@ -15,6 +15,14 @@ from fabrictools.prepare.resolve import _safe_read_table, ResolvedColumn, _norma
 
 
 CONFIG_CODE_LABELS_PATH = "Tables/dbo/code_labels"
+
+PARTITION_MIN_COMBINED = 20
+PARTITION_MAX_COMBINED_HARD = 200
+PARTITION_QUASI_ID_RATIO = 0.95
+PARTITION_MAX_NULL_RATIO = 0.30
+PARTITION_CATEGORY_DISTINCT_MIN = 10
+PARTITION_CATEGORY_DISTINCT_MAX = 200
+DEFAULT_MAX_PARTITIONS_GUARD = 200
 
 ALIAS_TOKEN_REPLACEMENTS = {
     "YEAR": "ANNEE",
@@ -61,6 +69,159 @@ def _localize_alias_tokens(alias: str) -> str:
     localized = token_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], localized)
     localized = camel_suffix_pattern.sub(lambda match: ALIAS_TOKEN_REPLACEMENTS[match.group(0)], localized)
     return localized
+
+
+def _partition_token_excluded(col_name: str, excluded_tokens: set[str]) -> bool:
+    return _normalize_token(col_name).replace("_", " ") in excluded_tokens
+
+
+def _collect_partition_candidate_meta(
+    df: DataFrame,
+    resolved_mappings: List[ResolvedColumn],
+) -> Tuple[list[str], dict[str, str]]:
+    """
+    Ordered unique partition candidate columns: P1 (DATE year/month derivations, YEAR/MONTH),
+    then P2 (CATEGORY). Values in meta are tags: DATE_YEAR, DATE_MONTH, YEAR, MONTH, CATEGORY.
+    """
+    cols = set(df.columns)
+    ordered: list[str] = []
+    seen: set[str] = set()
+    meta: dict[str, str] = {}
+
+    def add(name: str, tag: str) -> None:
+        if name not in cols or name in seen:
+            return
+        seen.add(name)
+        ordered.append(name)
+        meta[name] = tag
+
+    for mapping in resolved_mappings:
+        st = mapping["semantic_type"].upper()
+        prep = mapping["col_prepared"]
+        if st == "DATE" and prep in cols:
+            add(f"{prep}_year", "DATE_YEAR")
+            add(f"{prep}_month_number", "DATE_MONTH")
+        elif st == "YEAR" and prep in cols:
+            add(prep, "YEAR")
+        elif st == "MONTH" and prep in cols:
+            add(prep, "MONTH")
+        elif st == "CATEGORY" and prep in cols:
+            add(prep, "CATEGORY")
+    return ordered, meta
+
+
+def _partition_stats(
+    df: DataFrame,
+    candidate_cols: list[str],
+) -> Tuple[int, dict[str, int], dict[str, int]]:
+    """Single agg: row count, per-column distinct count, per-column null count."""
+    if not candidate_cols:
+        row = df.agg(F.count(F.lit(1)).alias("n_rows")).first()
+        n_rows = int(row["n_rows"] or 0) if row is not None else 0
+        return n_rows, {}, {}
+    agg_exprs: list[F.Column] = [F.count(F.lit(1)).alias("n_rows")]
+    for idx, col in enumerate(candidate_cols):
+        agg_exprs.append(F.countDistinct(F.col(col)).alias(f"d_{idx}"))
+        agg_exprs.append(
+            F.sum(F.when(F.col(col).isNull(), F.lit(1)).otherwise(F.lit(0))).alias(f"nnull_{idx}")
+        )
+    row = df.agg(*agg_exprs).first()
+    if row is None:
+        return 0, {}, {}
+    n_rows = int(row["n_rows"] or 0)
+    distinct: dict[str, int] = {}
+    nulls: dict[str, int] = {}
+    for idx, col in enumerate(candidate_cols):
+        distinct[col] = int(row[f"d_{idx}"] or 0)
+        nulls[col] = int(row[f"nnull_{idx}"] or 0)
+    return n_rows, distinct, nulls
+
+
+def _best_partition_subset(
+    candidates: list[tuple[str, int]],
+    min_prod: int,
+    max_prod: int,
+) -> list[str]:
+    """Maximize |S|, then product in [min_prod, max_prod] (max product toward max_prod); tie-break lexicographic on names."""
+    n = len(candidates)
+    best: Optional[tuple[int, int, tuple[str, ...]]] = None
+
+    def is_better(
+        cand: tuple[int, int, tuple[str, ...]],
+        cur: tuple[int, int, tuple[str, ...]],
+    ) -> bool:
+        if cand[0] != cur[0]:
+            return cand[0] > cur[0]
+        if cand[1] != cur[1]:
+            return cand[1] > cur[1]
+        return cand[2] < cur[2]
+
+    def consider(chosen: list[str], prod: int) -> None:
+        nonlocal best
+        if not chosen or prod < min_prod or prod > max_prod:
+            return
+        cand = (len(chosen), prod, tuple(chosen))
+        if best is None or is_better(cand, best):
+            best = cand
+
+    def dfs(i: int, chosen: list[str], prod: int) -> None:
+        consider(chosen, prod)
+        if i >= n:
+            return
+        name, d_raw = candidates[i]
+        d = max(int(d_raw), 1)
+        next_prod = prod * d
+        if next_prod <= max_prod:
+            chosen.append(name)
+            dfs(i + 1, chosen, next_prod)
+            chosen.pop()
+        dfs(i + 1, chosen, prod)
+
+    dfs(0, [], 1)
+    if best is None:
+        return []
+    return list(best[2])
+
+
+def _select_partition_columns(
+    df: DataFrame,
+    resolved_mappings: List[ResolvedColumn],
+    *,
+    max_combined: int,
+    excluded_tokens: set[str],
+) -> list[str]:
+    upper = min(PARTITION_MAX_COMBINED_HARD, max_combined)
+    if upper < PARTITION_MIN_COMBINED:
+        return []
+
+    ordered, meta = _collect_partition_candidate_meta(df, resolved_mappings)
+    if not ordered:
+        return []
+
+    n_rows, distinct, nulls = _partition_stats(df, ordered)
+    if n_rows <= 0:
+        return []
+
+    filtered: list[tuple[str, int]] = []
+    for name in ordered:
+        if _partition_token_excluded(name, excluded_tokens):
+            continue
+        tag = meta[name]
+        d = distinct.get(name, 0)
+        nnull = nulls.get(name, 0)
+        if nnull / n_rows > PARTITION_MAX_NULL_RATIO:
+            continue
+        if d <= 0:
+            continue
+        if d / n_rows >= PARTITION_QUASI_ID_RATIO:
+            continue
+        if tag == "CATEGORY":
+            if d < PARTITION_CATEGORY_DISTINCT_MIN or d > PARTITION_CATEGORY_DISTINCT_MAX:
+                continue
+        filtered.append((name, d))
+
+    return _best_partition_subset(filtered, PARTITION_MIN_COMBINED, upper)
+
 
 def transform_to_prepared(
     source_lakehouse_name: str,
@@ -173,12 +334,21 @@ def write_prepared_table(
     target_lakehouse_name: str,
     target_relative_path: str,
     mode: str = "overwrite",
-    max_partitions_guard: int = 500,
+    max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
     vacuum_retention_hours: int = 168,
     spark: Optional[SparkSession] = None,
 ) -> None:
     """
     Write prepared table and run conditional Delta maintenance operations.
+
+    Partition columns are chosen so the product of COUNT DISTINCT per selected
+    column lies in [20, min(200, max_partitions_guard)], when possible. The
+    algorithm maximizes the number of partition columns, then the combined
+    cardinality (closest to the upper bound). P1 candidates are DATE-derived
+    year/month columns and YEAR/MONTH semantics; P2 are CATEGORY columns with
+    distinct count in [10, 200]. Quasi-identifiers, high-null columns, and
+    measure types are excluded. If no subset satisfies the combined range,
+    the table is written without partition columns.
     """
     _spark = spark or get_spark()
     date_partitions = [
@@ -186,33 +356,14 @@ def write_prepared_table(
         for mapping in resolved_mappings
         if mapping["semantic_type"].upper() == "DATE" and mapping["col_prepared"] in df.columns
     ]
-    code_partitions = [
-        mapping["col_prepared"]
-        for mapping in resolved_mappings
-        if mapping["semantic_type"].upper() == "CATEGORY" and mapping["col_prepared"] in df.columns
-    ]
 
     excluded_partition_tokens = {"source layer", "source path"}
-    selected_partitions: list[str] = []
-    selected_partitions.extend(
-        partition_col
-        for partition_col in date_partitions[:1]
-        if _normalize_token(partition_col).replace("_", " ") not in excluded_partition_tokens
+    selected_partitions = _select_partition_columns(
+        df,
+        resolved_mappings,
+        max_combined=max_partitions_guard,
+        excluded_tokens=excluded_partition_tokens,
     )
-    for candidate in code_partitions:
-        if candidate in selected_partitions:
-            continue
-        if _normalize_token(candidate).replace("_", " ") in excluded_partition_tokens:
-            continue
-        distinct_count = df.select(candidate).distinct().count()
-        if distinct_count < 50:
-            selected_partitions.append(candidate)
-
-    estimated_partitions = 1
-    for partition_col in selected_partitions:
-        estimated_partitions *= max(df.select(partition_col).distinct().count(), 1)
-    if estimated_partitions > max_partitions_guard and selected_partitions:
-        selected_partitions = selected_partitions[:1]
 
     write_lakehouse(
         df,

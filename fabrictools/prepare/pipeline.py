@@ -12,7 +12,11 @@ from fabrictools.io.discovery import list_lakehouse_tables
 from fabrictools.io import read_lakehouse
 from fabrictools.prepare.schema import snapshot_source_schema
 from fabrictools.prepare.resolve import resolve_columns
-from fabrictools.prepare.transform import transform_to_prepared, write_prepared_table
+from fabrictools.prepare.transform import (
+    DEFAULT_MAX_PARTITIONS_GUARD,
+    transform_to_prepared,
+    write_prepared_table,
+)
 from fabrictools.prepare.semantic import publish_semantic_model
 from fabrictools.prepare.aggregations import generate_prepared_aggregations
 from fabrictools.pipelines.config import (
@@ -58,7 +62,7 @@ def prepare_and_write_data(
     mode: str = "overwrite",
     sample_size: int = 500,
     profiling_confidence_threshold: float = 0.80,
-    max_partitions_guard: int = 500,
+    max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
     vacuum_retention_hours: int = 168,
     enable_semantic_model_publish: bool = False,
     semantic_workspace: Optional[str] = None,
@@ -128,7 +132,7 @@ def prepare_and_write_all_tables(
     exclude_tables: Optional[list[str]] = None,
     sample_size: int = 500,
     profiling_confidence_threshold: float = 0.80,
-    max_partitions_guard: int = 500,
+    max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
     vacuum_retention_hours: int = 168,
     enable_semantic_model_publish: bool = False,
     semantic_workspace: Optional[str] = None,
