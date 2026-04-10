@@ -76,7 +76,17 @@ def _replace_empty_strings_with_nulls(df: DataFrame) -> DataFrame:
 
 
 # Date-only strings (avoids classifying datetimes as date and dropping the time part).
-_DATE_ONLY_PATTERN = r"^(\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})$"
+# Allows 1–2 digit month/day; ISO yyyy-first dash, European dd-MM-yyyy / US MM-dd-yyyy hyphen, slash, dot.
+_DATE_ONLY_PATTERN = (
+    r"^("
+    r"\d{4}-\d{1,2}-\d{1,2}|"
+    r"\d{1,2}-\d{1,2}-\d{4}|"
+    r"\d{4}/\d{1,2}/\d{1,2}|"
+    r"\d{1,2}/\d{1,2}/\d{4}|"
+    r"\d{1,2}\.\d{1,2}\.\d{4}|"
+    r"\d{4}\.\d{1,2}\.\d{1,2}"
+    r")$"
+)
 _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 
@@ -87,12 +97,19 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     Order of detection (first match wins):
 
     1. **Date** — Non-null values match a date-only shape and parse with
-       ``to_date`` using, in order: ``yyyy-MM-dd``, then ``dd/MM/yyyy``.
-       ``dd/MM/yyyy`` is tried after ISO so values like ``01/02/2024`` are read
-       as day/month/year (not US ``MM/dd/yyyy``).
+       ``to_date`` using, in order: ISO ``yyyy-MM-dd`` / ``yyyy/M/d``, then
+       European hyphen ``dd-MM-yyyy`` / ``d-M-yyyy``, then US hyphen
+       ``MM-dd-yyyy`` / ``M-d-yyyy``, then ``dd/MM/yyyy`` and ``d/M/yyyy``, then
+       dotted ``dd.MM.yyyy`` / ``d.M.yyyy``, then US ``MM/dd/yyyy`` /
+       ``M/d/yyyy`` and ``MM.dd.yyyy`` / ``M.d.yyyy``. European forms are tried
+       before US so ambiguous values like ``01-02-2024`` or ``01/02/2024``
+       prefer day/month/year.
     2. **Timestamp** — Every non-null value parses with ``to_timestamp`` using,
-       in order: ``yyyy-MM-dd HH:mm:ss``, ``dd/MM/yyyy HH:mm:ss``,
-       ``yyyy-MM-dd'T'HH:mm:ss``.
+       in order: ``yyyy-MM-dd HH:mm:ss``, ``dd-MM-yyyy HH:mm:ss`` /
+       ``d-M-yyyy HH:mm:ss``, ``MM-dd-yyyy HH:mm:ss`` / ``M-d-yyyy HH:mm:ss``,
+       European ``dd/MM/yyyy HH:mm:ss`` / ``d/M/yyyy HH:mm:ss``, US
+       ``MM/dd/yyyy HH:mm:ss`` / ``M/d/yyyy HH:mm:ss``,
+       then ``yyyy-MM-dd'T'HH:mm:ss``.
     3. **Integer** — All non-null values match ``^[+-]?\\d+$``.
     4. **Double** — All non-null values match a decimal/scientific pattern
        (including ``e`` / ``E``).
@@ -111,7 +128,19 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
         trimmed = F.trim(F.col(col_name))
         parsed_date = F.coalesce(
             F.to_date(trimmed, "yyyy-MM-dd"),
+            F.to_date(trimmed, "yyyy/M/d"),
+            F.to_date(trimmed, "dd-MM-yyyy"),
+            F.to_date(trimmed, "d-M-yyyy"),
+            F.to_date(trimmed, "MM-dd-yyyy"),
+            F.to_date(trimmed, "M-d-yyyy"),
             F.to_date(trimmed, "dd/MM/yyyy"),
+            F.to_date(trimmed, "d/M/yyyy"),
+            F.to_date(trimmed, "dd.MM.yyyy"),
+            F.to_date(trimmed, "d.M.yyyy"),
+            F.to_date(trimmed, "MM/dd/yyyy"),
+            F.to_date(trimmed, "M/d/yyyy"),
+            F.to_date(trimmed, "MM.dd.yyyy"),
+            F.to_date(trimmed, "M.d.yyyy"),
         )
         date_mismatch = df.filter(
             F.col(col_name).isNotNull()
@@ -127,7 +156,14 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
 
         parsed_ts = F.coalesce(
             F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),
+            F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
             F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
             F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
         )
         ts_mismatch = df.filter(

@@ -44,8 +44,8 @@ Transform (DataFrame)
 ~~~~~~~~~~~~~~~~~~~~~
 filter_by_value_list(df, column, values, *, exclude=True)
     Filter rows by membership in a list (trim string columns only; no casts).
-merge_dataframes(main, join_df, join_columns, keys, how="left")
-    Join with prefixed columns from the right side; join_df must use .alias(prefix).
+merge_dataframes(main, join_df, join_columns, keys, how="left", *, join_prefix=None)
+    Join with prefixed normalized columns; prefix from join_df variable name or join_prefix.
 """
 from __future__ import annotations
 

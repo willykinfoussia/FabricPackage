@@ -416,7 +416,7 @@ all_tables = ft.prepare_and_write_all_tables(
 
 ### Transform (DataFrame)
 
-Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Le cote jointure doit etre passe avec **`.alias("prefix")`** : les colonnes ajoutees sont nommees `{prefix}_{nom_colonne}`.
+Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees est deduit du **nom de la variable** `join_df` a l’appel (ou `join_prefix=...`) ; les suffixes sont **normalises** (snake_case, comme `clean_data`). Pas besoin de `.alias()` Spark sur le DataFrame de droite.
 
 #### `filter_by_value_list`
 
@@ -428,17 +428,17 @@ df2 = ft.filter_by_value_list(df, "Compte", ("70830000", "70840000"), exclude=Tr
 
 #### `merge_dataframes`
 
-Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns` depuis la droite, renommees avec le prefixe lu sur le plan Spark (alias).
+Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`, renommees en `{prefix_snake}_{colonne_snake_unique}` (prefixe = nom de variable `projets` ci-dessous, ou `join_prefix="..."`).
 
 ```python
 out = ft.merge_dataframes(
     main=detail,
-    join_df=projets.alias("projets"),
+    join_df=projets,
     join_columns=["Client", "Type projet", "Nom client"],
     keys=[("Code projet", "ID projet")],
     how="left",
 )
-# Ex. colonnes : projets_Client, projets_Type projet, projets_Nom client
+# Ex. colonnes : projets_client, projets_type_projet, projets_nom_client
 ```
 
 ---

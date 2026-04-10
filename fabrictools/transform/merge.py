@@ -1,48 +1,109 @@
-"""Join a main DataFrame to a right side with prefixed column names from the right alias."""
+"""Join a main DataFrame to a right side with prefixed, normalized column names."""
 
 from __future__ import annotations
 
+import ast
+import inspect
+import linecache
+import textwrap
 from typing import Sequence
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
+from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
 
-def _join_df_prefix(join_df: DataFrame) -> str:
-    analyzed = join_df._jdf.queryExecution().analyzed()
 
-    def walk(node) -> str | None:
+def _merge_join_arg_display_name(call: ast.Call) -> str | None:
+    if len(call.args) >= 2:
+        arg1 = call.args[1]
+        if isinstance(arg1, ast.Name):
+            return arg1.id
+        if isinstance(arg1, ast.Attribute):
+            return arg1.attr
+        return None
+    for kw in call.keywords:
+        if kw.arg == "join_df":
+            v = kw.value
+            if isinstance(v, ast.Name):
+                return v.id
+            if isinstance(v, ast.Attribute):
+                return v.attr
+            return None
+    return None
+
+
+def _infer_join_prefix_from_call_site() -> str:
+    frame = inspect.currentframe()
+    outer = frame.f_back if frame else None
+    if outer is None:
+        raise ValueError(
+            "merge_dataframes: cannot infer join prefix from call stack; "
+            "pass join_prefix='...'."
+        )
+    filename = outer.f_code.co_filename
+    lineno = outer.f_lineno
+
+    def extract_from_block(block: str) -> str | None:
+        block = textwrap.dedent(block).strip()
+        if not block:
+            return None
         try:
-            if node.getClass().getSimpleName() == "SubqueryAlias":
-                ident = node.alias()
-                text = ident.toString() if hasattr(ident, "toString") else str(ident)
-                return text.strip("`\"")
-        except Exception:
-            pass
-        try:
-            it = node.children().iterator()
-            while it.hasNext():
-                found = walk(it.next())
-                if found is not None:
-                    return found
-        except Exception:
-            pass
+            tree = ast.parse(block)
+        except SyntaxError:
+            return None
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name):
+                if func.id != "merge_dataframes":
+                    continue
+            elif isinstance(func, ast.Attribute):
+                if func.attr != "merge_dataframes":
+                    continue
+            else:
+                continue
+            return _merge_join_arg_display_name(node)
         return None
 
-    prefix = walk(analyzed)
-    if not prefix:
-        raise ValueError(
-            "join_df must use .alias('<prefix>') so prefixed column names are defined, "
-            "e.g. projets.alias('projets')."
-        )
-    return prefix
+    info = inspect.getframeinfo(outer)
+    if info.code_context:
+        joined = "".join(info.code_context)
+        got = extract_from_block(joined)
+        if got:
+            return got
+
+    lines: list[str] = []
+    for i in range(lineno, lineno + 40):
+        line = linecache.getline(filename, i)
+        if not line:
+            break
+        lines.append(line)
+        got = extract_from_block("".join(lines))
+        if got:
+            return got
+
+    raise ValueError(
+        "merge_dataframes: could not infer a simple name for join_df "
+        "(use a bare variable or join_df=name, or pass join_prefix='...')."
+    )
 
 
-def _require_columns(df: DataFrame, names: Sequence[str], side: str) -> None:
-    cols = {f.name for f in df.schema.fields}
-    for n in names:
-        if n not in cols:
-            raise ValueError(f"{side} DataFrame has no column {n!r}")
+def _resolve_column_name(df: DataFrame, name: str, side: str) -> str:
+    cols = [f.name for f in df.schema.fields]
+    if name in cols:
+        return name
+    norm_list = _build_unique_column_names(cols)
+    if name in norm_list:
+        return cols[norm_list.index(name)]
+    candidate = _to_snake_case(name)
+    if candidate in norm_list:
+        return cols[norm_list.index(candidate)]
+    raise ValueError(
+        f"{side} DataFrame has no column {name!r} "
+        f"(not a physical name nor a name normalized like clean_data)"
+    )
 
 
 def merge_dataframes(
@@ -51,47 +112,69 @@ def merge_dataframes(
     join_columns: Sequence[str],
     keys: Sequence[tuple[str, str]],
     how: str = "left",
+    *,
+    join_prefix: str | None = None,
 ) -> DataFrame:
     """
-    Join ``main`` to ``join_df`` using ``keys`` and add right attributes as ``{prefix}_{col}``.
+    Join ``main`` to ``join_df`` using ``keys`` and add right attributes as
+    ``{prefix_snake}_{suffix_snake_unique}`` (same snake_case + disambiguation as
+    ``clean_data``).
 
-    ``join_df`` must be the result of ``right.alias('<prefix>')``. The prefix is read from
-    Spark's logical plan (``SubqueryAlias``), not passed as a separate argument.
+    The prefix defaults to the call-site **display name** of ``join_df``: the second
+    positional argument (e.g. ``merge_dataframes(df, df_join, ...)``) or the value of
+    ``join_df=...`` when it is a simple ``Name`` / ``obj.attr``. Spark ``.alias()`` on
+    ``join_df`` is not required. For complex expressions, pass ``join_prefix=...``.
 
     Parameters
     ----------
     main
         Left DataFrame.
     join_df
-        Right DataFrame, already aliased (e.g. ``projets.alias('projets')``).
+        Right DataFrame.
     join_columns
-        Column names on the right to include in the result (each renamed to ``prefix_name``).
+        Column names on the right to include; each output name is
+        ``{prefix}_{normalized_unique}``. Names are resolved like ``keys`` on ``join_df``.
     keys
-        Pairs ``(main_column, join_column)`` combined with AND.
+        Pairs ``(main_column, join_column)`` combined with AND. Each side may use
+        either the physical column name or the name produced by ``clean_data``
+        (``_build_unique_column_names`` on the frame's column order).
     how
         Spark join type, e.g. ``left``, ``inner``.
+    join_prefix
+        If set, used as the prefix (after ``_to_snake_case``) instead of inferring
+        from the caller.
     """
     if not keys:
         raise ValueError("keys must contain at least one (main_key, join_key) pair")
 
-    prefix = _join_df_prefix(join_df)
-    join_keys_rhs = [jk for _, jk in keys]
-    _require_columns(main, [mk for mk, _ in keys], "main")
-    _require_columns(join_df, join_keys_rhs, "join_df")
-    _require_columns(join_df, join_columns, "join_df")
+    raw_prefix = join_prefix if join_prefix is not None else _infer_join_prefix_from_call_site()
+    prefix = _to_snake_case(raw_prefix)
+
+    resolved_keys = [
+        (
+            _resolve_column_name(main, mk, "main"),
+            _resolve_column_name(join_df, jk, "join_df"),
+        )
+        for mk, jk in keys
+    ]
 
     temp_names = [f"_ft_join_k{i}" for i in range(len(keys))]
     exprs = []
-    for i, (_mk, jk) in enumerate(keys):
-        exprs.append(F.col(jk).alias(temp_names[i]))
-    for col in join_columns:
-        exprs.append(F.col(col).alias(f"{prefix}_{col}"))
+    for i, (_mk_res, jk_res) in enumerate(resolved_keys):
+        exprs.append(F.col(jk_res).alias(temp_names[i]))
+
+    normalized_suffixes = _build_unique_column_names(
+        [_to_snake_case(requested) for requested in join_columns]
+    )
+    for requested, suffix in zip(join_columns, normalized_suffixes):
+        actual = _resolve_column_name(join_df, requested, "join_df")
+        exprs.append(F.col(actual).alias(f"{prefix}_{suffix}"))
 
     right_proj = join_df.select(*exprs)
 
     cond = None
-    for i, (mk, _jk) in enumerate(keys):
-        part = F.col(mk) == F.col(temp_names[i])
+    for i, (mk_res, _jk_res) in enumerate(resolved_keys):
+        part = F.col(mk_res) == F.col(temp_names[i])
         cond = part if cond is None else (cond & part)
 
     out = main.join(right_proj, cond, how)
