@@ -13,6 +13,8 @@ from pyspark.sql import functions as F
 
 from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
 
+DEFAULT_JOIN_PREFIX = "join"
+
 
 def _is_merge_dataframes_call(node: ast.AST) -> bool:
     if not isinstance(node, ast.Call):
@@ -77,14 +79,82 @@ def _extract_join_prefix_from_source(source: str, lineno: int) -> str | None:
     return _merge_join_arg_display_name(candidates[0])
 
 
-def _infer_join_prefix_from_call_site() -> str:
+def _logical_plan_children(plan) -> list:
+    try:
+        ch = plan.children()
+    except Exception:
+        return []
+    if ch is None:
+        return []
+    out = []
+    try:
+        n = ch.size()
+    except Exception:
+        try:
+            return list(ch)
+        except Exception:
+            return []
+    for i in range(n):
+        try:
+            out.append(ch.apply(i))
+        except Exception:
+            try:
+                out.append(ch.get(i))
+            except Exception:
+                try:
+                    out.append(ch[i])
+                except Exception:
+                    pass
+    return out
+
+
+def _subquery_alias_from_logical_plan(plan) -> str | None:
+    """First SubqueryAlias name in depth-first pre-order (matches e.g. ``df.alias('x')``)."""
+    if plan is None:
+        return None
+    try:
+        simple = plan.getClass().getSimpleName()
+    except Exception:
+        return None
+    if simple == "SubqueryAlias":
+        val = None
+        try:
+            val = plan.alias()
+        except Exception:
+            try:
+                val = plan.name()
+            except Exception:
+                val = None
+        if val is not None:
+            if isinstance(val, str):
+                s = val.strip()
+            else:
+                try:
+                    s = str(val.name()).strip()
+                except Exception:
+                    s = str(val).strip()
+            if s:
+                return s
+    for child in _logical_plan_children(plan):
+        got = _subquery_alias_from_logical_plan(child)
+        if got:
+            return got
+    return None
+
+
+def _try_join_prefix_from_dataframe_alias(df: DataFrame) -> str | None:
+    try:
+        plan = df._jdf.queryExecution().analyzed()
+    except Exception:
+        return None
+    return _subquery_alias_from_logical_plan(plan)
+
+
+def _try_infer_join_prefix_from_call_site() -> str | None:
     frame = inspect.currentframe()
     outer = frame.f_back if frame else None
     if outer is None:
-        raise ValueError(
-            "merge_dataframes: cannot infer join prefix from call stack; "
-            "pass join_prefix='...'."
-        )
+        return None
     filename = outer.f_code.co_filename
     lineno = outer.f_lineno
 
@@ -128,12 +198,7 @@ def _infer_join_prefix_from_call_site() -> str:
         if got:
             return got
 
-    raise ValueError(
-        "merge_dataframes: could not infer a simple name for join_df "
-        "(use a bare variable or join_df=name, or pass join_prefix='...'). "
-        "In Jupyter notebooks or multi-line calls, introspection often fails; "
-        "pass join_prefix explicitly."
-    )
+    return None
 
 
 def _resolve_column_name(df: DataFrame, name: str, side: str) -> str:
@@ -166,13 +231,12 @@ def merge_dataframes(
     ``{prefix_snake}_{suffix_snake_unique}`` (same snake_case + disambiguation as
     ``clean_data``).
 
-    The prefix defaults to the call-site **display name** of ``join_df``: the second
-    positional argument (e.g. ``merge_dataframes(df, df_join, ...)``) or the value of
-    ``join_df=...`` when it is a simple ``Name`` / ``obj.attr``. Spark ``.alias()`` on
-    ``join_df`` is not required. For complex expressions, pass ``join_prefix=...``.
-    In Jupyter, if inference fails (multi-line calls / missing linecache), the
-    implementation falls back to ``inspect.getsource`` on the caller; otherwise pass
-    ``join_prefix`` explicitly.
+    The prefix defaults to, in order: the call-site **display name** of ``join_df``
+    (second positional arg or ``join_df=`` when it is a simple ``Name`` /
+    ``obj.attr``),     then the first **SubqueryAlias** on the analyzed logical plan of ``join_df``
+    plan (e.g. after ``df.alias("x")``), then ``"join"``. Pass ``join_prefix`` to
+    override. Introspection may fail in Jupyter or for complex expressions; the alias
+    or default avoids raising.
 
     Parameters
     ----------
@@ -190,13 +254,21 @@ def merge_dataframes(
     how
         Spark join type, e.g. ``left``, ``inner``.
     join_prefix
-        If set, used as the prefix (after ``_to_snake_case``) instead of inferring
-        from the caller.
+        If set, used as the prefix (after ``_to_snake_case``). If ``None``, resolved
+        via call-site inference, then DataFrame logical alias, then
+        ``DEFAULT_JOIN_PREFIX`` (``"join"``).
     """
     if not keys:
         raise ValueError("keys must contain at least one (main_key, join_key) pair")
 
-    raw_prefix = join_prefix if join_prefix is not None else _infer_join_prefix_from_call_site()
+    if join_prefix is not None:
+        raw_prefix = join_prefix
+    else:
+        raw_prefix = _try_infer_join_prefix_from_call_site()
+        if not raw_prefix:
+            raw_prefix = _try_join_prefix_from_dataframe_alias(join_df)
+        if not raw_prefix:
+            raw_prefix = DEFAULT_JOIN_PREFIX
     prefix = _to_snake_case(raw_prefix)
 
     resolved_keys = [

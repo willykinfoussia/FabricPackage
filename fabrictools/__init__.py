@@ -45,7 +45,13 @@ Transform (DataFrame)
 filter_by_value_list(df, column, values, *, exclude=True)
     Filter rows by membership in a list (trim string columns only; no casts).
 merge_dataframes(main, join_df, join_columns, keys, how="left", *, join_prefix=None)
-    Join with prefixed normalized columns; prefix from join_df variable name or join_prefix.
+    Join with prefixed normalized columns; prefix from call site, else Spark alias, else "join".
+norm_text(expr)
+    Lowercase string with control chars stripped and spaces removed (M Text.Clean-style); str becomes lit.
+empty_or_null(column)
+    True if the column is null or blank after string cast and trim.
+coalesce_dim(column)
+    String cast; null or blank becomes \"0\".
 """
 from __future__ import annotations
 
@@ -76,7 +82,13 @@ from fabrictools.prepare import (
 from fabrictools.quality.clean import add_silver_metadata, clean_data
 from fabrictools.quality.pipeline import clean_and_write_all_tables, clean_and_write_data
 from fabrictools.quality.scan import scan_data_errors
-from fabrictools.transform import filter_by_value_list, merge_dataframes
+from fabrictools.transform import (
+    coalesce_dim,
+    empty_or_null,
+    filter_by_value_list,
+    merge_dataframes,
+    norm_text,
+)
 
 _EXPORT_REGISTRY = {
     "read_lakehouse": read_lakehouse,
@@ -104,6 +116,9 @@ _EXPORT_REGISTRY = {
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
     "filter_by_value_list": filter_by_value_list,
     "merge_dataframes": merge_dataframes,
+    "norm_text": norm_text,
+    "empty_or_null": empty_or_null,
+    "coalesce_dim": coalesce_dim,
 }
 
 __all__ = list(_EXPORT_REGISTRY.keys())

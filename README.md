@@ -416,7 +416,7 @@ all_tables = ft.prepare_and_write_all_tables(
 
 ### Transform (DataFrame)
 
-Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees est deduit du **nom de la variable** `join_df` a l’appel (ou `join_prefix=...`) ; les suffixes sont **normalises** (snake_case, comme `clean_data`). Pas besoin de `.alias()` Spark sur le DataFrame de droite.
+Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees suit l’ordre : nom de variable `join_df` a l’appel si l’introspection reussit, sinon **alias** logique Spark du DataFrame de droite (ex. `join_df.alias("projets")`), sinon la valeur par defaut `join` ; vous pouvez forcer avec `join_prefix=...`. Les suffixes sont **normalises** (snake_case, comme `clean_data`).
 
 #### `filter_by_value_list`
 
@@ -428,7 +428,7 @@ df2 = ft.filter_by_value_list(df, "Compte", ("70830000", "70840000"), exclude=Tr
 
 #### `merge_dataframes`
 
-Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`, renommees en `{prefix_snake}_{colonne_snake_unique}` (prefixe = nom de variable `projets` ci-dessous, ou `join_prefix="..."`). Dans un notebook Jupyter, si l’inférence du préfixe échoue encore, passez explicitement `join_prefix="..."` (souvent le cas si `inspect.getsource` n’est pas disponible pour la cellule).
+Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`, renommees en `{prefix_snake}_{colonne_snake_unique}` (prefixe = nom de variable a l’appel, sinon alias Spark du `join_df`, sinon `join`, ou `join_prefix="..."` pour forcer).
 
 ```python
 out = ft.merge_dataframes(
