@@ -19,11 +19,7 @@ from fabrictools.pipelines.config import (
     build_table_jobs_from_config,
     build_table_jobs_from_discovery,
 )
-from fabrictools.quality.clean import (
-    _legacy_time_parser_for_casting,
-    add_silver_metadata,
-    clean_data,
-)
+from fabrictools.quality.clean import add_silver_metadata, clean_data
 
 
 def clean_and_write_data(
@@ -35,36 +31,24 @@ def clean_and_write_data(
     partition_by: Optional[list[str]] = None,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """Read, clean, enrich metadata, and write one table.
-
-    Uses the same ``timeParserPolicy=LEGACY`` scope as :func:`~fabrictools.quality.clean.clean_data`
-    through the write so Gluten does not re-parse string dates under ``EXCEPTION`` during
-    ``write_lakehouse``. If you call ``display`` or other actions on the returned DataFrame
-    after this function returns, set ``spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")``
-    for the session or materialize under that policy (e.g. cache/count inside the scope).
-    """
+    """Read, clean, enrich metadata, and write one table."""
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
-    # Outer LEGACY scope: write_lakehouse replays the same parse expressions as
-    # clean_data; after clean_data returns, session policy would be restored unless
-    # we keep LEGACY through write. Nested clean_data() scope is a no-op when
-    # policy is already LEGACY.
-    with _legacy_time_parser_for_casting(_spark):
-        cleaned_df = clean_data(source_df)
-        silver_df = add_silver_metadata(
-            cleaned_df,
-            source_lakehouse_name=source_lakehouse_name,
-            source_relative_path=source_relative_path,
-            spark=_spark,
-        )
-        write_lakehouse(
-            silver_df,
-            lakehouse_name=target_lakehouse_name,
-            relative_path=target_relative_path,
-            mode=mode,
-            partition_by=partition_by,
-            spark=_spark,
-        )
+    cleaned_df = clean_data(source_df)
+    silver_df = add_silver_metadata(
+        cleaned_df,
+        source_lakehouse_name=source_lakehouse_name,
+        source_relative_path=source_relative_path,
+        spark=_spark,
+    )
+    write_lakehouse(
+        silver_df,
+        lakehouse_name=target_lakehouse_name,
+        relative_path=target_relative_path,
+        mode=mode,
+        partition_by=partition_by,
+        spark=_spark,
+    )
     return silver_df
 
 

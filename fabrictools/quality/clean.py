@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from contextlib import contextmanager
-from typing import Generator, List, Optional
+from typing import List, Optional
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -19,27 +18,6 @@ from pyspark.sql.types import (
 
 from fabrictools.core import log
 from fabrictools.io import resolve_lakehouse_read_candidate
-
-_LEGACY_TIME_PARSER_KEY = "spark.sql.legacy.timeParserPolicy"
-
-
-@contextmanager
-def _legacy_time_parser_for_casting(spark: SparkSession) -> Generator[None, None, None]:
-    """Use Spark 2.x datetime parsing during type inference.
-
-    Fabric/Gluten often runs with ``timeParserPolicy=EXCEPTION``. Combined with
-    ``coalesce(to_date(...))``, engines may evaluate every branch; some formats
-    then raise ``SparkUpgradeException`` on values like ``1/9/2026``. ``LEGACY``
-    matches pre–Spark 3 parsing for these calls only; the previous setting is
-    restored afterwards.
-    """
-    conf = spark.conf
-    previous = conf.get(_LEGACY_TIME_PARSER_KEY)
-    conf.set(_LEGACY_TIME_PARSER_KEY, "LEGACY")
-    try:
-        yield
-    finally:
-        conf.set(_LEGACY_TIME_PARSER_KEY, previous)
 
 
 def _to_snake_case(name: str) -> str:
@@ -113,85 +91,6 @@ _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 
 
-def _parsed_date_expr(trimmed):
-    """Date parse expression that avoids feeding each string to every format.
-
-    A plain ``coalesce(to_date(..., fmt1), to_date(..., fmt2), ...)`` makes Spark
-    evaluate multiple parsers per cell; with ``timeParserPolicy=EXCEPTION`` (common
-    on Spark 3.x / Fabric), mismatched shapes like ``1/9/2026`` against
-    ``yyyy-MM-dd`` abort the job. We branch on string shape first, then coalesce
-    only the plausible parsers for that shape (European order before US, unchanged).
-    """
-    iso_dash = trimmed.rlike(r"^\d{4}-\d{1,2}-\d{1,2}$")
-    iso_slash_y = trimmed.rlike(r"^\d{4}/\d{1,2}/\d{1,2}$")
-    iso_dot_y = trimmed.rlike(r"^\d{4}\.\d{1,2}\.\d{1,2}$")
-    amb_hyphen = trimmed.rlike(r"^\d{1,2}-\d{1,2}-\d{4}$")
-    amb_slash = trimmed.rlike(r"^\d{1,2}/\d{1,2}/\d{4}$")
-    amb_dot = trimmed.rlike(r"^\d{1,2}\.\d{1,2}\.\d{4}$")
-
-    hyphen_dates = F.coalesce(
-        F.to_date(trimmed, "dd-MM-yyyy"),
-        F.to_date(trimmed, "d-M-yyyy"),
-        F.to_date(trimmed, "MM-dd-yyyy"),
-        F.to_date(trimmed, "M-d-yyyy"),
-    )
-    slash_dates = F.coalesce(
-        F.to_date(trimmed, "dd/MM/yyyy"),
-        F.to_date(trimmed, "d/M/yyyy"),
-        F.to_date(trimmed, "MM/dd/yyyy"),
-        F.to_date(trimmed, "M/d/yyyy"),
-    )
-    dot_dates = F.coalesce(
-        F.to_date(trimmed, "dd.MM.yyyy"),
-        F.to_date(trimmed, "d.M.yyyy"),
-        F.to_date(trimmed, "MM.dd.yyyy"),
-        F.to_date(trimmed, "M.d.yyyy"),
-    )
-
-    return F.coalesce(
-        F.when(iso_dash, F.to_date(trimmed, "yyyy-MM-dd")),
-        F.when(iso_slash_y, F.to_date(trimmed, "yyyy/M/d")),
-        F.when(amb_hyphen, hyphen_dates),
-        F.when(amb_slash, slash_dates),
-        F.when(amb_dot, dot_dates),
-        F.when(iso_dot_y, F.to_date(trimmed, "yyyy.M.d")),
-    )
-
-
-def _parsed_timestamp_expr(trimmed):
-    """Same shape-gating as :func:`_parsed_date_expr`; uses ``to_timestamp`` only for Fabric compatibility."""
-    iso_ts = trimmed.rlike(
-        r"^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}$"
-    )
-    amb_hyphen_ts = trimmed.rlike(
-        r"^\d{1,2}-\d{1,2}-\d{4} \d{1,2}:\d{1,2}:\d{1,2}$"
-    )
-    amb_slash_ts = trimmed.rlike(
-        r"^\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{1,2}:\d{1,2}$"
-    )
-    iso_t = trimmed.rlike(r"^\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{1,2}:\d{1,2}$")
-
-    hyphen_ts = F.coalesce(
-        F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
-        F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
-        F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
-        F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
-    )
-    slash_ts = F.coalesce(
-        F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
-        F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
-        F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
-        F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
-    )
-
-    return F.coalesce(
-        F.when(iso_ts, F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss")),
-        F.when(amb_hyphen_ts, hyphen_ts),
-        F.when(amb_slash_ts, slash_ts),
-        F.when(iso_t, F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss")),
-    )
-
-
 def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     """Infer primitive types from string columns and cast when the whole column is consistent.
 
@@ -218,28 +117,38 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
 
     Columns that contain only nulls are left unchanged (no inferred type).
     Null cells are preserved for any cast branch.
-
-    On Microsoft Fabric / Gluten, materializing the result (``count``, ``collect``,
-    ``write``) while ``spark.sql.legacy.timeParserPolicy`` is ``EXCEPTION`` can
-    still fail on values like ``1/9/2026``. Use :func:`clean_data` or wrap actions
-    with :func:`_legacy_time_parser_for_casting`.
     """
     transformed_df = df
     string_columns = [
-        field.name
-        for field in df.schema.fields
-        if isinstance(field.dataType, StringType)
+        field.name for field in df.schema.fields if isinstance(field.dataType, StringType)
     ]
     for col_name in string_columns:
         if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
             continue
         trimmed = F.trim(F.col(col_name))
-        parsed_date = _parsed_date_expr(trimmed)
+        parsed_date = F.coalesce(
+            F.to_date(trimmed, "yyyy-MM-dd"),
+            F.to_date(trimmed, "yyyy/M/d"),
+            F.to_date(trimmed, "dd-MM-yyyy"),
+            F.to_date(trimmed, "d-M-yyyy"),
+            F.to_date(trimmed, "MM-dd-yyyy"),
+            F.to_date(trimmed, "M-d-yyyy"),
+            F.to_date(trimmed, "dd/MM/yyyy"),
+            F.to_date(trimmed, "d/M/yyyy"),
+            F.to_date(trimmed, "dd.MM.yyyy"),
+            F.to_date(trimmed, "d.M.yyyy"),
+            F.to_date(trimmed, "MM/dd/yyyy"),
+            F.to_date(trimmed, "M/d/yyyy"),
+            F.to_date(trimmed, "MM.dd.yyyy"),
+            F.to_date(trimmed, "M.d.yyyy"),
+        )
+        print(parsed_date.collect())
         date_mismatch = df.filter(
             F.col(col_name).isNotNull()
             & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
         ).limit(1)
         if date_mismatch.count() == 0:
+            print(date_mismatch.collect())
             transformed_df = transformed_df.withColumn(
                 col_name,
                 F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
@@ -247,7 +156,18 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
             log(f"Column converted to {DateType().simpleString()}: {col_name}")
             continue
 
-        parsed_ts = _parsed_timestamp_expr(trimmed)
+        parsed_ts = F.coalesce(
+            F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),
+            F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
+            F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
+        )
         ts_mismatch = df.filter(
             F.col(col_name).isNotNull() & parsed_ts.isNull()
         ).limit(1)
@@ -346,18 +266,14 @@ def clean_data(
     normalized_columns = _build_unique_column_names(df.columns)
     cleaned_df = df.toDF(*normalized_columns)
     cleaned_df = _replace_empty_strings_with_nulls(cleaned_df)
+    cleaned_df = detect_and_cast_columns(cleaned_df)
 
-    # LEGACY must stay in effect through every action that runs the cast plan
-    # (detect_and_cast uses count(); this count() and downstream write/display
-    # would otherwise run under EXCEPTION again — see _legacy_time_parser_for_casting).
-    with _legacy_time_parser_for_casting(df.sparkSession):
-        cleaned_df = detect_and_cast_columns(cleaned_df)
-        if drop_duplicates:
-            cleaned_df = cleaned_df.dropDuplicates()
-        if drop_all_null_rows:
-            cleaned_df = cleaned_df.dropna(how="all")
-        after_rows = cleaned_df.count()
+    if drop_duplicates:
+        cleaned_df = cleaned_df.dropDuplicates()
+    if drop_all_null_rows:
+        cleaned_df = cleaned_df.dropna(how="all")
 
+    after_rows = cleaned_df.count()
     after_cols = len(cleaned_df.columns)
     log(
         f"Data cleaned: rows {before_rows:,} -> {after_rows:,} | "
