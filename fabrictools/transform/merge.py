@@ -14,6 +14,17 @@ from pyspark.sql import functions as F
 from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
 
 
+def _is_merge_dataframes_call(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id == "merge_dataframes"
+    if isinstance(func, ast.Attribute):
+        return func.attr == "merge_dataframes"
+    return False
+
+
 def _merge_join_arg_display_name(call: ast.Call) -> str | None:
     if len(call.args) >= 2:
         arg1 = call.args[1]
@@ -31,6 +42,39 @@ def _merge_join_arg_display_name(call: ast.Call) -> str | None:
                 return v.attr
             return None
     return None
+
+
+def _call_covers_lineno(node: ast.Call, lineno: int) -> bool:
+    start = node.lineno
+    end = getattr(node, "end_lineno", start)
+    return start <= lineno <= end
+
+
+def _extract_join_prefix_from_source(source: str, lineno: int) -> str | None:
+    """Parse full cell/module source and infer join_df display name for the call at lineno."""
+    block = textwrap.dedent(source).strip()
+    if not block:
+        return None
+    try:
+        tree = ast.parse(block)
+    except SyntaxError:
+        return None
+    candidates: list[ast.Call] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not _is_merge_dataframes_call(node):
+            continue
+        if _call_covers_lineno(node, lineno):
+            candidates.append(node)
+    if not candidates:
+        return None
+    if len(candidates) > 1:
+
+        def span(c: ast.Call) -> int:
+            end = getattr(c, "end_lineno", c.lineno)
+            return end - c.lineno
+
+        candidates.sort(key=span)
+    return _merge_join_arg_display_name(candidates[0])
 
 
 def _infer_join_prefix_from_call_site() -> str:
@@ -53,16 +97,7 @@ def _infer_join_prefix_from_call_site() -> str:
         except SyntaxError:
             return None
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            if isinstance(func, ast.Name):
-                if func.id != "merge_dataframes":
-                    continue
-            elif isinstance(func, ast.Attribute):
-                if func.attr != "merge_dataframes":
-                    continue
-            else:
+            if not _is_merge_dataframes_call(node):
                 continue
             return _merge_join_arg_display_name(node)
         return None
@@ -84,9 +119,20 @@ def _infer_join_prefix_from_call_site() -> str:
         if got:
             return got
 
+    try:
+        full_source = inspect.getsource(outer.f_code)
+    except (OSError, TypeError):
+        full_source = None
+    if full_source:
+        got = _extract_join_prefix_from_source(full_source, outer.f_lineno)
+        if got:
+            return got
+
     raise ValueError(
         "merge_dataframes: could not infer a simple name for join_df "
-        "(use a bare variable or join_df=name, or pass join_prefix='...')."
+        "(use a bare variable or join_df=name, or pass join_prefix='...'). "
+        "In Jupyter notebooks or multi-line calls, introspection often fails; "
+        "pass join_prefix explicitly."
     )
 
 
@@ -124,6 +170,9 @@ def merge_dataframes(
     positional argument (e.g. ``merge_dataframes(df, df_join, ...)``) or the value of
     ``join_df=...`` when it is a simple ``Name`` / ``obj.attr``. Spark ``.alias()`` on
     ``join_df`` is not required. For complex expressions, pass ``join_prefix=...``.
+    In Jupyter, if inference fails (multi-line calls / missing linecache), the
+    implementation falls back to ``inspect.getsource`` on the caller; otherwise pass
+    ``join_prefix`` explicitly.
 
     Parameters
     ----------

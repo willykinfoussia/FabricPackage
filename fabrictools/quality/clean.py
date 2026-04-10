@@ -160,15 +160,7 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
         ]
         for col_name in string_columns:
             if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
-                log(
-                    f"detect_and_cast_columns: skip column {col_name!r} "
-                    "(all values null; no cast)"
-                )
                 continue
-            log(
-                f"detect_and_cast_columns: evaluating column {col_name!r} "
-                f"(string column, non-null sample exists)"
-            )
             trimmed = F.trim(F.col(col_name))
             parsed_date = F.coalesce(
                 F.to_date(trimmed, "yyyy-MM-dd"),
@@ -186,23 +178,16 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                 F.to_date(trimmed, "MM.dd.yyyy"),
                 F.to_date(trimmed, "M.d.yyyy"),
             )
-            _log_parsed_date_sample(df, col_name, trimmed, parsed_date)
             date_mismatch = df.filter(
                 F.col(col_name).isNotNull()
                 & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
             ).limit(1)
             date_mismatch_count = date_mismatch.count()
-            log(
-                f"detect_and_cast_columns: column {col_name!r} date probe "
-                f"date_mismatch_rows={date_mismatch_count} "
-                "(0 => treat whole column as date)"
-            )
             if date_mismatch_count == 0:
                 transformed_df = transformed_df.withColumn(
                     col_name,
                     F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
                 )
-                log(f"Column converted to {DateType().simpleString()}: {col_name}")
                 continue
 
             parsed_ts = F.coalesce(
@@ -221,18 +206,10 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                 F.col(col_name).isNotNull() & parsed_ts.isNull()
             ).limit(1)
             ts_mismatch_count = ts_mismatch.count()
-            log(
-                f"detect_and_cast_columns: column {col_name!r} timestamp probe "
-                f"ts_mismatch_rows={ts_mismatch_count} "
-                "(0 => treat whole column as timestamp)"
-            )
             if ts_mismatch_count == 0:
                 transformed_df = transformed_df.withColumn(
                     col_name,
                     F.when(F.col(col_name).isNull(), None).otherwise(parsed_ts),
-                )
-                log(
-                    f"Column converted to {TimestampType().simpleString()}: {col_name}"
                 )
                 continue
 
@@ -240,10 +217,6 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                 F.col(col_name).isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN)
             ).limit(1)
             int_mismatch_count = int_mismatch.count()
-            log(
-                f"detect_and_cast_columns: column {col_name!r} integer probe "
-                f"int_mismatch_rows={int_mismatch_count}"
-            )
             if int_mismatch_count == 0:
                 transformed_df = transformed_df.withColumn(
                     col_name,
@@ -251,17 +224,12 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                         F.col(col_name).cast(IntegerType())
                     ),
                 )
-                log(f"Column converted to {IntegerType().simpleString()}: {col_name}")
                 continue
 
             float_mismatch = df.filter(
                 F.col(col_name).isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN)
             ).limit(1)
             float_mismatch_count = float_mismatch.count()
-            log(
-                f"detect_and_cast_columns: column {col_name!r} float probe "
-                f"float_mismatch_rows={float_mismatch_count}"
-            )
             if float_mismatch_count == 0:
                 transformed_df = transformed_df.withColumn(
                     col_name,
@@ -269,13 +237,8 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                         F.col(col_name).cast(DoubleType())
                     ),
                 )
-                log(f"Column converted to {DoubleType().simpleString()}: {col_name}")
             else:
-                log(
-                    f"detect_and_cast_columns: column {col_name!r} left as string "
-                    "(no single-type rule matched)"
-                )
-
+                continue
         return transformed_df
     finally:
         if previous_time_parser_policy is None:

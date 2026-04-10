@@ -428,7 +428,7 @@ df2 = ft.filter_by_value_list(df, "Compte", ("70830000", "70840000"), exclude=Tr
 
 #### `merge_dataframes`
 
-Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`, renommees en `{prefix_snake}_{colonne_snake_unique}` (prefixe = nom de variable `projets` ci-dessous, ou `join_prefix="..."`).
+Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`, renommees en `{prefix_snake}_{colonne_snake_unique}` (prefixe = nom de variable `projets` ci-dessous, ou `join_prefix="..."`). Dans un notebook Jupyter, si l’inférence du préfixe échoue encore, passez explicitement `join_prefix="..."` (souvent le cas si `inspect.getsource` n’est pas disponible pour la cellule).
 
 ```python
 out = ft.merge_dataframes(
