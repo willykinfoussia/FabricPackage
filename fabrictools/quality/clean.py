@@ -91,21 +91,6 @@ _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 
 
-def _try_to_date(trimmed, fmt: str):
-    """Parse date; prefer try_to_date (Spark 3.5+) so bad combos yield null instead of failing the job."""
-    fn = getattr(F, "try_to_date", None)
-    if fn is not None:
-        return fn(trimmed, fmt)
-    return F.to_date(trimmed, fmt)
-
-
-def _try_to_timestamp(trimmed, fmt: str):
-    fn = getattr(F, "try_to_timestamp", None)
-    if fn is not None:
-        return fn(trimmed, fmt)
-    return F.to_timestamp(trimmed, fmt)
-
-
 def _parsed_date_expr(trimmed):
     """Date parse expression that avoids feeding each string to every format.
 
@@ -123,36 +108,36 @@ def _parsed_date_expr(trimmed):
     amb_dot = trimmed.rlike(r"^\d{1,2}\.\d{1,2}\.\d{4}$")
 
     hyphen_dates = F.coalesce(
-        _try_to_date(trimmed, "dd-MM-yyyy"),
-        _try_to_date(trimmed, "d-M-yyyy"),
-        _try_to_date(trimmed, "MM-dd-yyyy"),
-        _try_to_date(trimmed, "M-d-yyyy"),
+        F.to_date(trimmed, "dd-MM-yyyy"),
+        F.to_date(trimmed, "d-M-yyyy"),
+        F.to_date(trimmed, "MM-dd-yyyy"),
+        F.to_date(trimmed, "M-d-yyyy"),
     )
     slash_dates = F.coalesce(
-        _try_to_date(trimmed, "dd/MM/yyyy"),
-        _try_to_date(trimmed, "d/M/yyyy"),
-        _try_to_date(trimmed, "MM/dd/yyyy"),
-        _try_to_date(trimmed, "M/d/yyyy"),
+        F.to_date(trimmed, "dd/MM/yyyy"),
+        F.to_date(trimmed, "d/M/yyyy"),
+        F.to_date(trimmed, "MM/dd/yyyy"),
+        F.to_date(trimmed, "M/d/yyyy"),
     )
     dot_dates = F.coalesce(
-        _try_to_date(trimmed, "dd.MM.yyyy"),
-        _try_to_date(trimmed, "d.M.yyyy"),
-        _try_to_date(trimmed, "MM.dd.yyyy"),
-        _try_to_date(trimmed, "M.d.yyyy"),
+        F.to_date(trimmed, "dd.MM.yyyy"),
+        F.to_date(trimmed, "d.M.yyyy"),
+        F.to_date(trimmed, "MM.dd.yyyy"),
+        F.to_date(trimmed, "M.d.yyyy"),
     )
 
     return F.coalesce(
-        F.when(iso_dash, _try_to_date(trimmed, "yyyy-MM-dd")),
-        F.when(iso_slash_y, _try_to_date(trimmed, "yyyy/M/d")),
+        F.when(iso_dash, F.to_date(trimmed, "yyyy-MM-dd")),
+        F.when(iso_slash_y, F.to_date(trimmed, "yyyy/M/d")),
         F.when(amb_hyphen, hyphen_dates),
         F.when(amb_slash, slash_dates),
         F.when(amb_dot, dot_dates),
-        F.when(iso_dot_y, _try_to_date(trimmed, "yyyy.M.d")),
+        F.when(iso_dot_y, F.to_date(trimmed, "yyyy.M.d")),
     )
 
 
 def _parsed_timestamp_expr(trimmed):
-    """Same shape-gating idea as :func:`_parsed_date_expr` for timestamp strings."""
+    """Same shape-gating as :func:`_parsed_date_expr`; uses ``to_timestamp`` only for Fabric compatibility."""
     iso_ts = trimmed.rlike(
         r"^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}$"
     )
@@ -165,23 +150,23 @@ def _parsed_timestamp_expr(trimmed):
     iso_t = trimmed.rlike(r"^\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{1,2}:\d{1,2}$")
 
     hyphen_ts = F.coalesce(
-        _try_to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
-        _try_to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
-        _try_to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
-        _try_to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
     )
     slash_ts = F.coalesce(
-        _try_to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
-        _try_to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
-        _try_to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
-        _try_to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
+        F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
     )
 
     return F.coalesce(
-        F.when(iso_ts, _try_to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss")),
+        F.when(iso_ts, F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss")),
         F.when(amb_hyphen_ts, hyphen_ts),
         F.when(amb_slash_ts, slash_ts),
-        F.when(iso_t, _try_to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss")),
+        F.when(iso_t, F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss")),
     )
 
 
