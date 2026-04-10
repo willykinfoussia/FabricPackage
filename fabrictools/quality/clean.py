@@ -90,6 +90,7 @@ _DATE_ONLY_PATTERN = (
 _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 _PARSED_DATE_SAMPLE_LIMIT = 5
+_TIME_PARSER_POLICY_KEY = "spark.sql.legacy.timeParserPolicy"
 
 
 def _log_parsed_date_sample(
@@ -142,128 +143,145 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
 
     Columns that contain only nulls are left unchanged (no inferred type).
     Null cells are preserved for any cast branch.
+
+    For the duration of this function, ``spark.sql.legacy.timeParserPolicy`` is
+    set to ``LEGACY`` so ``to_date`` / ``to_timestamp`` pattern parsing matches
+    classic Spark behavior; the previous session value is restored afterward.
     """
-    transformed_df = df
-    string_columns = [
-        field.name for field in df.schema.fields if isinstance(field.dataType, StringType)
-    ]
-    for col_name in string_columns:
-        if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
+    spark = df.sparkSession
+    previous_time_parser_policy = spark.conf.get(_TIME_PARSER_POLICY_KEY, None)
+    spark.conf.set(_TIME_PARSER_POLICY_KEY, "LEGACY")
+    try:
+        transformed_df = df
+        string_columns = [
+            field.name
+            for field in df.schema.fields
+            if isinstance(field.dataType, StringType)
+        ]
+        for col_name in string_columns:
+            if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
+                log(
+                    f"detect_and_cast_columns: skip column {col_name!r} "
+                    "(all values null; no cast)"
+                )
+                continue
             log(
-                f"detect_and_cast_columns: skip column {col_name!r} "
-                "(all values null; no cast)"
+                f"detect_and_cast_columns: evaluating column {col_name!r} "
+                f"(string column, non-null sample exists)"
             )
-            continue
-        log(
-            f"detect_and_cast_columns: evaluating column {col_name!r} "
-            f"(string column, non-null sample exists)"
-        )
-        trimmed = F.trim(F.col(col_name))
-        parsed_date = F.coalesce(
-            F.to_date(trimmed, "yyyy-MM-dd"),
-            F.to_date(trimmed, "yyyy/M/d"),
-            F.to_date(trimmed, "dd-MM-yyyy"),
-            F.to_date(trimmed, "d-M-yyyy"),
-            F.to_date(trimmed, "MM-dd-yyyy"),
-            F.to_date(trimmed, "M-d-yyyy"),
-            F.to_date(trimmed, "dd/MM/yyyy"),
-            F.to_date(trimmed, "d/M/yyyy"),
-            F.to_date(trimmed, "dd.MM.yyyy"),
-            F.to_date(trimmed, "d.M.yyyy"),
-            F.to_date(trimmed, "MM/dd/yyyy"),
-            F.to_date(trimmed, "M/d/yyyy"),
-            F.to_date(trimmed, "MM.dd.yyyy"),
-            F.to_date(trimmed, "M.d.yyyy"),
-        )
-        _log_parsed_date_sample(df, col_name, trimmed, parsed_date)
-        date_mismatch = df.filter(
-            F.col(col_name).isNotNull()
-            & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
-        ).limit(1)
-        date_mismatch_count = date_mismatch.count()
-        log(
-            f"detect_and_cast_columns: column {col_name!r} date probe "
-            f"date_mismatch_rows={date_mismatch_count} "
-            "(0 => treat whole column as date)"
-        )
-        if date_mismatch_count == 0:
-            transformed_df = transformed_df.withColumn(
-                col_name,
-                F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
+            trimmed = F.trim(F.col(col_name))
+            parsed_date = F.coalesce(
+                F.to_date(trimmed, "yyyy-MM-dd"),
+                F.to_date(trimmed, "yyyy/M/d"),
+                F.to_date(trimmed, "dd-MM-yyyy"),
+                F.to_date(trimmed, "d-M-yyyy"),
+                F.to_date(trimmed, "MM-dd-yyyy"),
+                F.to_date(trimmed, "M-d-yyyy"),
+                F.to_date(trimmed, "dd/MM/yyyy"),
+                F.to_date(trimmed, "d/M/yyyy"),
+                F.to_date(trimmed, "dd.MM.yyyy"),
+                F.to_date(trimmed, "d.M.yyyy"),
+                F.to_date(trimmed, "MM/dd/yyyy"),
+                F.to_date(trimmed, "M/d/yyyy"),
+                F.to_date(trimmed, "MM.dd.yyyy"),
+                F.to_date(trimmed, "M.d.yyyy"),
             )
-            log(f"Column converted to {DateType().simpleString()}: {col_name}")
-            continue
+            _log_parsed_date_sample(df, col_name, trimmed, parsed_date)
+            date_mismatch = df.filter(
+                F.col(col_name).isNotNull()
+                & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
+            ).limit(1)
+            date_mismatch_count = date_mismatch.count()
+            log(
+                f"detect_and_cast_columns: column {col_name!r} date probe "
+                f"date_mismatch_rows={date_mismatch_count} "
+                "(0 => treat whole column as date)"
+            )
+            if date_mismatch_count == 0:
+                transformed_df = transformed_df.withColumn(
+                    col_name,
+                    F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
+                )
+                log(f"Column converted to {DateType().simpleString()}: {col_name}")
+                continue
 
-        parsed_ts = F.coalesce(
-            F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),
-            F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
-        )
-        ts_mismatch = df.filter(
-            F.col(col_name).isNotNull() & parsed_ts.isNull()
-        ).limit(1)
-        ts_mismatch_count = ts_mismatch.count()
-        log(
-            f"detect_and_cast_columns: column {col_name!r} timestamp probe "
-            f"ts_mismatch_rows={ts_mismatch_count} "
-            "(0 => treat whole column as timestamp)"
-        )
-        if ts_mismatch_count == 0:
-            transformed_df = transformed_df.withColumn(
-                col_name,
-                F.when(F.col(col_name).isNull(), None).otherwise(parsed_ts),
+            parsed_ts = F.coalesce(
+                F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),
+                F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
             )
-            log(f"Column converted to {TimestampType().simpleString()}: {col_name}")
-            continue
+            ts_mismatch = df.filter(
+                F.col(col_name).isNotNull() & parsed_ts.isNull()
+            ).limit(1)
+            ts_mismatch_count = ts_mismatch.count()
+            log(
+                f"detect_and_cast_columns: column {col_name!r} timestamp probe "
+                f"ts_mismatch_rows={ts_mismatch_count} "
+                "(0 => treat whole column as timestamp)"
+            )
+            if ts_mismatch_count == 0:
+                transformed_df = transformed_df.withColumn(
+                    col_name,
+                    F.when(F.col(col_name).isNull(), None).otherwise(parsed_ts),
+                )
+                log(
+                    f"Column converted to {TimestampType().simpleString()}: {col_name}"
+                )
+                continue
 
-        int_mismatch = df.filter(
-            F.col(col_name).isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN)
-        ).limit(1)
-        int_mismatch_count = int_mismatch.count()
-        log(
-            f"detect_and_cast_columns: column {col_name!r} integer probe "
-            f"int_mismatch_rows={int_mismatch_count}"
-        )
-        if int_mismatch_count == 0:
-            transformed_df = transformed_df.withColumn(
-                col_name,
-                F.when(F.col(col_name).isNull(), None).otherwise(
-                    F.col(col_name).cast(IntegerType())
-                ),
+            int_mismatch = df.filter(
+                F.col(col_name).isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN)
+            ).limit(1)
+            int_mismatch_count = int_mismatch.count()
+            log(
+                f"detect_and_cast_columns: column {col_name!r} integer probe "
+                f"int_mismatch_rows={int_mismatch_count}"
             )
-            log(f"Column converted to {IntegerType().simpleString()}: {col_name}")
-            continue
+            if int_mismatch_count == 0:
+                transformed_df = transformed_df.withColumn(
+                    col_name,
+                    F.when(F.col(col_name).isNull(), None).otherwise(
+                        F.col(col_name).cast(IntegerType())
+                    ),
+                )
+                log(f"Column converted to {IntegerType().simpleString()}: {col_name}")
+                continue
 
-        float_mismatch = df.filter(
-            F.col(col_name).isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN)
-        ).limit(1)
-        float_mismatch_count = float_mismatch.count()
-        log(
-            f"detect_and_cast_columns: column {col_name!r} float probe "
-            f"float_mismatch_rows={float_mismatch_count}"
-        )
-        if float_mismatch_count == 0:
-            transformed_df = transformed_df.withColumn(
-                col_name,
-                F.when(F.col(col_name).isNull(), None).otherwise(
-                    F.col(col_name).cast(DoubleType())
-                ),
+            float_mismatch = df.filter(
+                F.col(col_name).isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN)
+            ).limit(1)
+            float_mismatch_count = float_mismatch.count()
+            log(
+                f"detect_and_cast_columns: column {col_name!r} float probe "
+                f"float_mismatch_rows={float_mismatch_count}"
             )
-            log(f"Column converted to {DoubleType().simpleString()}: {col_name}")
+            if float_mismatch_count == 0:
+                transformed_df = transformed_df.withColumn(
+                    col_name,
+                    F.when(F.col(col_name).isNull(), None).otherwise(
+                        F.col(col_name).cast(DoubleType())
+                    ),
+                )
+                log(f"Column converted to {DoubleType().simpleString()}: {col_name}")
+            else:
+                log(
+                    f"detect_and_cast_columns: column {col_name!r} left as string "
+                    "(no single-type rule matched)"
+                )
+
+        return transformed_df
+    finally:
+        if previous_time_parser_policy is None:
+            spark.conf.unset(_TIME_PARSER_POLICY_KEY)
         else:
-            log(
-                f"detect_and_cast_columns: column {col_name!r} left as string "
-                "(no single-type rule matched)"
-            )
-
-    return transformed_df
+            spark.conf.set(_TIME_PARSER_POLICY_KEY, previous_time_parser_policy)
 
 def add_silver_metadata(
     df: DataFrame,
