@@ -91,6 +91,100 @@ _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 
 
+def _try_to_date(trimmed, fmt: str):
+    """Parse date; prefer try_to_date (Spark 3.5+) so bad combos yield null instead of failing the job."""
+    fn = getattr(F, "try_to_date", None)
+    if fn is not None:
+        return fn(trimmed, fmt)
+    return F.to_date(trimmed, fmt)
+
+
+def _try_to_timestamp(trimmed, fmt: str):
+    fn = getattr(F, "try_to_timestamp", None)
+    if fn is not None:
+        return fn(trimmed, fmt)
+    return F.to_timestamp(trimmed, fmt)
+
+
+def _parsed_date_expr(trimmed):
+    """Date parse expression that avoids feeding each string to every format.
+
+    A plain ``coalesce(to_date(..., fmt1), to_date(..., fmt2), ...)`` makes Spark
+    evaluate multiple parsers per cell; with ``timeParserPolicy=EXCEPTION`` (common
+    on Spark 3.x / Fabric), mismatched shapes like ``1/9/2026`` against
+    ``yyyy-MM-dd`` abort the job. We branch on string shape first, then coalesce
+    only the plausible parsers for that shape (European order before US, unchanged).
+    """
+    iso_dash = trimmed.rlike(r"^\d{4}-\d{1,2}-\d{1,2}$")
+    iso_slash_y = trimmed.rlike(r"^\d{4}/\d{1,2}/\d{1,2}$")
+    iso_dot_y = trimmed.rlike(r"^\d{4}\.\d{1,2}\.\d{1,2}$")
+    amb_hyphen = trimmed.rlike(r"^\d{1,2}-\d{1,2}-\d{4}$")
+    amb_slash = trimmed.rlike(r"^\d{1,2}/\d{1,2}/\d{4}$")
+    amb_dot = trimmed.rlike(r"^\d{1,2}\.\d{1,2}\.\d{4}$")
+
+    hyphen_dates = F.coalesce(
+        _try_to_date(trimmed, "dd-MM-yyyy"),
+        _try_to_date(trimmed, "d-M-yyyy"),
+        _try_to_date(trimmed, "MM-dd-yyyy"),
+        _try_to_date(trimmed, "M-d-yyyy"),
+    )
+    slash_dates = F.coalesce(
+        _try_to_date(trimmed, "dd/MM/yyyy"),
+        _try_to_date(trimmed, "d/M/yyyy"),
+        _try_to_date(trimmed, "MM/dd/yyyy"),
+        _try_to_date(trimmed, "M/d/yyyy"),
+    )
+    dot_dates = F.coalesce(
+        _try_to_date(trimmed, "dd.MM.yyyy"),
+        _try_to_date(trimmed, "d.M.yyyy"),
+        _try_to_date(trimmed, "MM.dd.yyyy"),
+        _try_to_date(trimmed, "M.d.yyyy"),
+    )
+
+    return F.coalesce(
+        F.when(iso_dash, _try_to_date(trimmed, "yyyy-MM-dd")),
+        F.when(iso_slash_y, _try_to_date(trimmed, "yyyy/M/d")),
+        F.when(amb_hyphen, hyphen_dates),
+        F.when(amb_slash, slash_dates),
+        F.when(amb_dot, dot_dates),
+        F.when(iso_dot_y, _try_to_date(trimmed, "yyyy.M.d")),
+    )
+
+
+def _parsed_timestamp_expr(trimmed):
+    """Same shape-gating idea as :func:`_parsed_date_expr` for timestamp strings."""
+    iso_ts = trimmed.rlike(
+        r"^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}$"
+    )
+    amb_hyphen_ts = trimmed.rlike(
+        r"^\d{1,2}-\d{1,2}-\d{4} \d{1,2}:\d{1,2}:\d{1,2}$"
+    )
+    amb_slash_ts = trimmed.rlike(
+        r"^\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{1,2}:\d{1,2}$"
+    )
+    iso_t = trimmed.rlike(r"^\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{1,2}:\d{1,2}$")
+
+    hyphen_ts = F.coalesce(
+        _try_to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
+        _try_to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
+        _try_to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
+        _try_to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
+    )
+    slash_ts = F.coalesce(
+        _try_to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
+        _try_to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
+        _try_to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
+        _try_to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
+    )
+
+    return F.coalesce(
+        F.when(iso_ts, _try_to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss")),
+        F.when(amb_hyphen_ts, hyphen_ts),
+        F.when(amb_slash_ts, slash_ts),
+        F.when(iso_t, _try_to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss")),
+    )
+
+
 def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     """Infer primitive types from string columns and cast when the whole column is consistent.
 
@@ -126,22 +220,7 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
         if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
             continue
         trimmed = F.trim(F.col(col_name))
-        parsed_date = F.coalesce(
-            F.to_date(trimmed, "yyyy-MM-dd"),
-            F.to_date(trimmed, "yyyy/M/d"),
-            F.to_date(trimmed, "dd-MM-yyyy"),
-            F.to_date(trimmed, "d-M-yyyy"),
-            F.to_date(trimmed, "MM-dd-yyyy"),
-            F.to_date(trimmed, "M-d-yyyy"),
-            F.to_date(trimmed, "dd/MM/yyyy"),
-            F.to_date(trimmed, "d/M/yyyy"),
-            F.to_date(trimmed, "dd.MM.yyyy"),
-            F.to_date(trimmed, "d.M.yyyy"),
-            F.to_date(trimmed, "MM/dd/yyyy"),
-            F.to_date(trimmed, "M/d/yyyy"),
-            F.to_date(trimmed, "MM.dd.yyyy"),
-            F.to_date(trimmed, "M.d.yyyy"),
-        )
+        parsed_date = _parsed_date_expr(trimmed)
         date_mismatch = df.filter(
             F.col(col_name).isNotNull()
             & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
@@ -154,18 +233,7 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
             log(f"Column converted to {DateType().simpleString()}: {col_name}")
             continue
 
-        parsed_ts = F.coalesce(
-            F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),
-            F.to_timestamp(trimmed, "dd-MM-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "d-M-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "MM-dd-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "M-d-yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "dd/MM/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
-            F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
-        )
+        parsed_ts = _parsed_timestamp_expr(trimmed)
         ts_mismatch = df.filter(
             F.col(col_name).isNotNull() & parsed_ts.isNull()
         ).limit(1)
