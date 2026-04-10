@@ -42,6 +42,7 @@ visualization = [
 ]
 dev = [
     "countrystatecity-countries",
+    "pandas>=1.5",
     "pyspark>=3.3",
     "delta-spark>=2.4",
     "plotly>=5.0",

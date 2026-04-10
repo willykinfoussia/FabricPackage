@@ -39,6 +39,13 @@ build_dimension_city(countries_limit=None, include_states_metadata=True, fail_on
     Build a city dimension DataFrame and optionally write it to a Lakehouse path.
 generate_dimensions(lakehouse_name, warehouse_name, ...)
     Build and write dimension tables to Lakehouse and Warehouse.
+
+Transform (DataFrame)
+~~~~~~~~~~~~~~~~~~~~~
+filter_by_value_list(df, column, values, *, exclude=True)
+    Filter rows by membership in a list (trim string columns only; no casts).
+merge_dataframes(main, join_df, join_columns, keys, how="left")
+    Join with prefixed columns from the right side; join_df must use .alias(prefix).
 """
 from __future__ import annotations
 
@@ -69,6 +76,7 @@ from fabrictools.prepare import (
 from fabrictools.quality.clean import add_silver_metadata, clean_data
 from fabrictools.quality.pipeline import clean_and_write_all_tables, clean_and_write_data
 from fabrictools.quality.scan import scan_data_errors
+from fabrictools.transform import filter_by_value_list, merge_dataframes
 
 _EXPORT_REGISTRY = {
     "read_lakehouse": read_lakehouse,
@@ -94,6 +102,8 @@ _EXPORT_REGISTRY = {
     "publish_semantic_model": publish_semantic_model,
     "prepare_and_write_data": prepare_and_write_data,
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
+    "filter_by_value_list": filter_by_value_list,
+    "merge_dataframes": merge_dataframes,
 }
 
 __all__ = list(_EXPORT_REGISTRY.keys())
