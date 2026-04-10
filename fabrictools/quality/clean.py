@@ -219,72 +219,72 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     Columns that contain only nulls are left unchanged (no inferred type).
     Null cells are preserved for any cast branch.
 
-    Temporarily sets ``spark.sql.legacy.timeParserPolicy`` to ``LEGACY`` for the
-    duration of this function so ``to_date`` / ``to_timestamp`` used here do not
-    abort the job on Fabric/Gluten (see :func:`_legacy_time_parser_for_casting`).
+    On Microsoft Fabric / Gluten, materializing the result (``count``, ``collect``,
+    ``write``) while ``spark.sql.legacy.timeParserPolicy`` is ``EXCEPTION`` can
+    still fail on values like ``1/9/2026``. Use :func:`clean_data` or wrap actions
+    with :func:`_legacy_time_parser_for_casting`.
     """
-    with _legacy_time_parser_for_casting(df.sparkSession):
-        transformed_df = df
-        string_columns = [
-            field.name
-            for field in df.schema.fields
-            if isinstance(field.dataType, StringType)
-        ]
-        for col_name in string_columns:
-            if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
-                continue
-            trimmed = F.trim(F.col(col_name))
-            parsed_date = _parsed_date_expr(trimmed)
-            date_mismatch = df.filter(
-                F.col(col_name).isNotNull()
-                & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
-            ).limit(1)
-            if date_mismatch.count() == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
-                )
-                log(f"Column converted to {DateType().simpleString()}: {col_name}")
-                continue
+    transformed_df = df
+    string_columns = [
+        field.name
+        for field in df.schema.fields
+        if isinstance(field.dataType, StringType)
+    ]
+    for col_name in string_columns:
+        if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
+            continue
+        trimmed = F.trim(F.col(col_name))
+        parsed_date = _parsed_date_expr(trimmed)
+        date_mismatch = df.filter(
+            F.col(col_name).isNotNull()
+            & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
+        ).limit(1)
+        if date_mismatch.count() == 0:
+            transformed_df = transformed_df.withColumn(
+                col_name,
+                F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
+            )
+            log(f"Column converted to {DateType().simpleString()}: {col_name}")
+            continue
 
-            parsed_ts = _parsed_timestamp_expr(trimmed)
-            ts_mismatch = df.filter(
-                F.col(col_name).isNotNull() & parsed_ts.isNull()
-            ).limit(1)
-            if ts_mismatch.count() == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(parsed_ts),
-                )
-                log(f"Column converted to {TimestampType().simpleString()}: {col_name}")
-                continue
+        parsed_ts = _parsed_timestamp_expr(trimmed)
+        ts_mismatch = df.filter(
+            F.col(col_name).isNotNull() & parsed_ts.isNull()
+        ).limit(1)
+        if ts_mismatch.count() == 0:
+            transformed_df = transformed_df.withColumn(
+                col_name,
+                F.when(F.col(col_name).isNull(), None).otherwise(parsed_ts),
+            )
+            log(f"Column converted to {TimestampType().simpleString()}: {col_name}")
+            continue
 
-            int_mismatch = df.filter(
-                F.col(col_name).isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN)
-            ).limit(1)
-            if int_mismatch.count() == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(
-                        F.col(col_name).cast(IntegerType())
-                    ),
-                )
-                log(f"Column converted to {IntegerType().simpleString()}: {col_name}")
-                continue
+        int_mismatch = df.filter(
+            F.col(col_name).isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN)
+        ).limit(1)
+        if int_mismatch.count() == 0:
+            transformed_df = transformed_df.withColumn(
+                col_name,
+                F.when(F.col(col_name).isNull(), None).otherwise(
+                    F.col(col_name).cast(IntegerType())
+                ),
+            )
+            log(f"Column converted to {IntegerType().simpleString()}: {col_name}")
+            continue
 
-            float_mismatch = df.filter(
-                F.col(col_name).isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN)
-            ).limit(1)
-            if float_mismatch.count() == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(
-                        F.col(col_name).cast(DoubleType())
-                    ),
-                )
-                log(f"Column converted to {DoubleType().simpleString()}: {col_name}")
+        float_mismatch = df.filter(
+            F.col(col_name).isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN)
+        ).limit(1)
+        if float_mismatch.count() == 0:
+            transformed_df = transformed_df.withColumn(
+                col_name,
+                F.when(F.col(col_name).isNull(), None).otherwise(
+                    F.col(col_name).cast(DoubleType())
+                ),
+            )
+            log(f"Column converted to {DoubleType().simpleString()}: {col_name}")
 
-        return transformed_df
+    return transformed_df
 
 def add_silver_metadata(
     df: DataFrame,
@@ -346,14 +346,18 @@ def clean_data(
     normalized_columns = _build_unique_column_names(df.columns)
     cleaned_df = df.toDF(*normalized_columns)
     cleaned_df = _replace_empty_strings_with_nulls(cleaned_df)
-    cleaned_df = detect_and_cast_columns(cleaned_df)
 
-    if drop_duplicates:
-        cleaned_df = cleaned_df.dropDuplicates()
-    if drop_all_null_rows:
-        cleaned_df = cleaned_df.dropna(how="all")
+    # LEGACY must stay in effect through every action that runs the cast plan
+    # (detect_and_cast uses count(); this count() and downstream write/display
+    # would otherwise run under EXCEPTION again — see _legacy_time_parser_for_casting).
+    with _legacy_time_parser_for_casting(df.sparkSession):
+        cleaned_df = detect_and_cast_columns(cleaned_df)
+        if drop_duplicates:
+            cleaned_df = cleaned_df.dropDuplicates()
+        if drop_all_null_rows:
+            cleaned_df = cleaned_df.dropna(how="all")
+        after_rows = cleaned_df.count()
 
-    after_rows = cleaned_df.count()
     after_cols = len(cleaned_df.columns)
     log(
         f"Data cleaned: rows {before_rows:,} -> {after_rows:,} | "
