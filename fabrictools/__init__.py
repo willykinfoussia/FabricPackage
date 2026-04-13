@@ -45,7 +45,7 @@ Transform (DataFrame)
 filter_by_value_list(df, column, values, *, exclude=True)
     Filter rows by membership in a list (trim string columns only; no casts).
 drop_rows_over_empty_percent(df, max_empty_percent, *, columns=None)
-    Drop rows where more than the given percent of cells are empty (empty_or_null).
+    Drop rows where more than max_empty_percent (fraction in [0, 1]) of cells are empty (empty_or_null).
 merge_dataframes(main, join_df, join_columns, keys, how="left", *, join_prefix=None)
     Join with prefixed normalized columns; prefix from call site, else Spark alias, else "join".
 remove_columns(df, *columns)

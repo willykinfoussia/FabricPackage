@@ -31,8 +31,9 @@ def drop_rows_over_empty_percent(
     df
         Input DataFrame.
     max_empty_percent
-        Threshold in ``[0, 100]``. Rows with empty ratio **>** ``max_empty_percent / 100``
-        are removed (e.g. ``50`` keeps rows with at most 50% empty cells).
+        Maximum fraction of empty cells in ``[0, 1]`` (same scale as ``empty_ratio``).
+        Rows with ``empty_ratio`` **>** ``max_empty_percent`` are removed.
+        For example ``0.05`` keeps rows with at most 5% empty cells (at least 95% non-null).
     columns
         Physical or clean_data-style column names to include in the ratio.
         If ``None``, all columns of ``df`` are used.
@@ -40,12 +41,12 @@ def drop_rows_over_empty_percent(
     Raises
     ------
     ValueError
-        If ``max_empty_percent`` is outside ``[0, 100]``, if ``columns`` is an
+        If ``max_empty_percent`` is outside ``[0, 1]``, if ``columns`` is an
         empty sequence, or if there are no columns to evaluate.
     """
-    if not 0 <= max_empty_percent <= 100:
+    if not 0 <= max_empty_percent <= 1:
         raise ValueError(
-            f"max_empty_percent must be in [0, 100], got {max_empty_percent!r}"
+            f"max_empty_percent must be in [0, 1], got {max_empty_percent!r}"
         )
 
     if columns is not None and len(columns) == 0:
@@ -74,5 +75,4 @@ def drop_rows_over_empty_percent(
         ),
     )
     empty_ratio = empty_count / F.lit(float(n))
-    threshold = max_empty_percent / 100.0
-    return df.filter(empty_ratio <= F.lit(threshold))
+    return df.filter(empty_ratio <= F.lit(float(max_empty_percent)))

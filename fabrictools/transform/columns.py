@@ -178,7 +178,7 @@ def rename_columns_pq_serial_to_dates(
     df: DataFrame,
     *,
     date_format: str = "%Y-%m-%d",
-    prefix: str = "pq_date_",
+    prefix: str = "",
     include_suffix_in_name: bool = True,
 ) -> DataFrame:
     """
@@ -210,9 +210,9 @@ def rename_columns_pq_serial_to_dates(
 def rename_columns_pq_serial_to_mois_annee(
     df: DataFrame,
     *,
-    prefix: str = "pq_date_",
+    prefix: str = "",
     include_suffix_in_name: bool = True,
-    capitalize_month: bool = False,
+    capitalize_month: bool = True,
 ) -> DataFrame:
     """
     Same as ``rename_columns_pq_serial_to_dates`` but the date part is French
