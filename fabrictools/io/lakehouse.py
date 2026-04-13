@@ -236,8 +236,10 @@ def write_lakehouse(
         Spark write mode — ``"overwrite"`` (default), ``"append"``,
         ``"ignore"``, or ``"error"``.
     partition_by:
-        Optional list of column names to partition the output by.
-        Auto-detected date partitions are appended when found in the DataFrame.
+        Optional list of column names to partition the output by.  Each name is
+        resolved like ``clean_data`` / ``merge_dataframes`` (physical name,
+        normalized unique label, or snake_case of the label).  Auto-detected date
+        partitions are appended when found in the DataFrame.
     format:
         Output format — ``"delta"`` (default), ``"parquet"``, or ``"csv"``.
     spark:
@@ -262,7 +264,14 @@ def write_lakehouse(
         f"[format={format}, mode={mode}]"
     )
 
-    user_partitions = list(partition_by or [])
+    # Lazy import: fabrictools.transform.columns → quality.clean → fabrictools.io
+    # would otherwise create an import cycle while io.__init__ loads lakehouse.
+    from fabrictools.transform.columns import _resolve_column_name  # noqa: PLC0415
+
+    user_partitions = [
+        _resolve_column_name(df, col, side="DataFrame")
+        for col in (partition_by or [])
+    ]
     auto_detected_partitions = _detect_partition_columns(df)
     effective_partition_by = _dedupe_preserve_order(
         user_partitions + auto_detected_partitions

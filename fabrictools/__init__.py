@@ -44,10 +44,16 @@ Transform (DataFrame)
 ~~~~~~~~~~~~~~~~~~~~~
 filter_by_value_list(df, column, values, *, exclude=True)
     Filter rows by membership in a list (trim string columns only; no casts).
+drop_rows_over_empty_percent(df, max_empty_percent, *, columns=None)
+    Drop rows where more than the given percent of cells are empty (empty_or_null).
 merge_dataframes(main, join_df, join_columns, keys, how="left", *, join_prefix=None)
     Join with prefixed normalized columns; prefix from call site, else Spark alias, else "join".
 remove_columns(df, *columns)
     Drop columns; each name may be physical or normalized like clean_data.
+rename_columns_pq_serial_to_dates(df, *, date_format='%Y-%m-%d', prefix='pq_date_', include_suffix_in_name=True)
+    Rename columns whose names embed a PQ/Excel day serial to a date-based name.
+rename_columns_pq_serial_to_mois_annee(df, *, prefix='pq_date_', include_suffix_in_name=True, capitalize_month=False)
+    Same as rename_columns_pq_serial_to_dates with French month-year labels (e.g. janvier_2024).
 norm_text(expr)
     Lowercase string with control chars stripped and spaces removed (M Text.Clean-style); str becomes lit.
 empty_or_null(column)
@@ -86,11 +92,14 @@ from fabrictools.quality.pipeline import clean_and_write_all_tables, clean_and_w
 from fabrictools.quality.scan import scan_data_errors
 from fabrictools.transform import (
     coalesce_dim,
+    drop_rows_over_empty_percent,
     empty_or_null,
     filter_by_value_list,
     merge_dataframes,
     norm_text,
     remove_columns,
+    rename_columns_pq_serial_to_dates,
+    rename_columns_pq_serial_to_mois_annee,
 )
 
 _EXPORT_REGISTRY = {
@@ -118,8 +127,11 @@ _EXPORT_REGISTRY = {
     "prepare_and_write_data": prepare_and_write_data,
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
     "filter_by_value_list": filter_by_value_list,
+    "drop_rows_over_empty_percent": drop_rows_over_empty_percent,
     "merge_dataframes": merge_dataframes,
     "remove_columns": remove_columns,
+    "rename_columns_pq_serial_to_dates": rename_columns_pq_serial_to_dates,
+    "rename_columns_pq_serial_to_mois_annee": rename_columns_pq_serial_to_mois_annee,
     "norm_text": norm_text,
     "empty_or_null": empty_or_null,
     "coalesce_dim": coalesce_dim,
