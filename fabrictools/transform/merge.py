@@ -12,6 +12,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
+from fabrictools.transform.columns import _resolve_column_name
 
 DEFAULT_JOIN_PREFIX = "join"
 
@@ -201,22 +202,6 @@ def _try_infer_join_prefix_from_call_site() -> str | None:
     return None
 
 
-def _resolve_column_name(df: DataFrame, name: str, side: str) -> str:
-    cols = [f.name for f in df.schema.fields]
-    if name in cols:
-        return name
-    norm_list = _build_unique_column_names(cols)
-    if name in norm_list:
-        return cols[norm_list.index(name)]
-    candidate = _to_snake_case(name)
-    if candidate in norm_list:
-        return cols[norm_list.index(candidate)]
-    raise ValueError(
-        f"{side} DataFrame has no column {name!r} "
-        f"(not a physical name nor a name normalized like clean_data)"
-    )
-
-
 def merge_dataframes(
     main: DataFrame,
     join_df: DataFrame,
@@ -273,8 +258,8 @@ def merge_dataframes(
 
     resolved_keys = [
         (
-            _resolve_column_name(main, mk, "main"),
-            _resolve_column_name(join_df, jk, "join_df"),
+            _resolve_column_name(main, mk, side="main"),
+            _resolve_column_name(join_df, jk, side="join_df"),
         )
         for mk, jk in keys
     ]
@@ -288,7 +273,7 @@ def merge_dataframes(
         [_to_snake_case(requested) for requested in join_columns]
     )
     for requested, suffix in zip(join_columns, normalized_suffixes):
-        actual = _resolve_column_name(join_df, requested, "join_df")
+        actual = _resolve_column_name(join_df, requested, side="join_df")
         exprs.append(F.col(actual).alias(f"{prefix}_{suffix}"))
 
     right_proj = join_df.select(*exprs)

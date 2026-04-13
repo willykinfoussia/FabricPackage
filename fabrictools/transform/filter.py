@@ -8,6 +8,8 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType
 
+from fabrictools.transform.columns import _resolve_column_name
+
 try:
     from pyspark.sql.types import CharType, VarcharType
 except ImportError:  # pragma: no cover
@@ -64,8 +66,9 @@ def filter_by_value_list(
         If True (default), drop rows whose value is in ``values``.
         If False, keep only rows whose value is in ``values``.
     """
-    dtype = _column_dtype(df, column)
-    expr = F.trim(F.col(column)) if _is_string_like(dtype) else F.col(column)
+    resolved = _resolve_column_name(df, column, side="DataFrame")
+    dtype = _column_dtype(df, resolved)
+    expr = F.trim(F.col(resolved)) if _is_string_like(dtype) else F.col(resolved)
     literals = _prepare_values(values)
     in_list = expr.isin(literals)
     pred = ~in_list if exclude else in_list

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Callable, Iterable, Optional, TypedDict
 
 
@@ -26,7 +27,9 @@ def _pick_first_non_empty(item: dict[str, Any], keys: Iterable[str]) -> str:
 
 
 def _to_pascal_case_identifier(value: str) -> str:
-    tokens = [token for token in re.split(r"[^0-9A-Za-z]+", value) if token]
+    normalized_value = unicodedata.normalize("NFKD", value)
+    ascii_value = normalized_value.encode("ascii", "ignore").decode("ascii")
+    tokens = [token for token in re.split(r"[^0-9A-Za-z]+", ascii_value) if token]
     return "".join(token[:1].upper() + token[1:] for token in tokens)
 
 

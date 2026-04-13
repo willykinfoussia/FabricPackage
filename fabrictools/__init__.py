@@ -46,6 +46,8 @@ filter_by_value_list(df, column, values, *, exclude=True)
     Filter rows by membership in a list (trim string columns only; no casts).
 merge_dataframes(main, join_df, join_columns, keys, how="left", *, join_prefix=None)
     Join with prefixed normalized columns; prefix from call site, else Spark alias, else "join".
+remove_columns(df, *columns)
+    Drop columns; each name may be physical or normalized like clean_data.
 norm_text(expr)
     Lowercase string with control chars stripped and spaces removed (M Text.Clean-style); str becomes lit.
 empty_or_null(column)
@@ -88,6 +90,7 @@ from fabrictools.transform import (
     filter_by_value_list,
     merge_dataframes,
     norm_text,
+    remove_columns,
 )
 
 _EXPORT_REGISTRY = {
@@ -116,6 +119,7 @@ _EXPORT_REGISTRY = {
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
     "filter_by_value_list": filter_by_value_list,
     "merge_dataframes": merge_dataframes,
+    "remove_columns": remove_columns,
     "norm_text": norm_text,
     "empty_or_null": empty_or_null,
     "coalesce_dim": coalesce_dim,
