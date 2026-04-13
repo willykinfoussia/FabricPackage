@@ -54,6 +54,10 @@ rename_columns_pq_serial_to_dates(df, *, date_format='%Y-%m-%d', prefix='pq_date
     Rename columns whose names embed a PQ/Excel day serial to a date-based name.
 rename_columns_pq_serial_to_mois_annee(df, *, prefix='pq_date_', include_suffix_in_name=True, capitalize_month=False)
     Same as rename_columns_pq_serial_to_dates with French month-year labels (e.g. janvier_2024).
+rename_columns_month_year_block_labels(df, *, labels=..., exclude_columns=('__spark_row_order__',))
+    Rename contiguous French month-year columns with configurable block labels (projection-style).
+month_start_from_ca_monthly_col(col_name)
+    Parse first-of-month from a column name (optional `` [label]`` suffix stripped).
 norm_text(expr)
     Lowercase string with control chars stripped and spaces removed (M Text.Clean-style); str becomes lit.
 empty_or_null(column)
@@ -96,8 +100,10 @@ from fabrictools.transform import (
     empty_or_null,
     filter_by_value_list,
     merge_dataframes,
+    month_start_from_ca_monthly_col,
     norm_text,
     remove_columns,
+    rename_columns_month_year_block_labels,
     rename_columns_pq_serial_to_dates,
     rename_columns_pq_serial_to_mois_annee,
 )
@@ -132,6 +138,8 @@ _EXPORT_REGISTRY = {
     "remove_columns": remove_columns,
     "rename_columns_pq_serial_to_dates": rename_columns_pq_serial_to_dates,
     "rename_columns_pq_serial_to_mois_annee": rename_columns_pq_serial_to_mois_annee,
+    "rename_columns_month_year_block_labels": rename_columns_month_year_block_labels,
+    "month_start_from_ca_monthly_col": month_start_from_ca_monthly_col,
     "norm_text": norm_text,
     "empty_or_null": empty_or_null,
     "coalesce_dim": coalesce_dim,
