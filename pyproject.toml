@@ -34,7 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 spark = [
-    "pyspark>=3.3",
+    "pyspark>=3.4",
     "delta-spark>=2.4",
 ]
 visualization = [

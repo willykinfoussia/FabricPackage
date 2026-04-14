@@ -7,7 +7,7 @@ Lakehouse
 ~~~~~~~~~
 read_lakehouse(lakehouse_name, relative_path, spark=None)
     Read a dataset (auto-detects Delta / Parquet / CSV).
-write_lakehouse(df, lakehouse_name, relative_path, mode, partition_by, format, spark=None)
+write_lakehouse(df, lakehouse_name, relative_path, mode, partition_by, format, spark=None, *, normalize_column_names=True)
     Write a DataFrame to a Lakehouse (defaults to Delta format).
 merge_lakehouse(source_df, lakehouse_name, relative_path, merge_condition, ...)
     Upsert (merge) a DataFrame into an existing Delta table.
@@ -50,6 +50,8 @@ merge_dataframes(main, join_df, join_columns, keys, how="left", *, join_prefix=N
     Join with prefixed normalized columns; prefix from call site, else Spark alias, else "join".
 remove_columns(df, *columns)
     Drop columns; each name may be physical or normalized like clean_data.
+rename_columns_normalized(df)
+    Rename all columns to snake_case / unique suffixes (same as clean_data's rename step).
 rename_columns_pq_serial_to_dates(df, *, date_format='%Y-%m-%d', prefix='pq_date_', include_suffix_in_name=True)
     Rename columns whose names embed a PQ/Excel day serial to a date-based name.
 rename_columns_pq_serial_to_mois_annee(df, *, prefix='pq_date_', include_suffix_in_name=True, capitalize_month=False)
@@ -58,6 +60,18 @@ rename_columns_month_year_block_labels(df, *, labels=..., exclude_columns=('__sp
     Rename contiguous French month-year columns with configurable block labels (projection-style).
 month_start_from_ca_monthly_col(col_name)
     Parse first-of-month from a column name (optional `` [label]`` suffix stripped).
+resolve_dataframe_column(df, name)
+    Resolve a logical or normalized column name to the physical name on *df*.
+wide_value_columns(df, *, suffix, exclude=())
+    Physical columns whose names end with *suffix* (wide month / block suffix pattern).
+dataframe_unpivot_wide_month_suffix(df, *, id_columns, value_columns_suffix=..., ...)
+    Unpivot wide value columns and add MonthStart from the variable column name.
+dataframe_last_nonnull_wide_month_from_long(long_df, *, order_column, ...)
+    Last non-null value per month column (window on long form from the unpivot helper).
+dataframe_pivot_category_wide_month_from_long(long_df, *, category_column, pivot_categories, ...)
+    Sum by month and category, pivot categories, Year/Month columns.
+transform_wide_month_suffix(df, *, id_columns, aggregation='last_nonnull'|'pivot_sum', ...)
+    One-call wrapper: unpivot wide month suffix then last-non-null or pivot-sum.
 norm_text(expr)
     Lowercase string with control chars stripped and spaces removed (M Text.Clean-style); str becomes lit.
 empty_or_null(column)
@@ -96,6 +110,9 @@ from fabrictools.quality.pipeline import clean_and_write_all_tables, clean_and_w
 from fabrictools.quality.scan import scan_data_errors
 from fabrictools.transform import (
     coalesce_dim,
+    dataframe_last_nonnull_wide_month_from_long,
+    dataframe_pivot_category_wide_month_from_long,
+    dataframe_unpivot_wide_month_suffix,
     drop_rows_over_empty_percent,
     empty_or_null,
     filter_by_value_list,
@@ -103,9 +120,13 @@ from fabrictools.transform import (
     month_start_from_ca_monthly_col,
     norm_text,
     remove_columns,
+    rename_columns_normalized,
     rename_columns_month_year_block_labels,
     rename_columns_pq_serial_to_dates,
     rename_columns_pq_serial_to_mois_annee,
+    resolve_dataframe_column,
+    transform_wide_month_suffix,
+    wide_value_columns,
 )
 
 _EXPORT_REGISTRY = {
@@ -136,10 +157,17 @@ _EXPORT_REGISTRY = {
     "drop_rows_over_empty_percent": drop_rows_over_empty_percent,
     "merge_dataframes": merge_dataframes,
     "remove_columns": remove_columns,
+    "rename_columns_normalized": rename_columns_normalized,
     "rename_columns_pq_serial_to_dates": rename_columns_pq_serial_to_dates,
     "rename_columns_pq_serial_to_mois_annee": rename_columns_pq_serial_to_mois_annee,
     "rename_columns_month_year_block_labels": rename_columns_month_year_block_labels,
     "month_start_from_ca_monthly_col": month_start_from_ca_monthly_col,
+    "resolve_dataframe_column": resolve_dataframe_column,
+    "wide_value_columns": wide_value_columns,
+    "dataframe_unpivot_wide_month_suffix": dataframe_unpivot_wide_month_suffix,
+    "dataframe_last_nonnull_wide_month_from_long": dataframe_last_nonnull_wide_month_from_long,
+    "dataframe_pivot_category_wide_month_from_long": dataframe_pivot_category_wide_month_from_long,
+    "transform_wide_month_suffix": transform_wide_month_suffix,
     "norm_text": norm_text,
     "empty_or_null": empty_or_null,
     "coalesce_dim": coalesce_dim,

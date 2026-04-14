@@ -219,6 +219,8 @@ def write_lakehouse(
     partition_by: Optional[List[str]] = None,
     format: str = "delta",
     spark: Optional[SparkSession] = None,
+    *,
+    normalize_column_names: bool = True,
 ) -> None:
     """
     Write a DataFrame to a Fabric Lakehouse as a Delta table (default).
@@ -244,6 +246,11 @@ def write_lakehouse(
         Output format — ``"delta"`` (default), ``"parquet"``, or ``"csv"``.
     spark:
         Optional SparkSession.  When omitted the active session is used.
+    normalize_column_names:
+        When ``True`` (default), renames all columns with ``rename_columns_normalized``
+        (same snake_case / unique suffix rules as ``clean_data``) before resolving
+        ``partition_by`` and writing.  Set ``False`` to persist the DataFrame's
+        current physical column names unchanged.
 
     Examples
     --------
@@ -266,7 +273,16 @@ def write_lakehouse(
 
     # Lazy import: fabrictools.transform.columns → quality.clean → fabrictools.io
     # would otherwise create an import cycle while io.__init__ loads lakehouse.
-    from fabrictools.transform.columns import _resolve_column_name  # noqa: PLC0415
+    from fabrictools.transform.columns import (  # noqa: PLC0415
+        _resolve_column_name,
+        rename_columns_normalized,
+    )
+
+    if normalize_column_names:
+        original_cols = list(df.columns)
+        df = rename_columns_normalized(df)
+        if list(df.columns) != original_cols:
+            log("  Column names normalized (clean_data-style) before write")
 
     user_partitions = [
         _resolve_column_name(df, col, side="DataFrame")

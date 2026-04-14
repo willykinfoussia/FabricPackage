@@ -146,6 +146,42 @@ def _resolve_column_name(df: DataFrame, name: str, *, side: str = "DataFrame") -
     )
 
 
+def resolve_dataframe_column(df: DataFrame, name: str) -> str:
+    """
+    Resolve *name* to the physical column name on *df*.
+
+    Accepts the physical name, a ``clean_data``-style normalized label, or a
+    snake_case variant (same rules as ``merge_dataframes`` / ``remove_columns``).
+    """
+    return _resolve_column_name(df, name, side="DataFrame")
+
+
+def rename_columns_normalized(df: DataFrame) -> DataFrame:
+    """
+    Rename every column to snake_case with ``_2``, ``_3``, … for duplicate bases.
+
+    Uses ``_build_unique_column_names`` in column order — the same scheme as the
+    rename step in ``clean_data`` and the labels accepted by ``merge_dataframes`` /
+    ``remove_columns`` when resolving a column name.
+    Does not cast types, replace blanks, deduplicate rows, or drop rows.
+
+    Parameters
+    ----------
+    df
+        Input DataFrame.
+
+    Returns
+    -------
+    DataFrame
+        Same column order and data; names updated where they differ from targets.
+    """
+    cols = list(df.columns)
+    normalized = _build_unique_column_names(cols)
+    if normalized == cols:
+        return df
+    return df.toDF(*normalized)
+
+
 def remove_columns(df: DataFrame, *columns: str) -> DataFrame:
     """
     Drop columns by physical name or by the same resolution rules as ``merge_dataframes`` /
