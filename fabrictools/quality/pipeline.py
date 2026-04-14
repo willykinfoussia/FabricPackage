@@ -80,6 +80,7 @@ def _build_jobs(
         exclude_tables=exclude_tables,
         mode=mode,
         partition_by=partition_by,
+        cleaned_table_prefix=True,
     )
 
 
@@ -94,7 +95,12 @@ def clean_and_write_all_tables(
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
-    """Bulk clean/write orchestration with canonical table-job config parsing."""
+    """Bulk clean/write orchestration with canonical table-job config parsing.
+
+    When ``tables_config`` is omitted, discovered targets use a ``Cleaned_`` leaf
+    name (PascalCase from the source table), e.g.
+    ``Tables/dbo/projets table`` → ``Tables/dbo/Cleaned_ProjetsTable``.
+    """
     _spark = spark or get_spark()
     table_jobs = _build_jobs(
         source_lakehouse_name=source_lakehouse_name,

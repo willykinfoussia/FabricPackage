@@ -41,7 +41,16 @@ def _strip_technical_table_prefix(table_name: str) -> str:
     return table_name
 
 
-def _to_business_target_relative_path(relative_path: str) -> str:
+def _to_business_target_relative_path(
+    relative_path: str, *, cleaned_table_prefix: bool = False
+) -> str:
+    """Derive a lakehouse table path from a source path (same folders, new leaf name).
+
+    By default the leaf is PascalCase from the source table name. When
+    ``cleaned_table_prefix`` is True (quality silver/cleaned outputs), the leaf
+    is ``Cleaned_`` + that PascalCase, e.g. ``Tables/dbo/projets table`` →
+    ``Tables/dbo/Cleaned_ProjetsTable``.
+    """
     parts = [segment for segment in relative_path.strip().strip("/").split("/") if segment]
     if not parts:
         return relative_path
@@ -49,7 +58,17 @@ def _to_business_target_relative_path(relative_path: str) -> str:
     table_segment = parts[-1]
     stripped_name = _strip_technical_table_prefix(table_segment)
     business_table_name = _to_pascal_case_identifier(stripped_name)
-    parts[-1] = business_table_name or table_segment
+    pascal_table = business_table_name or _to_pascal_case_identifier(table_segment)
+
+    if cleaned_table_prefix:
+        final_segment = pascal_table or table_segment
+        lower = final_segment.lower()
+        if lower.startswith("cleaned_"):
+            parts[-1] = final_segment
+        else:
+            parts[-1] = f"Cleaned_{final_segment}"
+    else:
+        parts[-1] = business_table_name or table_segment
     return "/".join(parts)
 
 
@@ -64,6 +83,7 @@ def build_table_jobs_from_config(
     require_target: bool = False,
     require_mode: bool = False,
     allow_merge_condition: bool = False,
+    cleaned_table_prefix: bool = False,
 ) -> list[TableJobConfig]:
     """Normalize heterogeneous config entries into canonical table jobs."""
     jobs: list[TableJobConfig] = []
@@ -81,7 +101,9 @@ def build_table_jobs_from_config(
         if not target_relative_path:
             if require_target:
                 raise ValueError(f"tables_config[{index}] is missing a target path key.")
-            target_relative_path = _to_business_target_relative_path(source_relative_path)
+            target_relative_path = _to_business_target_relative_path(
+                source_relative_path, cleaned_table_prefix=cleaned_table_prefix
+            )
 
         if require_mode:
             mode_value = str(table_config.get("mode", "")).strip().lower()
@@ -144,6 +166,7 @@ def build_table_jobs_from_discovery(
     exclude_tables: Optional[list[str]],
     mode: str,
     partition_by: Optional[list[str]] = None,
+    cleaned_table_prefix: bool = False,
 ) -> list[TableJobConfig]:
     """Create canonical jobs from table discovery."""
     discovered = discover_fn(
@@ -154,7 +177,9 @@ def build_table_jobs_from_discovery(
     return [
         TableJobConfig(
             source_relative_path=relative_path,
-            target_relative_path=_to_business_target_relative_path(relative_path),
+            target_relative_path=_to_business_target_relative_path(
+                relative_path, cleaned_table_prefix=cleaned_table_prefix
+            ),
             mode=mode,
             partition_by=partition_by,
             merge_condition=None,
