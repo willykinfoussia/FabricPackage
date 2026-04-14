@@ -1,0 +1,4 @@
+fabrictools.transform.wide_month_suffix
+=========================================
+
+.. automodule:: fabrictools.transform.wide_month_suffix

@@ -8,6 +8,8 @@ from typing import Any, Callable, Iterable, Optional, TypedDict
 
 
 class TableJobConfig(TypedDict, total=False):
+    """Canonical keys for one bulk pipeline table job."""
+
     source_relative_path: str
     target_relative_path: str
     mode: str
@@ -44,12 +46,20 @@ def _strip_technical_table_prefix(table_name: str) -> str:
 def _to_business_target_relative_path(
     relative_path: str, *, cleaned_table_prefix: bool = False
 ) -> str:
-    """Derive a lakehouse table path from a source path (same folders, new leaf name).
+    """Derive a Lakehouse table path from a source path (same folders, new leaf).
 
     By default the leaf is PascalCase from the source table name. When
-    ``cleaned_table_prefix`` is True (quality silver/cleaned outputs), the leaf
-    is ``Cleaned_`` + that PascalCase, e.g. ``Tables/dbo/projets table`` →
+    ``cleaned_table_prefix`` is ``True`` (Silver / cleaned outputs), the leaf is
+    ``Cleaned_`` + that PascalCase, e.g. ``Tables/dbo/projets table`` →
     ``Tables/dbo/Cleaned_ProjetsTable``.
+
+    :param relative_path: Source ``Tables/...`` path.
+    :param cleaned_table_prefix: If ``True``, enforce ``Cleaned_`` prefix on the leaf.
+    :type relative_path: str
+    :type cleaned_table_prefix: bool
+
+    :returns: Target relative path string.
+    :rtype: str
     """
     parts = [segment for segment in relative_path.strip().strip("/").split("/") if segment]
     if not parts:
@@ -85,7 +95,34 @@ def build_table_jobs_from_config(
     allow_merge_condition: bool = False,
     cleaned_table_prefix: bool = False,
 ) -> list[TableJobConfig]:
-    """Normalize heterogeneous config entries into canonical table jobs."""
+    """Normalize heterogeneous ``tables_config`` dicts into :class:`TableJobConfig` rows.
+
+    :param tables_config: Per-table configuration dicts.
+    :param default_mode: Mode used when an entry omits ``mode`` (unless ``require_mode``).
+    :param default_partition_by: Default ``partition_by`` when omitted per entry.
+    :param supported_modes: Allowed mode strings (e.g. ``overwrite``, ``append``, ``merge``).
+    :param source_keys: Keys tried in order to read the source path.
+    :param target_keys: Keys tried in order to read the target path.
+    :param require_target: If ``True``, each entry must specify a target key.
+    :param require_mode: If ``True``, each entry must include ``mode``.
+    :param allow_merge_condition: If ``True``, parse ``merge_condition`` and require it for ``merge``.
+    :param cleaned_table_prefix: Passed to target path derivation when target is inferred.
+    :type tables_config: list[dict]
+    :type default_mode: str
+    :type default_partition_by: list[str] | None
+    :type supported_modes: set[str]
+    :type source_keys: tuple[str, ...]
+    :type target_keys: tuple[str, ...]
+    :type require_target: bool
+    :type require_mode: bool
+    :type allow_merge_condition: bool
+    :type cleaned_table_prefix: bool
+
+    :returns: List of normalized job dicts.
+    :rtype: list
+
+    :raises ValueError: On invalid entries, unsupported modes, or missing merge condition.
+    """
     jobs: list[TableJobConfig] = []
     for index, table_config in enumerate(tables_config, start=1):
         if not isinstance(table_config, dict):
@@ -168,7 +205,26 @@ def build_table_jobs_from_discovery(
     partition_by: Optional[list[str]] = None,
     cleaned_table_prefix: bool = False,
 ) -> list[TableJobConfig]:
-    """Create canonical jobs from table discovery."""
+    """Build :class:`TableJobConfig` rows by listing tables then deriving target paths.
+
+    :param source_lakehouse_name: Lakehouse passed to ``discover_fn``.
+    :param discover_fn: Callable like :py:func:`fabrictools.io.discovery.list_lakehouse_tables_for_pipeline`.
+    :param include_schemas: Forwarded to ``discover_fn``.
+    :param exclude_tables: Forwarded to ``discover_fn``.
+    :param mode: Write mode for every generated job.
+    :param partition_by: Optional partition columns for every job.
+    :param cleaned_table_prefix: When ``True``, target leaf uses ``Cleaned_`` prefix logic.
+    :type source_lakehouse_name: str
+    :type discover_fn: collections.abc.Callable
+    :type include_schemas: list[str] | None
+    :type exclude_tables: list[str] | None
+    :type mode: str
+    :type partition_by: list[str] | None
+    :type cleaned_table_prefix: bool
+
+    :returns: One job per discovered relative path.
+    :rtype: list
+    """
     discovered = discover_fn(
         lakehouse_name=source_lakehouse_name,
         include_schemas=include_schemas,

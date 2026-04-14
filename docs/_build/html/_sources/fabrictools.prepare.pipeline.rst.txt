@@ -1,0 +1,4 @@
+fabrictools.prepare.pipeline
+============================
+
+.. automodule:: fabrictools.prepare.pipeline

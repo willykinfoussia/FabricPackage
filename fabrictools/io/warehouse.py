@@ -22,30 +22,24 @@ def read_warehouse(
     query: str,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """
-    Execute a SQL query against a Fabric Warehouse and return the result.
+    """Run a SQL query on a Fabric Warehouse and return the result as a ``DataFrame``.
 
-    The connection URL is resolved automatically from the warehouse display
-    name using ``notebookutils``.  Authentication reuses the token of the
-    currently signed-in Fabric user (Managed Identity / Entra token).
+    The JDBC URL is resolved from the warehouse display name via ``notebookutils``.
+    Authentication uses the signed-in Fabric user token.
 
-    Parameters
-    ----------
-    warehouse_name:
-        Display name of the Warehouse (e.g. ``"MyWarehouse"``).
-    query:
-        SQL query to execute (e.g. ``"SELECT * FROM dbo.sales"``).
-        Wrap complex queries in parentheses when needed:
-        ``"(SELECT id, name FROM dbo.sales WHERE year = 2024) t"``.
-    spark:
-        Optional SparkSession.  When omitted the active session is used.
+    :param warehouse_name: Warehouse display name (e.g. ``"MyWarehouse"``).
+    :param query: SQL text (e.g. ``"SELECT * FROM dbo.sales"``). Wrap subqueries in
+        parentheses when needed, e.g. ``"(SELECT id, name FROM dbo.sales WHERE year = 2024) t"``.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type warehouse_name: str
+    :type query: str
+    :type spark: ~pyspark.sql.SparkSession | None
 
-    Returns
-    -------
-    DataFrame
+    :returns: Query result.
+    :rtype: ~pyspark.sql.DataFrame
 
-    Examples
-    --------
+    .. rubric:: Example
+
     >>> df = read_warehouse("MyWarehouse", "SELECT * FROM dbo.sales")
     """
     _spark = spark or get_spark()
@@ -74,27 +68,24 @@ def write_warehouse(
     batch_size: int = 10_000,
     spark: Optional[SparkSession] = None,
 ) -> None:
-    """
-    Write a DataFrame to a table in a Fabric Warehouse via JDBC.
+    """Write a ``DataFrame`` to a Fabric Warehouse table via JDBC.
 
-    Parameters
-    ----------
-    df:
-        DataFrame to persist.
-    warehouse_name:
-        Display name of the target Warehouse.
-    table:
-        Fully-qualified table name, e.g. ``"dbo.sales_clean"``.
-    mode:
-        Spark write mode — ``"overwrite"`` (default), ``"append"``,
+    :param df: DataFrame to persist.
+    :param warehouse_name: Target Warehouse display name.
+    :param table: Fully-qualified table name (e.g. ``"dbo.sales_clean"``).
+    :param mode: Spark write mode: ``"overwrite"`` (default), ``"append"``,
         ``"ignore"``, or ``"error"``.
-    batch_size:
-        Number of rows per JDBC batch insert.  Defaults to ``10 000``.
-    spark:
-        Optional SparkSession.  When omitted the active session is used.
+    :param batch_size: Rows per JDBC batch (default ``10000``).
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type df: ~pyspark.sql.DataFrame
+    :type warehouse_name: str
+    :type table: str
+    :type mode: str
+    :type batch_size: int
+    :type spark: ~pyspark.sql.SparkSession | None
 
-    Examples
-    --------
+    .. rubric:: Example
+
     >>> write_warehouse(df, "MyWarehouse", "dbo.sales_clean", mode="append")
     """
     _ = spark or get_spark()

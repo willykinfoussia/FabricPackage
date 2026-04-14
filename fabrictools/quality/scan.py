@@ -21,6 +21,23 @@ def scan_data_errors(
     include_samples: bool = True,
     display_results: bool = True,
 ) -> dict[str, Any]:
+    """Summarize nulls, blanks, duplicates, and normalized-name collisions.
+
+    Optionally builds a Plotly figure (requires optional dependency ``plotly``).
+    When ``display_results`` is ``True``, shows the summary dataframe and chart in
+    notebook environments via ``display`` / ``figure.show()``.
+
+    :param df: Dataset to profile.
+    :param include_samples: If ``True``, add ``sample_rows`` (up to 10 dicts) to the report.
+    :param display_results: If ``True``, render ``summary_df`` and the chart when available.
+    :type df: ~pyspark.sql.DataFrame
+    :type include_samples: bool
+    :type display_results: bool
+
+    :returns: Dict with keys ``summary_df``, ``figure``, ``issue_totals``, ``collisions``,
+        and optionally ``sample_rows`` (Spark dataframe, plotly figure, lists, dict).
+    :rtype: dict
+    """
     log("Scanning data quality issues...")
     normalized_df = _replace_empty_strings_with_nulls(df)
     total_rows = df.count()

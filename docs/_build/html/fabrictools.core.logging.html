@@ -1,0 +1,163 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fabrictools.core.logging &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="fabrictools.core.paths" href="fabrictools.core.paths.html" />
+    <link rel="prev" title="API publique (import fabrictools)" href="api_publique.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">Référence API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="api_publique.html">API publique (import fabrictools)</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">fabrictools.core.logging</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.core.logging.log"><code class="docutils literal notranslate"><span class="pre">log()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.paths.html">fabrictools.core.paths</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.spark.html">fabrictools.core.spark</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html">fabrictools.core</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.date.html">fabrictools.dimensions.date</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.geo.html">fabrictools.dimensions.geo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.pipeline.html">fabrictools.dimensions.pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html">fabrictools.dimensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.discovery.html">fabrictools.io.discovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.lakehouse.html">fabrictools.io.lakehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.warehouse.html">fabrictools.io.warehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html">fabrictools.io</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.config.html">fabrictools.pipelines.config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html">fabrictools.pipelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.aggregations.html">fabrictools.prepare.aggregations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.pipeline.html">fabrictools.prepare.pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.resolve.html">fabrictools.prepare.resolve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.schema.html">fabrictools.prepare.schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.semantic.html">fabrictools.prepare.semantic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.transform.html">fabrictools.prepare.transform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html">fabrictools.prepare</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.clean.html">fabrictools.quality.clean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.pipeline.html">fabrictools.quality.pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.scan.html">fabrictools.quality.scan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html">fabrictools.quality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.columns.html">fabrictools.transform.columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.filter.html">fabrictools.transform.filter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.merge.html">fabrictools.transform.merge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.rows.html">fabrictools.transform.rows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.text.html">fabrictools.transform.text</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.wide_month_suffix.html">fabrictools.transform.wide_month_suffix</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html">fabrictools.transform</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">Référence API</a></li>
+      <li class="breadcrumb-item active">fabrictools.core.logging</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/fabrictools.core.logging.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fabrictools.core.logging">
+<span id="fabrictools-core-logging"></span><h1>fabrictools.core.logging<a class="headerlink" href="#module-fabrictools.core.logging" title="Link to this heading"></a></h1>
+<p>Internal logging utility for fabrictools.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.core.logging.log">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.core.logging.</span></span><span class="sig-name descname"><span class="pre">log</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">level</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'info'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="_modules/fabrictools/core/logging.html#log"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fabrictools.core.logging.log" title="Link to this definition"></a></dt>
+<dd><p>Emit a timestamped line on the <code class="docutils literal notranslate"><span class="pre">fabrictools</span></code> logger.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Text to log.</p></li>
+<li><p><strong>level</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – One of <code class="docutils literal notranslate"><span class="pre">info</span></code>, <code class="docutils literal notranslate"><span class="pre">warning</span></code>, <code class="docutils literal notranslate"><span class="pre">error</span></code>, <code class="docutils literal notranslate"><span class="pre">debug</span></code> (case-insensitive).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="api_publique.html" class="btn btn-neutral float-left" title="API publique (import fabrictools)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fabrictools.core.paths.html" class="btn btn-neutral float-right" title="fabrictools.core.paths" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

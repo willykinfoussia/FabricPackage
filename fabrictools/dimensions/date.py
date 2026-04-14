@@ -34,12 +34,39 @@ def build_dimension_date(
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """
-    Build a date dimension DataFrame.
+    """Build a calendar date dimension (keys, labels, fiscal attributes, weekend flag).
 
-    Default range is rolling:
-    - start: Jan 1st of current_year - 10
-    - end: Dec 31st of current_year + 2
+    Default inclusive range when ``start_date`` / ``end_date`` are omitted: from
+    January 1st of ``current_year - (current_year % 100)`` through December 31st
+    of ``current_year + 4``.
+
+    :param start_date: Inclusive lower bound ``yyyy-MM-dd``, or ``None`` for default.
+    :param end_date: Inclusive upper bound ``yyyy-MM-dd``, or ``None`` for default.
+    :param fiscal_year_start_month: First fiscal month (1–12).
+    :param lakehouse_name: If set with ``lakehouse_relative_path``, write Delta there.
+    :param lakehouse_relative_path: Path under the Lakehouse for the dimension table.
+    :param warehouse_name: If set with ``warehouse_table``, JDBC-write to Warehouse.
+    :param warehouse_table: Fully qualified warehouse table name.
+    :param default_relative_path: Fallback Lakehouse path segment when none given.
+    :param mode: Spark write mode for persistence.
+    :param batch_size: JDBC batch size when writing the warehouse.
+    :param spark: Optional ``SparkSession``.
+    :type start_date: str | None
+    :type end_date: str | None
+    :type fiscal_year_start_month: int
+    :type lakehouse_name: str | None
+    :type lakehouse_relative_path: str | None
+    :type warehouse_name: str | None
+    :type warehouse_table: str | None
+    :type default_relative_path: str
+    :type mode: str
+    :type batch_size: int
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Ordered date dimension dataframe.
+    :rtype: ~pyspark.sql.DataFrame
+
+    :raises ValueError: If ``fiscal_year_start_month`` is outside 1..12.
     """
     _spark = spark or get_spark()
     if fiscal_year_start_month < 1 or fiscal_year_start_month > 12:

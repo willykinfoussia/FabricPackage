@@ -19,7 +19,18 @@ from fabrictools.transform.columns import (
 def wide_value_columns(
     df: DataFrame, *, suffix: str, exclude: Collection[str] = ()
 ) -> list[str]:
-    """Return physical column names that end with *suffix* and are not in *exclude*."""
+    """List physical columns whose names end with ``suffix`` and are not in ``exclude``.
+
+    :param df: Wide dataframe.
+    :param suffix: Suffix substring to match (e.g. block label including leading space if stored that way).
+    :param exclude: Column names to skip.
+    :type df: ~pyspark.sql.DataFrame
+    :type suffix: str
+    :type exclude: collections.abc.Collection[str]
+
+    :returns: Ordered column names from ``df.columns``.
+    :rtype: list[str]
+    """
     ex = set(exclude)
     return [c for c in df.columns if c.endswith(suffix) and c not in ex]
 
@@ -90,10 +101,31 @@ def dataframe_unpivot_wide_month_suffix(
     month_start_column: str = "MonthStart",
     month_start_from_column_name: Callable[[str], Optional[date]] = month_start_from_ca_monthly_col,
 ) -> DataFrame:
-    """
-    Select id + wide value columns, unpivot, and add *month_start_column* from the variable name.
+    """Unpivot wide month columns to long form and parse ``month_start_column`` from the variable name.
 
-    If *value_columns* is passed, it wins over *value_columns_suffix*.
+    If ``value_columns`` is set, it takes precedence over ``value_columns_suffix``.
+
+    :param df: Wide dataframe.
+    :param id_columns: Identifier columns kept as-is.
+    :param value_columns_suffix: Suffix selecting value columns (via :py:func:`wide_value_columns`).
+    :param value_columns: Explicit list of value column names (optional).
+    :param exclude_columns: Excluded from value detection when using suffix.
+    :param variable_column: Unpivot variable column name.
+    :param value_column: Unpivot value column name.
+    :param month_start_column: Output column for parsed month start dates.
+    :param month_start_from_column_name: Callable mapping variable name to ``date`` (default: :py:func:`fabrictools.month_start_from_ca_monthly_col`).
+    :type df: ~pyspark.sql.DataFrame
+    :type id_columns: collections.abc.Sequence[str]
+    :type value_columns_suffix: str | None
+    :type value_columns: collections.abc.Sequence[str] | None
+    :type exclude_columns: collections.abc.Collection[str]
+    :type variable_column: str
+    :type value_column: str
+    :type month_start_column: str
+    :type month_start_from_column_name: collections.abc.Callable[[str], date | None]
+
+    :returns: Long dataframe with ids, variable, value, and month start.
+    :rtype: ~pyspark.sql.DataFrame
     """
     id_resolved = _resolve_id_columns(df, id_columns)
     id_set = set(id_resolved)
@@ -143,8 +175,29 @@ def dataframe_last_nonnull_wide_month_from_long(
     output_month: str = "Month",
     output_value: str = "Value",
 ) -> DataFrame:
-    """
-    Keep the last non-null *value_column* per *variable_column* (by *order_column* desc), then cast.
+    """For each distinct ``variable_column``, keep the row with greatest ``order_column`` where ``value_column`` is non-null; emit typed month/value columns.
+
+    :param long_df: Long dataframe (e.g. from :py:func:`dataframe_unpivot_wide_month_suffix`).
+    :param order_column: Tie-break column (descending); must exist on ``long_df``.
+    :param variable_column: Month variable name column.
+    :param value_column: Measure column.
+    :param month_start_column: Parsed month start on ``long_df``.
+    :param output_month_start: Output date column name.
+    :param output_year: Output year column name.
+    :param output_month: Output month-of-year column name.
+    :param output_value: Output numeric value column name.
+    :type long_df: ~pyspark.sql.DataFrame
+    :type order_column: str
+    :type variable_column: str
+    :type value_column: str
+    :type month_start_column: str
+    :type output_month_start: str
+    :type output_year: str
+    :type output_month: str
+    :type output_value: str
+
+    :returns: One row per ``variable_column`` with cast types, or empty schema if inputs missing.
+    :rtype: ~pyspark.sql.DataFrame
     """
     spark = long_df.sparkSession
     if variable_column not in long_df.columns:
@@ -190,8 +243,33 @@ def dataframe_pivot_category_wide_month_from_long(
     output_month: str = "Month",
     montant_column: str = "Montant",
 ) -> DataFrame:
-    """
-    Sum *value_column* by month and category, pivot categories to wide columns, add Year/Month.
+    """Sum ``value_column`` by ``month_start_column`` and ``category_column``, pivot categories wide, add year/month columns.
+
+    :param long_df: Long dataframe with month, category, and value.
+    :param category_column: Dimension to pivot.
+    :param pivot_categories: Category values that become column names.
+    :param fill_value: Fill null pivot cells after aggregation.
+    :param variable_column: Variable column name (must exist on ``long_df`` for early-exit checks).
+    :param value_column: Measure to sum.
+    :param month_start_column: Date key for grouping.
+    :param output_year: Name of year output column.
+    :param output_month: Name of month output column.
+    :param montant_column: Internal aggregate column name before pivot.
+    :type long_df: ~pyspark.sql.DataFrame
+    :type category_column: str
+    :type pivot_categories: collections.abc.Sequence[str]
+    :type fill_value: float
+    :type variable_column: str
+    :type value_column: str
+    :type month_start_column: str
+    :type output_year: str
+    :type output_month: str
+    :type montant_column: str
+
+    :returns: Wide dataframe ``Year``, ``Month``, one column per category.
+    :rtype: ~pyspark.sql.DataFrame
+
+    :raises ValueError: If ``pivot_categories`` is empty.
     """
     spark = long_df.sparkSession
     cats = list(pivot_categories)
@@ -265,8 +343,51 @@ def transform_wide_month_suffix(
     fill_value: float = 0.0,
     montant_column: str = "Montant",
 ) -> DataFrame:
-    """
-    Unpivot wide month columns then apply *aggregation* (last non-null row per month column, or pivot sum).
+    """Run :py:func:`dataframe_unpivot_wide_month_suffix` then ``last_nonnull`` or ``pivot_sum`` aggregation.
+
+    :param df: Wide source dataframe.
+    :param id_columns: Passed through to unpivot.
+    :param aggregation: ``last_nonnull`` (needs ``order_column``) or ``pivot_sum`` (needs ``category_column`` and ``pivot_categories``).
+    :param value_columns_suffix: Passed through to unpivot.
+    :param value_columns: Passed through to unpivot.
+    :param exclude_columns: Passed through to unpivot.
+    :param variable_column: Long-form variable column name.
+    :param value_column: Long-form value column name.
+    :param month_start_column: Long-form month start column name.
+    :param month_start_from_column_name: Parser for month start from variable name.
+    :param order_column: Source-wide column for ``last_nonnull`` ordering (resolved on ``df``).
+    :param output_value: Output value column for ``last_nonnull``.
+    :param output_month_start: Output month start for ``last_nonnull``.
+    :param output_year: Output year for both aggregations where applicable.
+    :param output_month: Output month for both aggregations where applicable.
+    :param category_column: Source column for ``pivot_sum`` (resolved on ``df``).
+    :param pivot_categories: Category list for ``pivot_sum``.
+    :param fill_value: Pivot fill for ``pivot_sum``.
+    :param montant_column: Internal sum column name for pivot path.
+    :type df: ~pyspark.sql.DataFrame
+    :type id_columns: collections.abc.Sequence[str]
+    :type aggregation: Literal['last_nonnull', 'pivot_sum']
+    :type value_columns_suffix: str | None
+    :type value_columns: collections.abc.Sequence[str] | None
+    :type exclude_columns: collections.abc.Collection[str]
+    :type variable_column: str
+    :type value_column: str
+    :type month_start_column: str
+    :type month_start_from_column_name: collections.abc.Callable[[str], date | None]
+    :type order_column: str | None
+    :type output_value: str
+    :type output_month_start: str
+    :type output_year: str
+    :type output_month: str
+    :type category_column: str | None
+    :type pivot_categories: collections.abc.Sequence[str] | None
+    :type fill_value: float
+    :type montant_column: str
+
+    :returns: Aggregated dataframe per selected mode.
+    :rtype: ~pyspark.sql.DataFrame
+
+    :raises ValueError: If ``aggregation`` is unknown or required parameters are missing.
     """
     long_df = dataframe_unpivot_wide_month_suffix(
         df,

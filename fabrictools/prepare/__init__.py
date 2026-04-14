@@ -1,4 +1,9 @@
-"""Prepared-layer package API."""
+"""Prepared-layer package API (schema snapshot, column resolution, transforms, writes).
+
+Public entry points are re-exported here; see submodules
+:mod:`fabrictools.prepare.schema`, :mod:`fabrictools.prepare.resolve`,
+:mod:`fabrictools.prepare.transform`, :mod:`fabrictools.prepare.pipeline`, etc.
+"""
 
 from __future__ import annotations
 

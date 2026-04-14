@@ -1,0 +1,4 @@
+fabrictools.pipelines.config
+============================
+
+.. automodule:: fabrictools.pipelines.config

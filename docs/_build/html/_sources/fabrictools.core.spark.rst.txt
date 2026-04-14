@@ -1,0 +1,4 @@
+fabrictools.core.spark
+======================
+
+.. automodule:: fabrictools.core.spark

@@ -31,7 +31,26 @@ def clean_and_write_data(
     partition_by: Optional[list[str]] = None,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """Read, clean, enrich metadata, and write one table."""
+    """Read one Lakehouse path, clean, add Silver metadata, and write the target path.
+
+    :param source_lakehouse_name: Bronze (or source) Lakehouse name.
+    :param source_relative_path: Source ``Tables/...`` or logical path.
+    :param target_lakehouse_name: Silver (or target) Lakehouse name.
+    :param target_relative_path: Destination path for the write.
+    :param mode: Spark write mode (e.g. ``overwrite``, ``append``).
+    :param partition_by: Optional partition columns for :py:func:`fabrictools.write_lakehouse`.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type source_relative_path: str
+    :type target_lakehouse_name: str
+    :type target_relative_path: str
+    :type mode: str
+    :type partition_by: list[str] | None
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: The Silver dataframe that was written.
+    :rtype: ~pyspark.sql.DataFrame
+    """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
     cleaned_df = clean_data(source_df)
@@ -95,11 +114,35 @@ def clean_and_write_all_tables(
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
-    """Bulk clean/write orchestration with canonical table-job config parsing.
+    """Bulk clean/write (or merge) using discovery or an explicit ``tables_config``.
 
-    When ``tables_config`` is omitted, discovered targets use a ``Cleaned_`` leaf
-    name (PascalCase from the source table), e.g.
+    When ``tables_config`` is omitted, jobs are built from
+    :py:func:`fabrictools.io.discovery.list_lakehouse_tables_for_pipeline`; target
+    paths use a ``Cleaned_`` leaf (PascalCase from the source table), e.g.
     ``Tables/dbo/projets table`` → ``Tables/dbo/Cleaned_ProjetsTable``.
+
+    :param source_lakehouse_name: Lakehouse to read from.
+    :param target_lakehouse_name: Lakehouse to write or merge into.
+    :param mode: Default mode when not overridden per table (``overwrite``, ``append``, ``merge``).
+    :param partition_by: Default partition columns for writes.
+    :param tables_config: Optional list of per-table job dicts (see ``pipelines.config``).
+    :param include_schemas: Discovery filter: schema allow-list.
+    :param exclude_tables: Discovery filter: table deny-list.
+    :param continue_on_error: If ``False``, stop on first failure.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type target_lakehouse_name: str
+    :type mode: str
+    :type partition_by: list[str] | None
+    :type tables_config: list[dict] | None
+    :type include_schemas: list[str] | None
+    :type exclude_tables: list[str] | None
+    :type continue_on_error: bool
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Summary dict with ``total_tables``, ``successful_tables``, ``failed_tables``,
+        ``tables``, ``failures``.
+    :rtype: dict
     """
     _spark = spark or get_spark()
     table_jobs = _build_jobs(

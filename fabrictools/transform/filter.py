@@ -48,23 +48,22 @@ def filter_by_value_list(
     *,
     exclude: bool = True,
 ) -> DataFrame:
-    """
-    Keep or drop rows where ``column`` is in ``values``.
+    """Keep or drop rows where ``column`` is in ``values`` (no column cast).
 
-    Never casts the column. For string-like columns, compares ``trim(column)``
-    to the given values. Python ``str`` entries in ``values`` are stripped.
+    For string-like dtypes, compares ``trim(column)`` to ``values``. ``str`` entries
+    in ``values`` are stripped.
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
-    column
-        Column name to test.
-    values
-        Values for membership; types should match the column semantics.
-    exclude
-        If True (default), drop rows whose value is in ``values``.
-        If False, keep only rows whose value is in ``values``.
+    :param df: Input dataframe.
+    :param column: Logical or physical column name (resolved like :py:func:`fabrictools.resolve_dataframe_column`).
+    :param values: Membership list; non-strings kept as-is.
+    :param exclude: If ``True`` (default), drop rows in ``values``; if ``False``, keep only those rows.
+    :type df: ~pyspark.sql.DataFrame
+    :type column: str
+    :type values: collections.abc.Sequence
+    :type exclude: bool
+
+    :returns: Filtered dataframe.
+    :rtype: ~pyspark.sql.DataFrame
     """
     resolved = _resolve_column_name(df, column, side="DataFrame")
     dtype = _column_dtype(df, resolved)

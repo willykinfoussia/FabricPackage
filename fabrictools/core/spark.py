@@ -6,6 +6,10 @@ from pyspark.sql import SparkSession
 
 
 def get_spark() -> SparkSession:
-    """Return the active SparkSession, creating one if necessary."""
+    """Return the active ``SparkSession``, creating one if none exists.
+
+    :returns: Current or newly built session.
+    :rtype: ~pyspark.sql.SparkSession
+    """
     return SparkSession.builder.getOrCreate()
 

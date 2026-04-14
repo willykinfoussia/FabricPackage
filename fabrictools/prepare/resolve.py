@@ -84,6 +84,8 @@ STRICT_DAY_NAMES = {
 }
 
 class ResolvedColumn(TypedDict):
+    """One resolved source column for the prepared layer."""
+
     col_source: str
     col_prepared: str
     semantic_type: str
@@ -422,8 +424,28 @@ def resolve_columns(
     unresolved_webhook_url: Optional[str] = None,
     spark: Optional[SparkSession] = None,
 ) -> List[ResolvedColumn]:
-    """
-    Resolve source columns to prepared semantic columns through 3 cascade layers.
+    """Resolve each source column to a prepared name and ``semantic_type`` (prefix rules, profiling cache, mapping).
+
+    Layer 1: prefix rules table. Layer 2: profiling heuristics (with cache by ``schema_hash``).
+    Layer 3: explicit mapping rules. Unresolved columns are audited (and optional webhook).
+
+    :param source_lakehouse_name: Lakehouse of the source table.
+    :param source_relative_path: Source table path.
+    :param schema_hash: If ``None``, computed from the live dataframe schema.
+    :param sample_size: Row sample size for layer-2 profiling.
+    :param profiling_confidence_threshold: Minimum confidence to accept cached profiling.
+    :param unresolved_webhook_url: Optional HTTP endpoint notified for unresolved columns.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type source_relative_path: str
+    :type schema_hash: str | None
+    :type sample_size: int
+    :type profiling_confidence_threshold: float
+    :type unresolved_webhook_url: str | None
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: One :class:`fabrictools.prepare.resolve.ResolvedColumn` dict per resolved column (not every source column if some stay unresolved).
+    :rtype: list
     """
     _spark = spark or get_spark()
     df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)

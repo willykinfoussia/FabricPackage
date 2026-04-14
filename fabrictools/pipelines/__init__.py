@@ -1,4 +1,8 @@
-"""Shared pipeline contracts and helpers."""
+"""Shared pipeline contracts and helpers.
+
+Re-exports :class:`fabrictools.pipelines.config.TableJobConfig` and job builders from
+:mod:`fabrictools.pipelines.config`.
+"""
 
 from fabrictools.pipelines.config import (
     TableJobConfig,

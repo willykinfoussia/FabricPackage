@@ -1,0 +1,215 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fabrictools &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">Référence API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fabrictools</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fabrictools</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;fabrictools — PySpark helpers for Microsoft Fabric Lakehouses and Warehouses.</span>
+
+<span class="sd">This package re-exports a single flat API (see ``__all__``). Full parameter lists and</span>
+<span class="sd">behaviour are documented on the **defining modules** (and mirrored in Sphinx):</span>
+
+<span class="sd">* :mod:`fabrictools.io` — read/write/merge Lakehouse, Warehouse JDBC, discovery</span>
+<span class="sd">* :mod:`fabrictools.quality` — ``clean_data``, Silver metadata, scans, bronze→silver pipelines</span>
+<span class="sd">* :mod:`fabrictools.prepare` — prepared-layer schema, resolution, transforms, semantic publish</span>
+<span class="sd">* :mod:`fabrictools.dimensions` — date / country / city dimensions and orchestration</span>
+<span class="sd">* :mod:`fabrictools.transform` — column renames, filters, joins, wide-month reshapes</span>
+<span class="sd">* :mod:`fabrictools.pipelines` — shared bulk job config (``tables_config`` parsing)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools._version</span><span class="w"> </span><span class="kn">import</span> <span class="n">__version__</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.dimensions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">build_dimension_city</span><span class="p">,</span>
+    <span class="n">build_dimension_country</span><span class="p">,</span>
+    <span class="n">build_dimension_date</span><span class="p">,</span>
+    <span class="n">generate_dimensions</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.io.lakehouse</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">delete_all_lakehouse_tables</span><span class="p">,</span>
+    <span class="n">merge_lakehouse</span><span class="p">,</span>
+    <span class="n">read_lakehouse</span><span class="p">,</span>
+    <span class="n">write_lakehouse</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.io.warehouse</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_warehouse</span><span class="p">,</span> <span class="n">write_warehouse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.prepare</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">generate_prepared_aggregations</span><span class="p">,</span>
+    <span class="n">prepare_and_write_all_tables</span><span class="p">,</span>
+    <span class="n">prepare_and_write_data</span><span class="p">,</span>
+    <span class="n">publish_semantic_model</span><span class="p">,</span>
+    <span class="n">resolve_columns</span><span class="p">,</span>
+    <span class="n">snapshot_source_schema</span><span class="p">,</span>
+    <span class="n">transform_to_prepared</span><span class="p">,</span>
+    <span class="n">write_prepared_table</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.quality.clean</span><span class="w"> </span><span class="kn">import</span> <span class="n">add_silver_metadata</span><span class="p">,</span> <span class="n">clean_data</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.quality.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">clean_and_write_all_tables</span><span class="p">,</span>
+    <span class="n">clean_and_write_data</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.quality.scan</span><span class="w"> </span><span class="kn">import</span> <span class="n">scan_data_errors</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.transform</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">coalesce_dim</span><span class="p">,</span>
+    <span class="n">dataframe_last_nonnull_wide_month_from_long</span><span class="p">,</span>
+    <span class="n">dataframe_pivot_category_wide_month_from_long</span><span class="p">,</span>
+    <span class="n">dataframe_unpivot_wide_month_suffix</span><span class="p">,</span>
+    <span class="n">drop_rows_over_empty_percent</span><span class="p">,</span>
+    <span class="n">empty_or_null</span><span class="p">,</span>
+    <span class="n">filter_by_value_list</span><span class="p">,</span>
+    <span class="n">merge_dataframes</span><span class="p">,</span>
+    <span class="n">month_start_from_ca_monthly_col</span><span class="p">,</span>
+    <span class="n">norm_text</span><span class="p">,</span>
+    <span class="n">remove_columns</span><span class="p">,</span>
+    <span class="n">rename_columns_normalized</span><span class="p">,</span>
+    <span class="n">rename_columns_month_year_block_labels</span><span class="p">,</span>
+    <span class="n">rename_columns_pq_serial_to_dates</span><span class="p">,</span>
+    <span class="n">rename_columns_pq_serial_to_mois_annee</span><span class="p">,</span>
+    <span class="n">resolve_dataframe_column</span><span class="p">,</span>
+    <span class="n">transform_wide_month_suffix</span><span class="p">,</span>
+    <span class="n">wide_value_columns</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">_EXPORT_REGISTRY</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;read_lakehouse&quot;</span><span class="p">:</span> <span class="n">read_lakehouse</span><span class="p">,</span>
+    <span class="s2">&quot;write_lakehouse&quot;</span><span class="p">:</span> <span class="n">write_lakehouse</span><span class="p">,</span>
+    <span class="s2">&quot;merge_lakehouse&quot;</span><span class="p">:</span> <span class="n">merge_lakehouse</span><span class="p">,</span>
+    <span class="s2">&quot;delete_all_lakehouse_tables&quot;</span><span class="p">:</span> <span class="n">delete_all_lakehouse_tables</span><span class="p">,</span>
+    <span class="s2">&quot;clean_data&quot;</span><span class="p">:</span> <span class="n">clean_data</span><span class="p">,</span>
+    <span class="s2">&quot;add_silver_metadata&quot;</span><span class="p">:</span> <span class="n">add_silver_metadata</span><span class="p">,</span>
+    <span class="s2">&quot;scan_data_errors&quot;</span><span class="p">:</span> <span class="n">scan_data_errors</span><span class="p">,</span>
+    <span class="s2">&quot;clean_and_write_data&quot;</span><span class="p">:</span> <span class="n">clean_and_write_data</span><span class="p">,</span>
+    <span class="s2">&quot;clean_and_write_all_tables&quot;</span><span class="p">:</span> <span class="n">clean_and_write_all_tables</span><span class="p">,</span>
+    <span class="s2">&quot;read_warehouse&quot;</span><span class="p">:</span> <span class="n">read_warehouse</span><span class="p">,</span>
+    <span class="s2">&quot;write_warehouse&quot;</span><span class="p">:</span> <span class="n">write_warehouse</span><span class="p">,</span>
+    <span class="s2">&quot;build_dimension_date&quot;</span><span class="p">:</span> <span class="n">build_dimension_date</span><span class="p">,</span>
+    <span class="s2">&quot;build_dimension_country&quot;</span><span class="p">:</span> <span class="n">build_dimension_country</span><span class="p">,</span>
+    <span class="s2">&quot;build_dimension_city&quot;</span><span class="p">:</span> <span class="n">build_dimension_city</span><span class="p">,</span>
+    <span class="s2">&quot;generate_dimensions&quot;</span><span class="p">:</span> <span class="n">generate_dimensions</span><span class="p">,</span>
+    <span class="s2">&quot;snapshot_source_schema&quot;</span><span class="p">:</span> <span class="n">snapshot_source_schema</span><span class="p">,</span>
+    <span class="s2">&quot;resolve_columns&quot;</span><span class="p">:</span> <span class="n">resolve_columns</span><span class="p">,</span>
+    <span class="s2">&quot;transform_to_prepared&quot;</span><span class="p">:</span> <span class="n">transform_to_prepared</span><span class="p">,</span>
+    <span class="s2">&quot;write_prepared_table&quot;</span><span class="p">:</span> <span class="n">write_prepared_table</span><span class="p">,</span>
+    <span class="s2">&quot;generate_prepared_aggregations&quot;</span><span class="p">:</span> <span class="n">generate_prepared_aggregations</span><span class="p">,</span>
+    <span class="s2">&quot;publish_semantic_model&quot;</span><span class="p">:</span> <span class="n">publish_semantic_model</span><span class="p">,</span>
+    <span class="s2">&quot;prepare_and_write_data&quot;</span><span class="p">:</span> <span class="n">prepare_and_write_data</span><span class="p">,</span>
+    <span class="s2">&quot;prepare_and_write_all_tables&quot;</span><span class="p">:</span> <span class="n">prepare_and_write_all_tables</span><span class="p">,</span>
+    <span class="s2">&quot;filter_by_value_list&quot;</span><span class="p">:</span> <span class="n">filter_by_value_list</span><span class="p">,</span>
+    <span class="s2">&quot;drop_rows_over_empty_percent&quot;</span><span class="p">:</span> <span class="n">drop_rows_over_empty_percent</span><span class="p">,</span>
+    <span class="s2">&quot;merge_dataframes&quot;</span><span class="p">:</span> <span class="n">merge_dataframes</span><span class="p">,</span>
+    <span class="s2">&quot;remove_columns&quot;</span><span class="p">:</span> <span class="n">remove_columns</span><span class="p">,</span>
+    <span class="s2">&quot;rename_columns_normalized&quot;</span><span class="p">:</span> <span class="n">rename_columns_normalized</span><span class="p">,</span>
+    <span class="s2">&quot;rename_columns_pq_serial_to_dates&quot;</span><span class="p">:</span> <span class="n">rename_columns_pq_serial_to_dates</span><span class="p">,</span>
+    <span class="s2">&quot;rename_columns_pq_serial_to_mois_annee&quot;</span><span class="p">:</span> <span class="n">rename_columns_pq_serial_to_mois_annee</span><span class="p">,</span>
+    <span class="s2">&quot;rename_columns_month_year_block_labels&quot;</span><span class="p">:</span> <span class="n">rename_columns_month_year_block_labels</span><span class="p">,</span>
+    <span class="s2">&quot;month_start_from_ca_monthly_col&quot;</span><span class="p">:</span> <span class="n">month_start_from_ca_monthly_col</span><span class="p">,</span>
+    <span class="s2">&quot;resolve_dataframe_column&quot;</span><span class="p">:</span> <span class="n">resolve_dataframe_column</span><span class="p">,</span>
+    <span class="s2">&quot;wide_value_columns&quot;</span><span class="p">:</span> <span class="n">wide_value_columns</span><span class="p">,</span>
+    <span class="s2">&quot;dataframe_unpivot_wide_month_suffix&quot;</span><span class="p">:</span> <span class="n">dataframe_unpivot_wide_month_suffix</span><span class="p">,</span>
+    <span class="s2">&quot;dataframe_last_nonnull_wide_month_from_long&quot;</span><span class="p">:</span> <span class="n">dataframe_last_nonnull_wide_month_from_long</span><span class="p">,</span>
+    <span class="s2">&quot;dataframe_pivot_category_wide_month_from_long&quot;</span><span class="p">:</span> <span class="n">dataframe_pivot_category_wide_month_from_long</span><span class="p">,</span>
+    <span class="s2">&quot;transform_wide_month_suffix&quot;</span><span class="p">:</span> <span class="n">transform_wide_month_suffix</span><span class="p">,</span>
+    <span class="s2">&quot;norm_text&quot;</span><span class="p">:</span> <span class="n">norm_text</span><span class="p">,</span>
+    <span class="s2">&quot;empty_or_null&quot;</span><span class="p">:</span> <span class="n">empty_or_null</span><span class="p">,</span>
+    <span class="s2">&quot;coalesce_dim&quot;</span><span class="p">:</span> <span class="n">coalesce_dim</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_EXPORT_REGISTRY</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+<span class="k">for</span> <span class="n">_exported_function</span> <span class="ow">in</span> <span class="n">_EXPORT_REGISTRY</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+    <span class="n">_exported_function</span><span class="o">.</span><span class="vm">__module__</span> <span class="o">=</span> <span class="vm">__name__</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

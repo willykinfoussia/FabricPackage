@@ -118,35 +118,23 @@ def _log_parsed_date_sample(
 
 
 def detect_and_cast_columns(df: DataFrame) -> DataFrame:
-    """Infer primitive types from string columns and cast when the whole column is consistent.
+    """Infer primitive types from string columns and cast when the column is uniform.
 
-    Order of detection (first match wins):
+    Order of detection (first match wins): **date** (``to_date`` with multiple
+    patterns—European forms before US for ambiguous day/month), **timestamp**
+    (``to_timestamp`` with several patterns plus ISO ``T``), **integer** (full
+    string matches ``^[+-]?\\d+$``), **double** (decimal/scientific), else the
+    column remains ``string``. Columns that are all-null are skipped; null cells are
+    kept through casts.
 
-    1. **Date** — Non-null values match a date-only shape and parse with
-       ``to_date`` using, in order: ISO ``yyyy-MM-dd`` / ``yyyy/M/d``, then
-       European hyphen ``dd-MM-yyyy`` / ``d-M-yyyy``, then US hyphen
-       ``MM-dd-yyyy`` / ``M-d-yyyy``, then ``dd/MM/yyyy`` and ``d/M/yyyy``, then
-       dotted ``dd.MM.yyyy`` / ``d.M.yyyy``, then US ``MM/dd/yyyy`` /
-       ``M/d/yyyy`` and ``MM.dd.yyyy`` / ``M.d.yyyy``. European forms are tried
-       before US so ambiguous values like ``01-02-2024`` or ``01/02/2024``
-       prefer day/month/year.
-    2. **Timestamp** — Every non-null value parses with ``to_timestamp`` using,
-       in order: ``yyyy-MM-dd HH:mm:ss``, ``dd-MM-yyyy HH:mm:ss`` /
-       ``d-M-yyyy HH:mm:ss``, ``MM-dd-yyyy HH:mm:ss`` / ``M-d-yyyy HH:mm:ss``,
-       European ``dd/MM/yyyy HH:mm:ss`` / ``d/M/yyyy HH:mm:ss``, US
-       ``MM/dd/yyyy HH:mm:ss`` / ``M/d/yyyy HH:mm:ss``,
-       then ``yyyy-MM-dd'T'HH:mm:ss``.
-    3. **Integer** — All non-null values match ``^[+-]?\\d+$``.
-    4. **Double** — All non-null values match a decimal/scientific pattern
-       (including ``e`` / ``E``).
-    5. **Text** — Otherwise the column stays ``string``.
+    Sets ``spark.sql.legacy.timeParserPolicy`` to ``LEGACY`` for the duration of the
+    call and restores the previous session value afterward.
 
-    Columns that contain only nulls are left unchanged (no inferred type).
-    Null cells are preserved for any cast branch.
+    :param df: Input dataframe.
+    :type df: ~pyspark.sql.DataFrame
 
-    For the duration of this function, ``spark.sql.legacy.timeParserPolicy`` is
-    set to ``LEGACY`` so ``to_date`` / ``to_timestamp`` pattern parsing matches
-    classic Spark behavior; the previous session value is restored afterward.
+    :returns: Dataframe with qualifying string columns cast.
+    :rtype: ~pyspark.sql.DataFrame
     """
     spark = df.sparkSession
     previous_time_parser_policy = spark.conf.get(_TIME_PARSER_POLICY_KEY, None)
@@ -259,6 +247,40 @@ def add_silver_metadata(
     day_col: str = "_day",
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
+    """Add Silver-layer metadata columns (ingestion time, source path, date parts).
+
+    Resolves ``source_relative_path`` with
+    :py:func:`fabrictools.io.lakehouse.resolve_lakehouse_read_candidate`. Date
+    partition columns (``year_col`` / ``month_col`` / ``day_col``) are derived from
+    the first date/timestamp column on ``df`` (excluding ``ingestion_timestamp_col``),
+    or from ``ingestion_timestamp_col`` if none.
+
+    :param df: Bronze or intermediate dataframe.
+    :param source_lakehouse_name: Source Lakehouse display name.
+    :param source_relative_path: Source path passed to path resolution.
+    :param source_layer: Literal stored in ``source_layer_col`` (default ``bronze``).
+    :param ingestion_timestamp_col: Column name for ``current_timestamp()``.
+    :param source_layer_col: Column name for the layer literal.
+    :param source_path_col: Column name for the resolved relative path string.
+    :param year_col: Partition year column name.
+    :param month_col: Partition month column name.
+    :param day_col: Partition day-of-month column name.
+    :param spark: Optional ``SparkSession`` for path resolution.
+    :type df: ~pyspark.sql.DataFrame
+    :type source_lakehouse_name: str
+    :type source_relative_path: str
+    :type source_layer: str
+    :type ingestion_timestamp_col: str
+    :type source_layer_col: str
+    :type source_path_col: str
+    :type year_col: str
+    :type month_col: str
+    :type day_col: str
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: ``df`` with metadata and partition columns appended/overwritten.
+    :rtype: ~pyspark.sql.DataFrame
+    """
     partition_source_col = next(
         (
             field.name
@@ -300,6 +322,22 @@ def clean_data(
     drop_duplicates: bool = True,
     drop_all_null_rows: bool = True,
 ) -> DataFrame:
+    """Normalize names, trim empty strings to null, infer types, optionally dedupe.
+
+    Renames columns to unique snake_case (via internal helpers), replaces blank
+    strings with null on string columns, runs :py:func:`detect_and_cast_columns`,
+    then optionally drops duplicate rows and rows that are all-null.
+
+    :param df: Input dataframe.
+    :param drop_duplicates: If ``True``, call ``dropDuplicates()`` after cleaning.
+    :param drop_all_null_rows: If ``True``, call ``dropna(how="all")``.
+    :type df: ~pyspark.sql.DataFrame
+    :type drop_duplicates: bool
+    :type drop_all_null_rows: bool
+
+    :returns: Cleaned dataframe.
+    :rtype: ~pyspark.sql.DataFrame
+    """
     before_rows = df.count()
     before_cols = len(df.columns)
 

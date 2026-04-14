@@ -229,8 +229,19 @@ def transform_to_prepared(
     resolved_mappings: List[ResolvedColumn],
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """
-    Apply semantic casts, code labels, and date derivations in one select pass.
+    """Build the prepared projection: semantic casts, optional code labels, DATE derivations.
+
+    :param source_lakehouse_name: Lakehouse to read the source from.
+    :param source_relative_path: Source path.
+    :param resolved_mappings: Output of :py:func:`fabrictools.resolve_columns`.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type source_relative_path: str
+    :type resolved_mappings: list
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Single ``select`` result with prepared column names.
+    :rtype: ~pyspark.sql.DataFrame
     """
     _spark = spark or get_spark()
     df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
@@ -338,17 +349,28 @@ def write_prepared_table(
     vacuum_retention_hours: int = 168,
     spark: Optional[SparkSession] = None,
 ) -> None:
-    """
-    Write prepared table and run conditional Delta maintenance operations.
+    """Write ``df`` to the target Lakehouse path with heuristic Delta partitioning, then optional OPTIMIZE/VACUUM.
 
-    Partition columns are chosen so the product of COUNT DISTINCT per selected
-    column lies in [20, min(200, max_partitions_guard)], when possible. The
-    algorithm maximizes the number of partition columns, then the combined
-    cardinality (closest to the upper bound). P1 candidates are DATE-derived
-    year/month columns and YEAR/MONTH semantics; P2 are CATEGORY columns with
-    distinct count in [10, 200]. Quasi-identifiers, high-null columns, and
-    measure types are excluded. If no subset satisfies the combined range,
-    the table is written without partition columns.
+    Partition columns are chosen so the product of distinct counts lies in
+    ``[20, min(200, max_partitions_guard)]`` when possible; otherwise the write
+    omits ``partitionBy``. Maintenance (``OPTIMIZE`` / ``VACUUM``) is best-effort.
+
+    :param df: Prepared dataframe from :py:func:`fabrictools.transform_to_prepared`.
+    :param resolved_mappings: Same mappings used to build ``df`` (for partition heuristics).
+    :param target_lakehouse_name: Target Lakehouse name.
+    :param target_relative_path: Target Delta path.
+    :param mode: Spark write mode.
+    :param max_partitions_guard: Upper cap for combined partition cardinality guard.
+    :param vacuum_retention_hours: Retention passed to Delta ``VACUUM``.
+    :param spark: Optional ``SparkSession``.
+    :type df: ~pyspark.sql.DataFrame
+    :type resolved_mappings: list
+    :type target_lakehouse_name: str
+    :type target_relative_path: str
+    :type mode: str
+    :type max_partitions_guard: int
+    :type vacuum_retention_hours: int
+    :type spark: ~pyspark.sql.SparkSession | None
     """
     _spark = spark or get_spark()
     date_partitions = [

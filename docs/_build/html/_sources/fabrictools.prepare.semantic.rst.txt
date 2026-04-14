@@ -1,0 +1,4 @@
+fabrictools.prepare.semantic
+============================
+
+.. automodule:: fabrictools.prepare.semantic

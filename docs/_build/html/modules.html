@@ -1,0 +1,315 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Référence API &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API publique (import racine)" href="api_publique.html" />
+    <link rel="prev" title="FabricTools" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Référence API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_publique.html">API publique (import racine)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html">Noyau applicatif (core)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html">Dimensions (calendrier et géographie)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html">I/O Lakehouse et Warehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html">Pipelines — configuration des jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html">Couche préparée (prepared)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html">Qualité des données et pipelines Silver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html">Transformations DataFrame</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Référence API</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/modules.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="reference-api">
+<h1>Référence API<a class="headerlink" href="#reference-api" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API publique</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api_publique.html">API publique (import racine)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_publique_io.html">I/O Lakehouse et Warehouse</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_io.html#fabrictools.read_lakehouse"><code class="docutils literal notranslate"><span class="pre">read_lakehouse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_io.html#fabrictools.write_lakehouse"><code class="docutils literal notranslate"><span class="pre">write_lakehouse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_io.html#fabrictools.merge_lakehouse"><code class="docutils literal notranslate"><span class="pre">merge_lakehouse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_io.html#fabrictools.delete_all_lakehouse_tables"><code class="docutils literal notranslate"><span class="pre">delete_all_lakehouse_tables()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_io.html#fabrictools.read_warehouse"><code class="docutils literal notranslate"><span class="pre">read_warehouse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_io.html#fabrictools.write_warehouse"><code class="docutils literal notranslate"><span class="pre">write_warehouse()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api_publique_qualite.html">Qualité des données et pipelines Silver</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_qualite.html#fabrictools.clean_data"><code class="docutils literal notranslate"><span class="pre">clean_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_qualite.html#fabrictools.add_silver_metadata"><code class="docutils literal notranslate"><span class="pre">add_silver_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_qualite.html#fabrictools.scan_data_errors"><code class="docutils literal notranslate"><span class="pre">scan_data_errors()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_qualite.html#fabrictools.clean_and_write_data"><code class="docutils literal notranslate"><span class="pre">clean_and_write_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_qualite.html#fabrictools.clean_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">clean_and_write_all_tables()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api_publique_dimensions.html">Dimensions (calendrier et géographie)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_dimensions.html#fabrictools.build_dimension_date"><code class="docutils literal notranslate"><span class="pre">build_dimension_date()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_dimensions.html#fabrictools.build_dimension_country"><code class="docutils literal notranslate"><span class="pre">build_dimension_country()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_dimensions.html#fabrictools.build_dimension_city"><code class="docutils literal notranslate"><span class="pre">build_dimension_city()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_dimensions.html#fabrictools.generate_dimensions"><code class="docutils literal notranslate"><span class="pre">generate_dimensions()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api_publique_prepare.html">Couche préparée (prepared)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.snapshot_source_schema"><code class="docutils literal notranslate"><span class="pre">snapshot_source_schema()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.resolve_columns"><code class="docutils literal notranslate"><span class="pre">resolve_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.transform_to_prepared"><code class="docutils literal notranslate"><span class="pre">transform_to_prepared()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.write_prepared_table"><code class="docutils literal notranslate"><span class="pre">write_prepared_table()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.generate_prepared_aggregations"><code class="docutils literal notranslate"><span class="pre">generate_prepared_aggregations()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.publish_semantic_model"><code class="docutils literal notranslate"><span class="pre">publish_semantic_model()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.prepare_and_write_data"><code class="docutils literal notranslate"><span class="pre">prepare_and_write_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_prepare.html#fabrictools.prepare_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">prepare_and_write_all_tables()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api_publique_transform.html">Transformations DataFrame</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.filter_by_value_list"><code class="docutils literal notranslate"><span class="pre">filter_by_value_list()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.drop_rows_over_empty_percent"><code class="docutils literal notranslate"><span class="pre">drop_rows_over_empty_percent()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.merge_dataframes"><code class="docutils literal notranslate"><span class="pre">merge_dataframes()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.remove_columns"><code class="docutils literal notranslate"><span class="pre">remove_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.rename_columns_normalized"><code class="docutils literal notranslate"><span class="pre">rename_columns_normalized()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.rename_columns_pq_serial_to_dates"><code class="docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_dates()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.rename_columns_pq_serial_to_mois_annee"><code class="docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_mois_annee()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.rename_columns_month_year_block_labels"><code class="docutils literal notranslate"><span class="pre">rename_columns_month_year_block_labels()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.month_start_from_ca_monthly_col"><code class="docutils literal notranslate"><span class="pre">month_start_from_ca_monthly_col()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.resolve_dataframe_column"><code class="docutils literal notranslate"><span class="pre">resolve_dataframe_column()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.wide_value_columns"><code class="docutils literal notranslate"><span class="pre">wide_value_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.dataframe_unpivot_wide_month_suffix"><code class="docutils literal notranslate"><span class="pre">dataframe_unpivot_wide_month_suffix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.dataframe_last_nonnull_wide_month_from_long"><code class="docutils literal notranslate"><span class="pre">dataframe_last_nonnull_wide_month_from_long()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.dataframe_pivot_category_wide_month_from_long"><code class="docutils literal notranslate"><span class="pre">dataframe_pivot_category_wide_month_from_long()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.transform_wide_month_suffix"><code class="docutils literal notranslate"><span class="pre">transform_wide_month_suffix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.norm_text"><code class="docutils literal notranslate"><span class="pre">norm_text()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.empty_or_null"><code class="docutils literal notranslate"><span class="pre">empty_or_null()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_publique_transform.html#fabrictools.coalesce_dim"><code class="docutils literal notranslate"><span class="pre">coalesce_dim()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Implémentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.core.html">Noyau applicatif (core)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.logging.log"><code class="docutils literal notranslate"><span class="pre">log()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.paths.build_lakehouse_read_path_candidates"><code class="docutils literal notranslate"><span class="pre">build_lakehouse_read_path_candidates()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.paths.build_lakehouse_write_path"><code class="docutils literal notranslate"><span class="pre">build_lakehouse_write_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.paths.get_lakehouse_abfs_path"><code class="docutils literal notranslate"><span class="pre">get_lakehouse_abfs_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.paths.get_warehouse_jdbc_url"><code class="docutils literal notranslate"><span class="pre">get_warehouse_jdbc_url()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.spark.get_spark"><code class="docutils literal notranslate"><span class="pre">get_spark()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.build_lakehouse_read_path_candidates"><code class="docutils literal notranslate"><span class="pre">build_lakehouse_read_path_candidates()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.build_lakehouse_write_path"><code class="docutils literal notranslate"><span class="pre">build_lakehouse_write_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.get_lakehouse_abfs_path"><code class="docutils literal notranslate"><span class="pre">get_lakehouse_abfs_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.get_spark"><code class="docutils literal notranslate"><span class="pre">get_spark()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.get_warehouse_jdbc_url"><code class="docutils literal notranslate"><span class="pre">get_warehouse_jdbc_url()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html#fabrictools.core.log"><code class="docutils literal notranslate"><span class="pre">log()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.dimensions.html">Dimensions (calendrier et géographie)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.date.build_dimension_date"><code class="docutils literal notranslate"><span class="pre">build_dimension_date()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.geo.build_dimension_city"><code class="docutils literal notranslate"><span class="pre">build_dimension_city()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.geo.build_dimension_country"><code class="docutils literal notranslate"><span class="pre">build_dimension_country()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.pipeline.generate_dimensions"><code class="docutils literal notranslate"><span class="pre">generate_dimensions()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.build_dimension_city"><code class="docutils literal notranslate"><span class="pre">build_dimension_city()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.build_dimension_country"><code class="docutils literal notranslate"><span class="pre">build_dimension_country()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.build_dimension_date"><code class="docutils literal notranslate"><span class="pre">build_dimension_date()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html#fabrictools.dimensions.generate_dimensions"><code class="docutils literal notranslate"><span class="pre">generate_dimensions()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.io.html">I/O Lakehouse et Warehouse</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.discovery.filter_pipeline_discovered_tables"><code class="docutils literal notranslate"><span class="pre">filter_pipeline_discovered_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.discovery.get_fs_entry_name"><code class="docutils literal notranslate"><span class="pre">get_fs_entry_name()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.discovery.list_lakehouse_tables"><code class="docutils literal notranslate"><span class="pre">list_lakehouse_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.discovery.list_lakehouse_tables_for_pipeline"><code class="docutils literal notranslate"><span class="pre">list_lakehouse_tables_for_pipeline()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.delete_all_lakehouse_tables"><code class="docutils literal notranslate"><span class="pre">delete_all_lakehouse_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.merge_lakehouse"><code class="docutils literal notranslate"><span class="pre">merge_lakehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.read_lakehouse"><code class="docutils literal notranslate"><span class="pre">read_lakehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.resolve_lakehouse_read_candidate"><code class="docutils literal notranslate"><span class="pre">resolve_lakehouse_read_candidate()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.write_lakehouse"><code class="docutils literal notranslate"><span class="pre">write_lakehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.warehouse.read_warehouse"><code class="docutils literal notranslate"><span class="pre">read_warehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.warehouse.write_warehouse"><code class="docutils literal notranslate"><span class="pre">write_warehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.delete_all_lakehouse_tables"><code class="docutils literal notranslate"><span class="pre">delete_all_lakehouse_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.filter_pipeline_discovered_tables"><code class="docutils literal notranslate"><span class="pre">filter_pipeline_discovered_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.list_lakehouse_tables"><code class="docutils literal notranslate"><span class="pre">list_lakehouse_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.list_lakehouse_tables_for_pipeline"><code class="docutils literal notranslate"><span class="pre">list_lakehouse_tables_for_pipeline()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.merge_lakehouse"><code class="docutils literal notranslate"><span class="pre">merge_lakehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.read_lakehouse"><code class="docutils literal notranslate"><span class="pre">read_lakehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.read_warehouse"><code class="docutils literal notranslate"><span class="pre">read_warehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.resolve_lakehouse_read_candidate"><code class="docutils literal notranslate"><span class="pre">resolve_lakehouse_read_candidate()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.write_lakehouse"><code class="docutils literal notranslate"><span class="pre">write_lakehouse()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html#fabrictools.io.write_warehouse"><code class="docutils literal notranslate"><span class="pre">write_warehouse()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.pipelines.html">Pipelines — configuration des jobs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig"><code class="docutils literal notranslate"><span class="pre">TableJobConfig</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig.merge_condition"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.merge_condition</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig.mode"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.mode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig.partition_by"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.partition_by</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig.source_relative_path"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.source_relative_path</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig.target_relative_path"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.target_relative_path</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.build_table_jobs_from_config"><code class="docutils literal notranslate"><span class="pre">build_table_jobs_from_config()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.config.build_table_jobs_from_discovery"><code class="docutils literal notranslate"><span class="pre">build_table_jobs_from_discovery()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.TableJobConfig"><code class="docutils literal notranslate"><span class="pre">TableJobConfig</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.TableJobConfig.merge_condition"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.merge_condition</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.TableJobConfig.mode"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.mode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.TableJobConfig.partition_by"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.partition_by</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.TableJobConfig.source_relative_path"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.source_relative_path</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.TableJobConfig.target_relative_path"><code class="docutils literal notranslate"><span class="pre">TableJobConfig.target_relative_path</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.build_table_jobs_from_config"><code class="docutils literal notranslate"><span class="pre">build_table_jobs_from_config()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html#fabrictools.pipelines.build_table_jobs_from_discovery"><code class="docutils literal notranslate"><span class="pre">build_table_jobs_from_discovery()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.prepare.html">Couche préparée (prepared)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.aggregations.generate_prepared_aggregations"><code class="docutils literal notranslate"><span class="pre">generate_prepared_aggregations()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.pipeline.prepare_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">prepare_and_write_all_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.pipeline.prepare_and_write_data"><code class="docutils literal notranslate"><span class="pre">prepare_and_write_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.resolve.resolve_columns"><code class="docutils literal notranslate"><span class="pre">resolve_columns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.schema.snapshot_source_schema"><code class="docutils literal notranslate"><span class="pre">snapshot_source_schema()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.semantic.publish_semantic_model"><code class="docutils literal notranslate"><span class="pre">publish_semantic_model()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.transform.transform_to_prepared"><code class="docutils literal notranslate"><span class="pre">transform_to_prepared()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.transform.write_prepared_table"><code class="docutils literal notranslate"><span class="pre">write_prepared_table()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.generate_prepared_aggregations"><code class="docutils literal notranslate"><span class="pre">generate_prepared_aggregations()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.prepare_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">prepare_and_write_all_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.prepare_and_write_data"><code class="docutils literal notranslate"><span class="pre">prepare_and_write_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.publish_semantic_model"><code class="docutils literal notranslate"><span class="pre">publish_semantic_model()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.resolve_columns"><code class="docutils literal notranslate"><span class="pre">resolve_columns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.snapshot_source_schema"><code class="docutils literal notranslate"><span class="pre">snapshot_source_schema()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.transform_to_prepared"><code class="docutils literal notranslate"><span class="pre">transform_to_prepared()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html#fabrictools.prepare.write_prepared_table"><code class="docutils literal notranslate"><span class="pre">write_prepared_table()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.quality.html">Qualité des données et pipelines Silver</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.clean.add_silver_metadata"><code class="docutils literal notranslate"><span class="pre">add_silver_metadata()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.clean.clean_data"><code class="docutils literal notranslate"><span class="pre">clean_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.clean.detect_and_cast_columns"><code class="docutils literal notranslate"><span class="pre">detect_and_cast_columns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.pipeline.clean_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">clean_and_write_all_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.pipeline.clean_and_write_data"><code class="docutils literal notranslate"><span class="pre">clean_and_write_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.scan.scan_data_errors"><code class="docutils literal notranslate"><span class="pre">scan_data_errors()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.add_silver_metadata"><code class="docutils literal notranslate"><span class="pre">add_silver_metadata()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.clean_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">clean_and_write_all_tables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.clean_and_write_data"><code class="docutils literal notranslate"><span class="pre">clean_and_write_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.clean_data"><code class="docutils literal notranslate"><span class="pre">clean_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html#fabrictools.quality.scan_data_errors"><code class="docutils literal notranslate"><span class="pre">scan_data_errors()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fabrictools.transform.html">Transformations DataFrame</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.coalesce_dim"><code class="docutils literal notranslate"><span class="pre">coalesce_dim()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.dataframe_last_nonnull_wide_month_from_long"><code class="docutils literal notranslate"><span class="pre">dataframe_last_nonnull_wide_month_from_long()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.dataframe_pivot_category_wide_month_from_long"><code class="docutils literal notranslate"><span class="pre">dataframe_pivot_category_wide_month_from_long()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.dataframe_unpivot_wide_month_suffix"><code class="docutils literal notranslate"><span class="pre">dataframe_unpivot_wide_month_suffix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.drop_rows_over_empty_percent"><code class="docutils literal notranslate"><span class="pre">drop_rows_over_empty_percent()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.empty_or_null"><code class="docutils literal notranslate"><span class="pre">empty_or_null()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.filter_by_value_list"><code class="docutils literal notranslate"><span class="pre">filter_by_value_list()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.merge_dataframes"><code class="docutils literal notranslate"><span class="pre">merge_dataframes()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.month_start_from_ca_monthly_col"><code class="docutils literal notranslate"><span class="pre">month_start_from_ca_monthly_col()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.norm_text"><code class="docutils literal notranslate"><span class="pre">norm_text()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.remove_columns"><code class="docutils literal notranslate"><span class="pre">remove_columns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.rename_columns_month_year_block_labels"><code class="docutils literal notranslate"><span class="pre">rename_columns_month_year_block_labels()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.rename_columns_normalized"><code class="docutils literal notranslate"><span class="pre">rename_columns_normalized()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.rename_columns_pq_serial_to_dates"><code class="docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_dates()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.rename_columns_pq_serial_to_mois_annee"><code class="docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_mois_annee()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.resolve_dataframe_column"><code class="docutils literal notranslate"><span class="pre">resolve_dataframe_column()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.transform_wide_month_suffix"><code class="docutils literal notranslate"><span class="pre">transform_wide_month_suffix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html#fabrictools.transform.wide_value_columns"><code class="docutils literal notranslate"><span class="pre">wide_value_columns()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="FabricTools" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="api_publique.html" class="btn btn-neutral float-right" title="API publique (import racine)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

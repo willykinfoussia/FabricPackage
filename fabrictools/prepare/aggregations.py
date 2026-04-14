@@ -45,21 +45,25 @@ def generate_prepared_aggregations(
     resolved_mappings: List[ResolvedColumn],
     spark: Optional[SparkSession] = None,
 ) -> dict[str, str]:
-    """
-    Generate default prepared aggregations and write them to target lakehouse.
+    """Build and write three default aggregation tables next to the prepared table.
 
-    Three tables are written:
+    Writes ``prepared_agg_day``, ``prepared_agg_week``, and ``prepared_agg_region`` under
+    a sibling folder derived from ``target_relative_path``. Heuristics pick temporal
+    and categorical dimensions from ``resolved_mappings`` and column names.
 
-    - ``prepared_agg_day``: groups by the first DAY column if present, otherwise
-      the first DATE column, plus the CATEGORY column with lowest distinct count.
-    - ``prepared_agg_week``: groups by the first available of: MONTH column,
-      ``{day}_week_number`` (if present), ``{date}_week_number`` as fallback when
-      only DATE-derived week columns exist in the prepared table, YEAR column,
-      or no dimensions (global sums).
-    - ``prepared_agg_region``: groups by the first CATEGORY whose name suggests
-      geography (keyword match in mapping order), else the lowest-cardinality
-      CATEGORY under 50 distinct values, else lowest-cardinality CATEGORY overall,
-      or no dimensions if there are no categories.
+    :param source_lakehouse_name: Lakehouse name (used for reads if needed).
+    :param target_lakehouse_name: Lakehouse where the prepared table and aggs are stored.
+    :param target_relative_path: Path to the main prepared Delta table.
+    :param resolved_mappings: Column resolution rows from :py:func:`fabrictools.resolve_columns`.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type target_lakehouse_name: str
+    :type target_relative_path: str
+    :type resolved_mappings: list
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Map of logical aggregation name to written relative path.
+    :rtype: dict[str, str]
     """
     _spark = spark or get_spark()
     prepared_df = read_lakehouse(target_lakehouse_name, target_relative_path, spark=_spark)

@@ -1,0 +1,355 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fabrictools.pipelines.config &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules.html">Référence API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fabrictools.pipelines.config</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fabrictools.pipelines.config</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Canonical table-job parsing for bulk pipelines.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">unicodedata</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">TypedDict</span>
+
+
+<div class="viewcode-block" id="TableJobConfig">
+<a class="viewcode-back" href="../../../fabrictools.pipelines.html#fabrictools.pipelines.config.TableJobConfig">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TableJobConfig</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Canonical keys for one bulk pipeline table job.&quot;&quot;&quot;</span>
+
+    <span class="n">source_relative_path</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">target_relative_path</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">partition_by</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span>
+    <span class="n">merge_condition</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span></div>
+
+
+
+<span class="n">_TECHNICAL_TABLE_PREFIXES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;dimension_&quot;</span><span class="p">,</span> <span class="s2">&quot;fact_&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pick_first_non_empty</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">keys</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_pascal_case_identifier</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">normalized_value</span> <span class="o">=</span> <span class="n">unicodedata</span><span class="o">.</span><span class="n">normalize</span><span class="p">(</span><span class="s2">&quot;NFKD&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="n">ascii_value</span> <span class="o">=</span> <span class="n">normalized_value</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;ascii&quot;</span><span class="p">,</span> <span class="s2">&quot;ignore&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;ascii&quot;</span><span class="p">)</span>
+    <span class="n">tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">token</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^0-9A-Za-z]+&quot;</span><span class="p">,</span> <span class="n">ascii_value</span><span class="p">)</span> <span class="k">if</span> <span class="n">token</span><span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token</span><span class="p">[:</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">+</span> <span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_strip_technical_table_prefix</span><span class="p">(</span><span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">lowered</span> <span class="o">=</span> <span class="n">table_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">_TECHNICAL_TABLE_PREFIXES</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">lowered</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">table_name</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">prefix</span><span class="p">):]</span>
+    <span class="k">return</span> <span class="n">table_name</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_business_target_relative_path</span><span class="p">(</span>
+    <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">cleaned_table_prefix</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Derive a Lakehouse table path from a source path (same folders, new leaf).</span>
+
+<span class="sd">    By default the leaf is PascalCase from the source table name. When</span>
+<span class="sd">    ``cleaned_table_prefix`` is ``True`` (Silver / cleaned outputs), the leaf is</span>
+<span class="sd">    ``Cleaned_`` + that PascalCase, e.g. ``Tables/dbo/projets table`` →</span>
+<span class="sd">    ``Tables/dbo/Cleaned_ProjetsTable``.</span>
+
+<span class="sd">    :param relative_path: Source ``Tables/...`` path.</span>
+<span class="sd">    :param cleaned_table_prefix: If ``True``, enforce ``Cleaned_`` prefix on the leaf.</span>
+<span class="sd">    :type relative_path: str</span>
+<span class="sd">    :type cleaned_table_prefix: bool</span>
+
+<span class="sd">    :returns: Target relative path string.</span>
+<span class="sd">    :rtype: str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">segment</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">relative_path</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">segment</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">parts</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">relative_path</span>
+
+    <span class="n">table_segment</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">stripped_name</span> <span class="o">=</span> <span class="n">_strip_technical_table_prefix</span><span class="p">(</span><span class="n">table_segment</span><span class="p">)</span>
+    <span class="n">business_table_name</span> <span class="o">=</span> <span class="n">_to_pascal_case_identifier</span><span class="p">(</span><span class="n">stripped_name</span><span class="p">)</span>
+    <span class="n">pascal_table</span> <span class="o">=</span> <span class="n">business_table_name</span> <span class="ow">or</span> <span class="n">_to_pascal_case_identifier</span><span class="p">(</span><span class="n">table_segment</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">cleaned_table_prefix</span><span class="p">:</span>
+        <span class="n">final_segment</span> <span class="o">=</span> <span class="n">pascal_table</span> <span class="ow">or</span> <span class="n">table_segment</span>
+        <span class="n">lower</span> <span class="o">=</span> <span class="n">final_segment</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">lower</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;cleaned_&quot;</span><span class="p">):</span>
+            <span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">final_segment</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Cleaned_</span><span class="si">{</span><span class="n">final_segment</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">business_table_name</span> <span class="ow">or</span> <span class="n">table_segment</span>
+    <span class="k">return</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="build_table_jobs_from_config">
+<a class="viewcode-back" href="../../../fabrictools.pipelines.html#fabrictools.pipelines.config.build_table_jobs_from_config">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_table_jobs_from_config</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">tables_config</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">default_mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">default_partition_by</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">supported_modes</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">source_keys</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;source_relative_path&quot;</span><span class="p">,</span> <span class="s2">&quot;source_path&quot;</span><span class="p">,</span> <span class="s2">&quot;source_table&quot;</span><span class="p">,</span> <span class="s2">&quot;bronze_path&quot;</span><span class="p">),</span>
+    <span class="n">target_keys</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;target_relative_path&quot;</span><span class="p">,</span> <span class="s2">&quot;target_path&quot;</span><span class="p">,</span> <span class="s2">&quot;target_table&quot;</span><span class="p">,</span> <span class="s2">&quot;prepared_table&quot;</span><span class="p">,</span> <span class="s2">&quot;silver_table&quot;</span><span class="p">),</span>
+    <span class="n">require_target</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">require_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">allow_merge_condition</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">cleaned_table_prefix</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">TableJobConfig</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize heterogeneous ``tables_config`` dicts into :class:`TableJobConfig` rows.</span>
+
+<span class="sd">    :param tables_config: Per-table configuration dicts.</span>
+<span class="sd">    :param default_mode: Mode used when an entry omits ``mode`` (unless ``require_mode``).</span>
+<span class="sd">    :param default_partition_by: Default ``partition_by`` when omitted per entry.</span>
+<span class="sd">    :param supported_modes: Allowed mode strings (e.g. ``overwrite``, ``append``, ``merge``).</span>
+<span class="sd">    :param source_keys: Keys tried in order to read the source path.</span>
+<span class="sd">    :param target_keys: Keys tried in order to read the target path.</span>
+<span class="sd">    :param require_target: If ``True``, each entry must specify a target key.</span>
+<span class="sd">    :param require_mode: If ``True``, each entry must include ``mode``.</span>
+<span class="sd">    :param allow_merge_condition: If ``True``, parse ``merge_condition`` and require it for ``merge``.</span>
+<span class="sd">    :param cleaned_table_prefix: Passed to target path derivation when target is inferred.</span>
+<span class="sd">    :type tables_config: list[dict]</span>
+<span class="sd">    :type default_mode: str</span>
+<span class="sd">    :type default_partition_by: list[str] | None</span>
+<span class="sd">    :type supported_modes: set[str]</span>
+<span class="sd">    :type source_keys: tuple[str, ...]</span>
+<span class="sd">    :type target_keys: tuple[str, ...]</span>
+<span class="sd">    :type require_target: bool</span>
+<span class="sd">    :type require_mode: bool</span>
+<span class="sd">    :type allow_merge_condition: bool</span>
+<span class="sd">    :type cleaned_table_prefix: bool</span>
+
+<span class="sd">    :returns: List of normalized job dicts.</span>
+<span class="sd">    :rtype: list</span>
+
+<span class="sd">    :raises ValueError: On invalid entries, unsupported modes, or missing merge condition.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">jobs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TableJobConfig</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">table_config</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tables_config</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">table_config</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] must be a dict, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">table_config</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">source_relative_path</span> <span class="o">=</span> <span class="n">_pick_first_non_empty</span><span class="p">(</span><span class="n">table_config</span><span class="p">,</span> <span class="n">source_keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">source_relative_path</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] is missing a source path key.&quot;</span><span class="p">)</span>
+
+        <span class="n">target_relative_path</span> <span class="o">=</span> <span class="n">_pick_first_non_empty</span><span class="p">(</span><span class="n">table_config</span><span class="p">,</span> <span class="n">target_keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">target_relative_path</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">require_target</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] is missing a target path key.&quot;</span><span class="p">)</span>
+            <span class="n">target_relative_path</span> <span class="o">=</span> <span class="n">_to_business_target_relative_path</span><span class="p">(</span>
+                <span class="n">source_relative_path</span><span class="p">,</span> <span class="n">cleaned_table_prefix</span><span class="o">=</span><span class="n">cleaned_table_prefix</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">require_mode</span><span class="p">:</span>
+            <span class="n">mode_value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">table_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mode&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">mode_value</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] is missing required key &#39;mode&#39;.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">mode_value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">table_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mode&quot;</span><span class="p">,</span> <span class="n">default_mode</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">mode_value</span><span class="p">:</span>
+                <span class="n">mode_value</span> <span class="o">=</span> <span class="n">default_mode</span>
+
+        <span class="k">if</span> <span class="n">mode_value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">supported_modes</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] has unsupported mode &#39;</span><span class="si">{</span><span class="n">mode_value</span><span class="si">}</span><span class="s2">&#39;. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Supported modes: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">supported_modes</span><span class="p">))</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="s2">&quot;partition_by&quot;</span> <span class="ow">in</span> <span class="n">table_config</span><span class="p">:</span>
+            <span class="n">raw_partition</span> <span class="o">=</span> <span class="n">table_config</span><span class="p">[</span><span class="s2">&quot;partition_by&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">raw_partition</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">partition_by</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw_partition</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">partition_by</span> <span class="o">=</span> <span class="n">raw_partition</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] key &#39;partition_by&#39; must be a list or None.&quot;</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">partition_by</span> <span class="o">=</span> <span class="n">default_partition_by</span>
+
+        <span class="n">merge_condition</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">allow_merge_condition</span><span class="p">:</span>
+            <span class="n">raw_merge_condition</span> <span class="o">=</span> <span class="n">table_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;merge_condition&quot;</span><span class="p">)</span>
+            <span class="n">merge_condition</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">raw_merge_condition</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">raw_merge_condition</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="k">else</span> <span class="kc">None</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">mode_value</span> <span class="o">==</span> <span class="s2">&quot;merge&quot;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">merge_condition</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;tables_config[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">] mode=&#39;merge&#39; requires &#39;merge_condition&#39;.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="n">jobs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">TableJobConfig</span><span class="p">(</span>
+                <span class="n">source_relative_path</span><span class="o">=</span><span class="n">source_relative_path</span><span class="p">,</span>
+                <span class="n">target_relative_path</span><span class="o">=</span><span class="n">target_relative_path</span><span class="p">,</span>
+                <span class="n">mode</span><span class="o">=</span><span class="n">mode_value</span><span class="p">,</span>
+                <span class="n">partition_by</span><span class="o">=</span><span class="n">partition_by</span><span class="p">,</span>
+                <span class="n">merge_condition</span><span class="o">=</span><span class="n">merge_condition</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">jobs</span></div>
+
+
+
+<div class="viewcode-block" id="build_table_jobs_from_discovery">
+<a class="viewcode-back" href="../../../fabrictools.pipelines.html#fabrictools.pipelines.config.build_table_jobs_from_discovery">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_table_jobs_from_discovery</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">source_lakehouse_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">discover_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
+    <span class="n">include_schemas</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
+    <span class="n">exclude_tables</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">partition_by</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">cleaned_table_prefix</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">TableJobConfig</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build :class:`TableJobConfig` rows by listing tables then deriving target paths.</span>
+
+<span class="sd">    :param source_lakehouse_name: Lakehouse passed to ``discover_fn``.</span>
+<span class="sd">    :param discover_fn: Callable like :py:func:`fabrictools.io.discovery.list_lakehouse_tables_for_pipeline`.</span>
+<span class="sd">    :param include_schemas: Forwarded to ``discover_fn``.</span>
+<span class="sd">    :param exclude_tables: Forwarded to ``discover_fn``.</span>
+<span class="sd">    :param mode: Write mode for every generated job.</span>
+<span class="sd">    :param partition_by: Optional partition columns for every job.</span>
+<span class="sd">    :param cleaned_table_prefix: When ``True``, target leaf uses ``Cleaned_`` prefix logic.</span>
+<span class="sd">    :type source_lakehouse_name: str</span>
+<span class="sd">    :type discover_fn: collections.abc.Callable</span>
+<span class="sd">    :type include_schemas: list[str] | None</span>
+<span class="sd">    :type exclude_tables: list[str] | None</span>
+<span class="sd">    :type mode: str</span>
+<span class="sd">    :type partition_by: list[str] | None</span>
+<span class="sd">    :type cleaned_table_prefix: bool</span>
+
+<span class="sd">    :returns: One job per discovered relative path.</span>
+<span class="sd">    :rtype: list</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">discovered</span> <span class="o">=</span> <span class="n">discover_fn</span><span class="p">(</span>
+        <span class="n">lakehouse_name</span><span class="o">=</span><span class="n">source_lakehouse_name</span><span class="p">,</span>
+        <span class="n">include_schemas</span><span class="o">=</span><span class="n">include_schemas</span><span class="p">,</span>
+        <span class="n">exclude_tables</span><span class="o">=</span><span class="n">exclude_tables</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="n">TableJobConfig</span><span class="p">(</span>
+            <span class="n">source_relative_path</span><span class="o">=</span><span class="n">relative_path</span><span class="p">,</span>
+            <span class="n">target_relative_path</span><span class="o">=</span><span class="n">_to_business_target_relative_path</span><span class="p">(</span>
+                <span class="n">relative_path</span><span class="p">,</span> <span class="n">cleaned_table_prefix</span><span class="o">=</span><span class="n">cleaned_table_prefix</span>
+            <span class="p">),</span>
+            <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
+            <span class="n">partition_by</span><span class="o">=</span><span class="n">partition_by</span><span class="p">,</span>
+            <span class="n">merge_condition</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">relative_path</span> <span class="ow">in</span> <span class="n">discovered</span>
+    <span class="p">]</span></div>
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

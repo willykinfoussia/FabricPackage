@@ -1,0 +1,4 @@
+fabrictools.prepare.aggregations
+================================
+
+.. automodule:: fabrictools.prepare.aggregations

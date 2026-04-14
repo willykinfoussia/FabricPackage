@@ -1,0 +1,4 @@
+fabrictools.prepare.schema
+==========================
+
+.. automodule:: fabrictools.prepare.schema

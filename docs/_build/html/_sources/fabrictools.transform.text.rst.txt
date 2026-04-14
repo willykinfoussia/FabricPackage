@@ -1,0 +1,4 @@
+fabrictools.transform.text
+==========================
+
+.. automodule:: fabrictools.transform.text

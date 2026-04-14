@@ -1,0 +1,4 @@
+fabrictools.io.discovery
+========================
+
+.. automodule:: fabrictools.io.discovery

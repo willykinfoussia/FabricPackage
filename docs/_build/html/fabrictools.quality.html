@@ -1,0 +1,442 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qualité des données et pipelines Silver &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Transformations DataFrame" href="fabrictools.transform.html" />
+    <link rel="prev" title="Couche préparée (prepared)" href="fabrictools.prepare.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">Référence API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="api_publique.html">API publique (import racine)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html">Noyau applicatif (core)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html">Dimensions (calendrier et géographie)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html">I/O Lakehouse et Warehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html">Pipelines — configuration des jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html">Couche préparée (prepared)</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Qualité des données et pipelines Silver</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.clean.add_silver_metadata"><code class="docutils literal notranslate"><span class="pre">add_silver_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.clean.clean_data"><code class="docutils literal notranslate"><span class="pre">clean_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.clean.detect_and_cast_columns"><code class="docutils literal notranslate"><span class="pre">detect_and_cast_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.pipeline.clean_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">clean_and_write_all_tables()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.pipeline.clean_and_write_data"><code class="docutils literal notranslate"><span class="pre">clean_and_write_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.scan.scan_data_errors"><code class="docutils literal notranslate"><span class="pre">scan_data_errors()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.add_silver_metadata"><code class="docutils literal notranslate"><span class="pre">add_silver_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.clean_and_write_all_tables"><code class="docutils literal notranslate"><span class="pre">clean_and_write_all_tables()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.clean_and_write_data"><code class="docutils literal notranslate"><span class="pre">clean_and_write_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.clean_data"><code class="docutils literal notranslate"><span class="pre">clean_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.quality.scan_data_errors"><code class="docutils literal notranslate"><span class="pre">scan_data_errors()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html">Transformations DataFrame</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">Référence API</a></li>
+      <li class="breadcrumb-item active">Qualité des données et pipelines Silver</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/fabrictools.quality.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fabrictools.quality.clean">
+<span id="qualite-des-donnees-et-pipelines-silver"></span><h1>Qualité des données et pipelines Silver<a class="headerlink" href="#module-fabrictools.quality.clean" title="Link to this heading"></a></h1>
+<p>Pure DataFrame cleaning helpers.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.clean.add_silver_metadata">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.clean.</span></span><span class="sig-name descname"><span class="pre">add_silver_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_relative_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'bronze'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ingestion_timestamp_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_ingestion_timestamp'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_layer_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_source_layer'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_path_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_source_path'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">year_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_year'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_month'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_day'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.SparkSession</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.quality.clean.add_silver_metadata" title="Link to this definition"></a></dt>
+<dd><p>Add Silver-layer metadata columns (ingestion time, source path, date parts).</p>
+<p>Resolves <code class="docutils literal notranslate"><span class="pre">source_relative_path</span></code> with
+<a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.resolve_lakehouse_read_candidate" title="fabrictools.io.lakehouse.resolve_lakehouse_read_candidate"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.io.lakehouse.resolve_lakehouse_read_candidate()</span></code></a>. Date
+partition columns (<code class="docutils literal notranslate"><span class="pre">year_col</span></code> / <code class="docutils literal notranslate"><span class="pre">month_col</span></code> / <code class="docutils literal notranslate"><span class="pre">day_col</span></code>) are derived from
+the first date/timestamp column on <code class="docutils literal notranslate"><span class="pre">df</span></code> (excluding <code class="docutils literal notranslate"><span class="pre">ingestion_timestamp_col</span></code>),
+or from <code class="docutils literal notranslate"><span class="pre">ingestion_timestamp_col</span></code> if none.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Bronze or intermediate dataframe.</p></li>
+<li><p><strong>source_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Source Lakehouse display name.</p></li>
+<li><p><strong>source_relative_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Source path passed to path resolution.</p></li>
+<li><p><strong>source_layer</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Literal stored in <code class="docutils literal notranslate"><span class="pre">source_layer_col</span></code> (default <code class="docutils literal notranslate"><span class="pre">bronze</span></code>).</p></li>
+<li><p><strong>ingestion_timestamp_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name for <code class="docutils literal notranslate"><span class="pre">current_timestamp()</span></code>.</p></li>
+<li><p><strong>source_layer_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name for the layer literal.</p></li>
+<li><p><strong>source_path_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name for the resolved relative path string.</p></li>
+<li><p><strong>year_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Partition year column name.</p></li>
+<li><p><strong>month_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Partition month column name.</p></li>
+<li><p><strong>day_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Partition day-of-month column name.</p></li>
+<li><p><strong>spark</strong> (<em>SparkSession</em><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">SparkSession</span></code> for path resolution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">df</span></code> with metadata and partition columns appended/overwritten.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.clean.clean_data">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.clean.</span></span><span class="sig-name descname"><span class="pre">clean_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_duplicates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_all_null_rows</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.quality.clean.clean_data" title="Link to this definition"></a></dt>
+<dd><p>Normalize names, trim empty strings to null, infer types, optionally dedupe.</p>
+<p>Renames columns to unique snake_case (via internal helpers), replaces blank
+strings with null on string columns, runs <a class="reference internal" href="#fabrictools.quality.clean.detect_and_cast_columns" title="fabrictools.quality.clean.detect_and_cast_columns"><code class="xref py py-func docutils literal notranslate"><span class="pre">detect_and_cast_columns()</span></code></a>,
+then optionally drops duplicate rows and rows that are all-null.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>drop_duplicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, call <code class="docutils literal notranslate"><span class="pre">dropDuplicates()</span></code> after cleaning.</p></li>
+<li><p><strong>drop_all_null_rows</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, call <code class="docutils literal notranslate"><span class="pre">dropna(how=&quot;all&quot;)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Cleaned dataframe.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.clean.detect_and_cast_columns">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.clean.</span></span><span class="sig-name descname"><span class="pre">detect_and_cast_columns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="reference internal" href="_modules/fabrictools/quality/clean.html#detect_and_cast_columns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fabrictools.quality.clean.detect_and_cast_columns" title="Link to this definition"></a></dt>
+<dd><p>Infer primitive types from string columns and cast when the column is uniform.</p>
+<p>Order of detection (first match wins): <strong>date</strong> (<code class="docutils literal notranslate"><span class="pre">to_date</span></code> with multiple
+patterns—European forms before US for ambiguous day/month), <strong>timestamp</strong>
+(<code class="docutils literal notranslate"><span class="pre">to_timestamp</span></code> with several patterns plus ISO <code class="docutils literal notranslate"><span class="pre">T</span></code>), <strong>integer</strong> (full
+string matches <code class="docutils literal notranslate"><span class="pre">^[+-]?\d+$</span></code>), <strong>double</strong> (decimal/scientific), else the
+column remains <code class="docutils literal notranslate"><span class="pre">string</span></code>. Columns that are all-null are skipped; null cells are
+kept through casts.</p>
+<p>Sets <code class="docutils literal notranslate"><span class="pre">spark.sql.legacy.timeParserPolicy</span></code> to <code class="docutils literal notranslate"><span class="pre">LEGACY</span></code> for the duration of the
+call and restores the previous session value afterward.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataframe with qualifying string columns cast.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-fabrictools.quality.pipeline">Quality pipeline orchestration helpers.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.pipeline.clean_and_write_all_tables">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.pipeline.</span></span><span class="sig-name descname"><span class="pre">clean_and_write_all_tables</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'overwrite'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">partition_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tables_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_schemas</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_tables</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continue_on_error</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.SparkSession</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#fabrictools.quality.pipeline.clean_and_write_all_tables" title="Link to this definition"></a></dt>
+<dd><p>Bulk clean/write (or merge) using discovery or an explicit <code class="docutils literal notranslate"><span class="pre">tables_config</span></code>.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">tables_config</span></code> is omitted, jobs are built from
+<a class="reference internal" href="fabrictools.io.html#fabrictools.io.discovery.list_lakehouse_tables_for_pipeline" title="fabrictools.io.discovery.list_lakehouse_tables_for_pipeline"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.io.discovery.list_lakehouse_tables_for_pipeline()</span></code></a>; target
+paths use a <code class="docutils literal notranslate"><span class="pre">Cleaned_</span></code> leaf (PascalCase from the source table), e.g.
+<code class="docutils literal notranslate"><span class="pre">Tables/dbo/projets</span> <span class="pre">table</span></code> → <code class="docutils literal notranslate"><span class="pre">Tables/dbo/Cleaned_ProjetsTable</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Lakehouse to read from.</p></li>
+<li><p><strong>target_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Lakehouse to write or merge into.</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Default mode when not overridden per table (<code class="docutils literal notranslate"><span class="pre">overwrite</span></code>, <code class="docutils literal notranslate"><span class="pre">append</span></code>, <code class="docutils literal notranslate"><span class="pre">merge</span></code>).</p></li>
+<li><p><strong>partition_by</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Default partition columns for writes.</p></li>
+<li><p><strong>tables_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em>] </em><em>| </em><em>None</em>) – Optional list of per-table job dicts (see <code class="docutils literal notranslate"><span class="pre">pipelines.config</span></code>).</p></li>
+<li><p><strong>include_schemas</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Discovery filter: schema allow-list.</p></li>
+<li><p><strong>exclude_tables</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Discovery filter: table deny-list.</p></li>
+<li><p><strong>continue_on_error</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">False</span></code>, stop on first failure.</p></li>
+<li><p><strong>spark</strong> (<em>SparkSession</em><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">SparkSession</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Summary dict with <code class="docutils literal notranslate"><span class="pre">total_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">successful_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">failed_tables</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tables</span></code>, <code class="docutils literal notranslate"><span class="pre">failures</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.pipeline.clean_and_write_data">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.pipeline.</span></span><span class="sig-name descname"><span class="pre">clean_and_write_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_relative_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_relative_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'overwrite'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">partition_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.SparkSession</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.quality.pipeline.clean_and_write_data" title="Link to this definition"></a></dt>
+<dd><p>Read one Lakehouse path, clean, add Silver metadata, and write the target path.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Bronze (or source) Lakehouse name.</p></li>
+<li><p><strong>source_relative_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Source <code class="docutils literal notranslate"><span class="pre">Tables/...</span></code> or logical path.</p></li>
+<li><p><strong>target_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Silver (or target) Lakehouse name.</p></li>
+<li><p><strong>target_relative_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Destination path for the write.</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Spark write mode (e.g. <code class="docutils literal notranslate"><span class="pre">overwrite</span></code>, <code class="docutils literal notranslate"><span class="pre">append</span></code>).</p></li>
+<li><p><strong>partition_by</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Optional partition columns for <a class="reference internal" href="api_publique_io.html#fabrictools.write_lakehouse" title="fabrictools.write_lakehouse"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.write_lakehouse()</span></code></a>.</p></li>
+<li><p><strong>spark</strong> (<em>SparkSession</em><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">SparkSession</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The Silver dataframe that was written.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-fabrictools.quality.scan">Data quality scan/report helpers.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.scan.scan_data_errors">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.scan.</span></span><span class="sig-name descname"><span class="pre">scan_data_errors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">display_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#fabrictools.quality.scan.scan_data_errors" title="Link to this definition"></a></dt>
+<dd><p>Summarize nulls, blanks, duplicates, and normalized-name collisions.</p>
+<p>Optionally builds a Plotly figure (requires optional dependency <code class="docutils literal notranslate"><span class="pre">plotly</span></code>).
+When <code class="docutils literal notranslate"><span class="pre">display_results</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, shows the summary dataframe and chart in
+notebook environments via <code class="docutils literal notranslate"><span class="pre">display</span></code> / <code class="docutils literal notranslate"><span class="pre">figure.show()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Dataset to profile.</p></li>
+<li><p><strong>include_samples</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, add <code class="docutils literal notranslate"><span class="pre">sample_rows</span></code> (up to 10 dicts) to the report.</p></li>
+<li><p><strong>display_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, render <code class="docutils literal notranslate"><span class="pre">summary_df</span></code> and the chart when available.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">summary_df</span></code>, <code class="docutils literal notranslate"><span class="pre">figure</span></code>, <code class="docutils literal notranslate"><span class="pre">issue_totals</span></code>, <code class="docutils literal notranslate"><span class="pre">collisions</span></code>,
+and optionally <code class="docutils literal notranslate"><span class="pre">sample_rows</span></code> (Spark dataframe, plotly figure, lists, dict).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-fabrictools.quality">Data quality: cleaning, scanning, and bronze→silver pipelines (<a class="reference internal" href="#module-fabrictools.quality.clean" title="fabrictools.quality.clean"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.quality.clean</span></code></a>, <a class="reference internal" href="#module-fabrictools.quality.scan" title="fabrictools.quality.scan"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.quality.scan</span></code></a>, <a class="reference internal" href="#module-fabrictools.quality.pipeline" title="fabrictools.quality.pipeline"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.quality.pipeline</span></code></a>).</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.add_silver_metadata">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.</span></span><span class="sig-name descname"><span class="pre">add_silver_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_relative_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'bronze'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ingestion_timestamp_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_ingestion_timestamp'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_layer_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_source_layer'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_path_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_source_path'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">year_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_year'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_month'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_day'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.SparkSession</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.quality.add_silver_metadata" title="Link to this definition"></a></dt>
+<dd><p>Add Silver-layer metadata columns (ingestion time, source path, date parts).</p>
+<p>Resolves <code class="docutils literal notranslate"><span class="pre">source_relative_path</span></code> with
+<a class="reference internal" href="fabrictools.io.html#fabrictools.io.lakehouse.resolve_lakehouse_read_candidate" title="fabrictools.io.lakehouse.resolve_lakehouse_read_candidate"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.io.lakehouse.resolve_lakehouse_read_candidate()</span></code></a>. Date
+partition columns (<code class="docutils literal notranslate"><span class="pre">year_col</span></code> / <code class="docutils literal notranslate"><span class="pre">month_col</span></code> / <code class="docutils literal notranslate"><span class="pre">day_col</span></code>) are derived from
+the first date/timestamp column on <code class="docutils literal notranslate"><span class="pre">df</span></code> (excluding <code class="docutils literal notranslate"><span class="pre">ingestion_timestamp_col</span></code>),
+or from <code class="docutils literal notranslate"><span class="pre">ingestion_timestamp_col</span></code> if none.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Bronze or intermediate dataframe.</p></li>
+<li><p><strong>source_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Source Lakehouse display name.</p></li>
+<li><p><strong>source_relative_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Source path passed to path resolution.</p></li>
+<li><p><strong>source_layer</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Literal stored in <code class="docutils literal notranslate"><span class="pre">source_layer_col</span></code> (default <code class="docutils literal notranslate"><span class="pre">bronze</span></code>).</p></li>
+<li><p><strong>ingestion_timestamp_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name for <code class="docutils literal notranslate"><span class="pre">current_timestamp()</span></code>.</p></li>
+<li><p><strong>source_layer_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name for the layer literal.</p></li>
+<li><p><strong>source_path_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Column name for the resolved relative path string.</p></li>
+<li><p><strong>year_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Partition year column name.</p></li>
+<li><p><strong>month_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Partition month column name.</p></li>
+<li><p><strong>day_col</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Partition day-of-month column name.</p></li>
+<li><p><strong>spark</strong> (<em>SparkSession</em><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">SparkSession</span></code> for path resolution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">df</span></code> with metadata and partition columns appended/overwritten.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.clean_and_write_all_tables">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.</span></span><span class="sig-name descname"><span class="pre">clean_and_write_all_tables</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'overwrite'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">partition_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tables_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_schemas</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_tables</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continue_on_error</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.SparkSession</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#fabrictools.quality.clean_and_write_all_tables" title="Link to this definition"></a></dt>
+<dd><p>Bulk clean/write (or merge) using discovery or an explicit <code class="docutils literal notranslate"><span class="pre">tables_config</span></code>.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">tables_config</span></code> is omitted, jobs are built from
+<a class="reference internal" href="fabrictools.io.html#fabrictools.io.discovery.list_lakehouse_tables_for_pipeline" title="fabrictools.io.discovery.list_lakehouse_tables_for_pipeline"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.io.discovery.list_lakehouse_tables_for_pipeline()</span></code></a>; target
+paths use a <code class="docutils literal notranslate"><span class="pre">Cleaned_</span></code> leaf (PascalCase from the source table), e.g.
+<code class="docutils literal notranslate"><span class="pre">Tables/dbo/projets</span> <span class="pre">table</span></code> → <code class="docutils literal notranslate"><span class="pre">Tables/dbo/Cleaned_ProjetsTable</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Lakehouse to read from.</p></li>
+<li><p><strong>target_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Lakehouse to write or merge into.</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Default mode when not overridden per table (<code class="docutils literal notranslate"><span class="pre">overwrite</span></code>, <code class="docutils literal notranslate"><span class="pre">append</span></code>, <code class="docutils literal notranslate"><span class="pre">merge</span></code>).</p></li>
+<li><p><strong>partition_by</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Default partition columns for writes.</p></li>
+<li><p><strong>tables_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em>] </em><em>| </em><em>None</em>) – Optional list of per-table job dicts (see <code class="docutils literal notranslate"><span class="pre">pipelines.config</span></code>).</p></li>
+<li><p><strong>include_schemas</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Discovery filter: schema allow-list.</p></li>
+<li><p><strong>exclude_tables</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Discovery filter: table deny-list.</p></li>
+<li><p><strong>continue_on_error</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">False</span></code>, stop on first failure.</p></li>
+<li><p><strong>spark</strong> (<em>SparkSession</em><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">SparkSession</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Summary dict with <code class="docutils literal notranslate"><span class="pre">total_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">successful_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">failed_tables</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tables</span></code>, <code class="docutils literal notranslate"><span class="pre">failures</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.clean_and_write_data">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.</span></span><span class="sig-name descname"><span class="pre">clean_and_write_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_relative_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_lakehouse_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_relative_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'overwrite'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">partition_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.SparkSession</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.quality.clean_and_write_data" title="Link to this definition"></a></dt>
+<dd><p>Read one Lakehouse path, clean, add Silver metadata, and write the target path.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Bronze (or source) Lakehouse name.</p></li>
+<li><p><strong>source_relative_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Source <code class="docutils literal notranslate"><span class="pre">Tables/...</span></code> or logical path.</p></li>
+<li><p><strong>target_lakehouse_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Silver (or target) Lakehouse name.</p></li>
+<li><p><strong>target_relative_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Destination path for the write.</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Spark write mode (e.g. <code class="docutils literal notranslate"><span class="pre">overwrite</span></code>, <code class="docutils literal notranslate"><span class="pre">append</span></code>).</p></li>
+<li><p><strong>partition_by</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Optional partition columns for <a class="reference internal" href="api_publique_io.html#fabrictools.write_lakehouse" title="fabrictools.write_lakehouse"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.write_lakehouse()</span></code></a>.</p></li>
+<li><p><strong>spark</strong> (<em>SparkSession</em><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">SparkSession</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The Silver dataframe that was written.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.clean_data">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.</span></span><span class="sig-name descname"><span class="pre">clean_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_duplicates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_all_null_rows</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.quality.clean_data" title="Link to this definition"></a></dt>
+<dd><p>Normalize names, trim empty strings to null, infer types, optionally dedupe.</p>
+<p>Renames columns to unique snake_case (via internal helpers), replaces blank
+strings with null on string columns, runs <code class="xref py py-func docutils literal notranslate"><span class="pre">detect_and_cast_columns()</span></code>,
+then optionally drops duplicate rows and rows that are all-null.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>drop_duplicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, call <code class="docutils literal notranslate"><span class="pre">dropDuplicates()</span></code> after cleaning.</p></li>
+<li><p><strong>drop_all_null_rows</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, call <code class="docutils literal notranslate"><span class="pre">dropna(how=&quot;all&quot;)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Cleaned dataframe.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.quality.scan_data_errors">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.quality.</span></span><span class="sig-name descname"><span class="pre">scan_data_errors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">display_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#fabrictools.quality.scan_data_errors" title="Link to this definition"></a></dt>
+<dd><p>Summarize nulls, blanks, duplicates, and normalized-name collisions.</p>
+<p>Optionally builds a Plotly figure (requires optional dependency <code class="docutils literal notranslate"><span class="pre">plotly</span></code>).
+When <code class="docutils literal notranslate"><span class="pre">display_results</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, shows the summary dataframe and chart in
+notebook environments via <code class="docutils literal notranslate"><span class="pre">display</span></code> / <code class="docutils literal notranslate"><span class="pre">figure.show()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Dataset to profile.</p></li>
+<li><p><strong>include_samples</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, add <code class="docutils literal notranslate"><span class="pre">sample_rows</span></code> (up to 10 dicts) to the report.</p></li>
+<li><p><strong>display_results</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, render <code class="docutils literal notranslate"><span class="pre">summary_df</span></code> and the chart when available.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">summary_df</span></code>, <code class="docutils literal notranslate"><span class="pre">figure</span></code>, <code class="docutils literal notranslate"><span class="pre">issue_totals</span></code>, <code class="docutils literal notranslate"><span class="pre">collisions</span></code>,
+and optionally <code class="docutils literal notranslate"><span class="pre">sample_rows</span></code> (Spark dataframe, plotly figure, lists, dict).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fabrictools.prepare.html" class="btn btn-neutral float-left" title="Couche préparée (prepared)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fabrictools.transform.html" class="btn btn-neutral float-right" title="Transformations DataFrame" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

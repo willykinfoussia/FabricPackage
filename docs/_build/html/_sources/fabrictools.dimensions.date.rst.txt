@@ -1,0 +1,4 @@
+fabrictools.dimensions.date
+===========================
+
+.. automodule:: fabrictools.dimensions.date

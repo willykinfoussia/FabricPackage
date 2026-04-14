@@ -19,30 +19,19 @@ def drop_rows_over_empty_percent(
     *,
     columns: Sequence[str] | None = None,
 ) -> DataFrame:
-    """
-    Drop rows where strictly more than ``max_empty_percent`` of the considered
-    cells are empty.
+    """Drop rows where the fraction of empty cells (see :py:func:`fabrictools.empty_or_null`) exceeds ``max_empty_percent``.
 
-    A cell is empty if ``empty_or_null`` is true for that column (null or blank
-    string after string cast and trim).
+    :param df: Input dataframe.
+    :param max_empty_percent: Upper bound in ``[0, 1]``; rows with empty ratio **strictly greater** than this are removed.
+    :param columns: Columns to score; ``None`` means all columns. Names resolved like :py:func:`fabrictools.resolve_dataframe_column`.
+    :type df: ~pyspark.sql.DataFrame
+    :type max_empty_percent: float
+    :type columns: collections.abc.Sequence[str] | None
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
-    max_empty_percent
-        Maximum fraction of empty cells in ``[0, 1]`` (same scale as ``empty_ratio``).
-        Rows with ``empty_ratio`` **>** ``max_empty_percent`` are removed.
-        For example ``0.05`` keeps rows with at most 5% empty cells (at least 95% non-null).
-    columns
-        Physical or clean_data-style column names to include in the ratio.
-        If ``None``, all columns of ``df`` are used.
+    :returns: Filtered dataframe.
+    :rtype: ~pyspark.sql.DataFrame
 
-    Raises
-    ------
-    ValueError
-        If ``max_empty_percent`` is outside ``[0, 1]``, if ``columns`` is an
-        empty sequence, or if there are no columns to evaluate.
+    :raises ValueError: If ``max_empty_percent`` is outside ``[0, 1]``, if ``columns`` is an empty sequence, or if no columns remain to score.
     """
     if not 0 <= max_empty_percent <= 1:
         raise ValueError(

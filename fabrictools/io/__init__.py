@@ -1,4 +1,4 @@
-"""I/O adapters for Fabric Lakehouse and Warehouse."""
+"""I/O adapters for Fabric Lakehouse and Warehouse (see :mod:`fabrictools.io.lakehouse`, :mod:`fabrictools.io.warehouse`, :mod:`fabrictools.io.discovery`)."""
 
 from fabrictools.io.discovery import (
     filter_pipeline_discovered_tables,

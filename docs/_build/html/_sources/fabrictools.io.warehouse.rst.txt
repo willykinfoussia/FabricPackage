@@ -1,0 +1,4 @@
+fabrictools.io.warehouse
+========================
+
+.. automodule:: fabrictools.io.warehouse

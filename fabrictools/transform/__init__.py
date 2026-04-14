@@ -1,4 +1,9 @@
-"""Generic DataFrame transforms (filter by value list, prefixed merge)."""
+"""DataFrame transforms: column tools, filters, merges, and wide-month reshaping.
+
+See submodules :mod:`fabrictools.transform.columns`, :mod:`fabrictools.transform.filter`,
+:mod:`fabrictools.transform.merge`, :mod:`fabrictools.transform.rows`,
+:mod:`fabrictools.transform.text`, :mod:`fabrictools.transform.wide_month_suffix`.
+"""
 
 from fabrictools.transform.columns import (
     month_start_from_ca_monthly_col,

@@ -39,10 +39,27 @@ def publish_semantic_model(
     overwrite_model: bool = True,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
-    """
-    Publish or replace a semantic model through Semantic Link (TOM).
+    """Publish or replace a semantic model via Semantic Link (``sempy`` / ``sempy_labs``).
 
-    This helper is intentionally best-effort and returns a status dictionary.
+    Best-effort: returns a status dict instead of raising when prerequisites are missing.
+
+    :param target_lakehouse_name: Lakehouse holding aggregation tables.
+    :param agg_tables: Map of table label to relative path (from :py:func:`fabrictools.generate_prepared_aggregations`).
+    :param resolved_mappings: Column metadata for semantic typing.
+    :param semantic_workspace: Fabric workspace name; if empty, publish is skipped.
+    :param semantic_model_name: Model name in the workspace.
+    :param overwrite_model: Replace an existing model when ``True``.
+    :param spark: Optional ``SparkSession`` for reading table schemas.
+    :type target_lakehouse_name: str
+    :type agg_tables: dict[str, str]
+    :type resolved_mappings: list
+    :type semantic_workspace: str | None
+    :type semantic_model_name: str
+    :type overwrite_model: bool
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Status dictionary (``status``, ``reason`` or ``error``, counts, etc.).
+    :rtype: dict
     """
     _spark = spark or get_spark()
 

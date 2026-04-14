@@ -211,37 +211,30 @@ def merge_dataframes(
     *,
     join_prefix: str | None = None,
 ) -> DataFrame:
-    """
-    Join ``main`` to ``join_df`` using ``keys`` and add right attributes as
-    ``{prefix_snake}_{suffix_snake_unique}`` (same snake_case + disambiguation as
-    ``clean_data``).
+    """Left-join ``main`` to ``join_df`` and project right columns as ``{prefix}_{suffix}``.
 
-    The prefix defaults to, in order: the call-site **display name** of ``join_df``
-    (second positional arg or ``join_df=`` when it is a simple ``Name`` /
-    ``obj.attr``),     then the first **SubqueryAlias** on the analyzed logical plan of ``join_df``
-    plan (e.g. after ``df.alias("x")``), then ``"join"``. Pass ``join_prefix`` to
-    override. Introspection may fail in Jupyter or for complex expressions; the alias
-    or default avoids raising.
+    Prefix is snake_case from, in order: inferred ``join_df`` variable name at the
+    call site, else first ``SubqueryAlias`` on ``join_df``'s analyzed plan, else
+    ``join`` (see ``DEFAULT_JOIN_PREFIX``). Pass ``join_prefix`` to force a value. Suffixes match
+    :py:func:`fabrictools.clean_data` uniqueness rules.
 
-    Parameters
-    ----------
-    main
-        Left DataFrame.
-    join_df
-        Right DataFrame.
-    join_columns
-        Column names on the right to include; each output name is
-        ``{prefix}_{normalized_unique}``. Names are resolved like ``keys`` on ``join_df``.
-    keys
-        Pairs ``(main_column, join_column)`` combined with AND. Each side may use
-        either the physical column name or the name produced by ``clean_data``
-        (``_build_unique_column_names`` on the frame's column order).
-    how
-        Spark join type, e.g. ``left``, ``inner``.
-    join_prefix
-        If set, used as the prefix (after ``_to_snake_case``). If ``None``, resolved
-        via call-site inference, then DataFrame logical alias, then
-        ``DEFAULT_JOIN_PREFIX`` (``"join"``).
+    :param main: Left dataframe.
+    :param join_df: Right dataframe (only ``join_columns`` projected, plus key temps).
+    :param join_columns: Right-side columns to expose with prefixed names.
+    :param keys: ``(main_col, join_col)`` pairs for the join predicate (AND); names resolved per frame.
+    :param how: Spark join type (e.g. ``left``, ``inner``).
+    :param join_prefix: Optional explicit prefix (snake_cased); overrides inference.
+    :type main: ~pyspark.sql.DataFrame
+    :type join_df: ~pyspark.sql.DataFrame
+    :type join_columns: collections.abc.Sequence[str]
+    :type keys: collections.abc.Sequence[tuple[str, str]]
+    :type how: str
+    :type join_prefix: str | None
+
+    :returns: Joined dataframe with temporary key columns dropped.
+    :rtype: ~pyspark.sql.DataFrame
+
+    :raises ValueError: If ``keys`` is empty.
     """
     if not keys:
         raise ValueError("keys must contain at least one (main_key, join_key) pair")

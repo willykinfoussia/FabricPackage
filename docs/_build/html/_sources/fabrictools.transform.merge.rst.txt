@@ -1,0 +1,4 @@
+fabrictools.transform.merge
+===========================
+
+.. automodule:: fabrictools.transform.merge

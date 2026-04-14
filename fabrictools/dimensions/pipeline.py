@@ -36,10 +36,61 @@ def generate_dimensions(
     city_warehouse_table: str = "dbo.dimension_city",
     spark: Optional[SparkSession] = None,
 ) -> dict[str, DataFrame]:
-    """
-    Build and write selected dimension tables to Lakehouse and Warehouse.
+    """Build enabled dimensions and persist each to the configured Lakehouse and/or Warehouse.
 
-    Returns a dict of generated DataFrames keyed by dimension name.
+    Keys in the returned map mirror the chosen relative path (or warehouse table name).
+
+    :param lakehouse_name: Optional Lakehouse for all dimension writes.
+    :param warehouse_name: Optional Warehouse for JDBC writes.
+    :param include_date: Build date dimension when ``True``.
+    :param include_country: Build country dimension when ``True``.
+    :param include_city: Build city dimension when ``True``.
+    :param start_date: Passed to :py:func:`fabrictools.build_dimension_date`.
+    :param end_date: Passed to ``build_dimension_date``.
+    :param fiscal_year_start_month: Passed to ``build_dimension_date``.
+    :param countries_limit: Passed to geo builders.
+    :param include_states_metadata: Passed to :py:func:`fabrictools.build_dimension_city`.
+    :param fail_on_source_error: Passed to geo builders.
+    :param city_regions: Passed as ``regions`` to ``build_dimension_city``.
+    :param city_subregions: Passed as ``subregions`` to ``build_dimension_city``.
+    :param city_countries: Passed as ``countries`` to ``build_dimension_city``.
+    :param mode: Write mode for all targets.
+    :param batch_size: JDBC batch size for warehouse writes.
+    :param date_relative_path: Lakehouse path for the date table.
+    :param country_relative_path: Lakehouse path for the country table.
+    :param city_relative_path: Lakehouse path for the city table.
+    :param date_warehouse_table: Warehouse table for date dimension.
+    :param country_warehouse_table: Warehouse table for country dimension.
+    :param city_warehouse_table: Warehouse table for city dimension.
+    :param spark: Optional ``SparkSession``.
+    :type lakehouse_name: str | None
+    :type warehouse_name: str | None
+    :type include_date: bool
+    :type include_country: bool
+    :type include_city: bool
+    :type start_date: str | None
+    :type end_date: str | None
+    :type fiscal_year_start_month: int
+    :type countries_limit: int | None
+    :type include_states_metadata: bool
+    :type fail_on_source_error: bool
+    :type city_regions: list[str] | None
+    :type city_subregions: list[str] | None
+    :type city_countries: list[str] | None
+    :type mode: str
+    :type batch_size: int
+    :type date_relative_path: str
+    :type country_relative_path: str
+    :type city_relative_path: str
+    :type date_warehouse_table: str
+    :type country_warehouse_table: str
+    :type city_warehouse_table: str
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Map of dimension key to dataframe.
+    :rtype: dict[str, ~pyspark.sql.DataFrame]
+
+    :raises ValueError: If all dimension flags are ``False``.
     """
     _spark = spark or get_spark()
     generated: dict[str, DataFrame] = {}

@@ -147,33 +147,36 @@ def _resolve_column_name(df: DataFrame, name: str, *, side: str = "DataFrame") -
 
 
 def resolve_dataframe_column(df: DataFrame, name: str) -> str:
-    """
-    Resolve *name* to the physical column name on *df*.
+    """Resolve ``name`` to the physical column name on ``df``.
 
-    Accepts the physical name, a ``clean_data``-style normalized label, or a
-    snake_case variant (same rules as ``merge_dataframes`` / ``remove_columns``).
+    Accepts the physical name, a :py:func:`fabrictools.clean_data`-style
+    normalized label, or snake_case (same rules as :py:func:`fabrictools.merge_dataframes` / :py:func:`fabrictools.remove_columns`).
+
+    :param df: Dataframe whose schema is searched.
+    :param name: Logical, normalized, or physical column label.
+    :type df: ~pyspark.sql.DataFrame
+    :type name: str
+
+    :returns: Physical column name present on ``df``.
+    :rtype: str
+
+    :raises ValueError: If ``name`` cannot be resolved.
     """
     return _resolve_column_name(df, name, side="DataFrame")
 
 
 def rename_columns_normalized(df: DataFrame) -> DataFrame:
-    """
-    Rename every column to snake_case with ``_2``, ``_3``, … for duplicate bases.
+    """Rename every column to snake_case with ``_2``, ``_3``, … disambiguation.
 
-    Uses ``_build_unique_column_names`` in column order — the same scheme as the
-    rename step in ``clean_data`` and the labels accepted by ``merge_dataframes`` /
-    ``remove_columns`` when resolving a column name.
-    Does not cast types, replace blanks, deduplicate rows, or drop rows.
+    Uses the same name scheme as the rename step in
+    :py:func:`fabrictools.clean_data`. Does not cast types, replace blanks,
+    deduplicate rows, or drop rows.
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
+    :param df: Input dataframe.
+    :type df: ~pyspark.sql.DataFrame
 
-    Returns
-    -------
-    DataFrame
-        Same column order and data; names updated where they differ from targets.
+    :returns: Dataframe with updated column names where needed.
+    :rtype: ~pyspark.sql.DataFrame
     """
     cols = list(df.columns)
     normalized = _build_unique_column_names(cols)
@@ -183,22 +186,17 @@ def rename_columns_normalized(df: DataFrame) -> DataFrame:
 
 
 def remove_columns(df: DataFrame, *columns: str) -> DataFrame:
-    """
-    Drop columns by physical name or by the same resolution rules as ``merge_dataframes`` /
-    ``clean_data`` (snake_case + unique suffixes).
+    """Drop columns by physical name or by the same resolution rules as :py:func:`fabrictools.merge_dataframes`.
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
-    *columns
-        One or more column labels to remove. Duplicate requests that resolve to the same
-        physical column are dropped once.
+    :param df: Input dataframe.
+    :param columns: One or more labels; duplicates resolving to the same physical column are dropped once.
+    :type df: ~pyspark.sql.DataFrame
+    :type columns: str
 
-    Raises
-    ------
-    ValueError
-        If no column names are passed, or if a name cannot be resolved.
+    :returns: ``df`` without the resolved columns.
+    :rtype: ~pyspark.sql.DataFrame
+
+    :raises ValueError: If no names are passed or a name cannot be resolved.
     """
     if not columns:
         raise ValueError("remove_columns requires at least one column name")
@@ -219,23 +217,21 @@ def rename_columns_pq_serial_to_dates(
     prefix: str = "",
     include_suffix_in_name: bool = True,
 ) -> DataFrame:
-    """
-    Rename columns whose names embed a Power Query / Excel day serial (see ``PQ_EPOCH``).
+    """Rename columns whose names embed a Power Query / Excel day serial (epoch ``PQ_EPOCH``).
 
-    Non-matching columns keep their names. Target names that collide with an
-    existing name or another rename get ``_2``, ``_3``, … appended.
+    Non-matching columns are unchanged. Target collisions get ``_2``, ``_3``, … suffixes.
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
-    date_format
-        ``strftime`` format for the date portion of the new name.
-    prefix
-        Prepended before the formatted date.
-    include_suffix_in_name
-        If True and a numeric suffix was parsed after the serial segment, append
-        ``_{suffix}`` to the new column name.
+    :param df: Input dataframe.
+    :param date_format: ``strftime`` format for the date portion of new names.
+    :param prefix: Text prepended before the formatted date.
+    :param include_suffix_in_name: If ``True``, append parsed numeric suffix after the serial segment.
+    :type df: ~pyspark.sql.DataFrame
+    :type date_format: str
+    :type prefix: str
+    :type include_suffix_in_name: bool
+
+    :returns: Dataframe with renamed columns.
+    :rtype: ~pyspark.sql.DataFrame
     """
     return _rename_columns_pq_serial_common(
         df,
@@ -252,22 +248,19 @@ def rename_columns_pq_serial_to_mois_annee(
     include_suffix_in_name: bool = True,
     capitalize_month: bool = True,
 ) -> DataFrame:
-    """
-    Same as ``rename_columns_pq_serial_to_dates`` but the date part is French
-    *mois année* (e.g. ``janvier_2024``), suitable for column names (underscore
-    between month and year).
+    """Like :py:func:`rename_columns_pq_serial_to_dates` but labels use French *mois année* (e.g. ``janvier_2024``).
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
-    prefix
-        Prepended before the ``mois_annee`` label.
-    include_suffix_in_name
-        If True and a numeric suffix was parsed after the serial segment, append
-        ``_{suffix}`` to the new column name.
-    capitalize_month
-        If True, capitalize the month (e.g. ``Janvier_2024``).
+    :param df: Input dataframe.
+    :param prefix: Prepended before the month-year token.
+    :param include_suffix_in_name: Append ``_{suffix}`` when a numeric suffix follows the serial in the source name.
+    :param capitalize_month: If ``True``, capitalize the month word (e.g. ``Janvier_2024``).
+    :type df: ~pyspark.sql.DataFrame
+    :type prefix: str
+    :type include_suffix_in_name: bool
+    :type capitalize_month: bool
+
+    :returns: Renamed dataframe.
+    :rtype: ~pyspark.sql.DataFrame
     """
     return _rename_columns_pq_serial_common(
         df,
@@ -414,9 +407,13 @@ def _allocate_unique_rename_targets_against_schema(
 
 
 def month_start_from_ca_monthly_col(col_name: str) -> Optional[date]:
-    """
-    Parse the month start (first of month) from a column name whose head is
-    ``mois année`` FR, optionally followed by `` [``…``]`` (block label suffix).
+    """Parse first-of-month from a column name: French *mois année* head, optional `` [label]`` suffix stripped.
+
+    :param col_name: Wide column name (e.g. ``janvier_2024 [CA Monthly]``).
+    :type col_name: str
+
+    :returns: Parsed month start, or ``None`` if parsing fails.
+    :rtype: datetime.date | None
     """
     base = col_name.split(" [", 1)[0] if " [" in col_name else col_name
     return _try_parse_month_year(base)
@@ -428,12 +425,20 @@ def rename_columns_month_year_block_labels(
     labels: Sequence[str] = _DEFAULT_MONTH_BLOCK_LABELS,
     exclude_columns: Collection[str] = ("__spark_row_order__",),
 ) -> DataFrame:
-    """
-    Rename contiguous runs of French *mois année* columns with ordered block labels.
+    """Rename contiguous French *mois année* column blocks using ordered ``labels`` (projection-style).
 
-    Column order follows ``df.columns`` after removing ``exclude_columns``.
-    Targets that collide among renames get ``__2``, ``__3``, … Further collisions
-    with columns that are not renamed use ``_2``, ``_3``, … (same as PQ renames).
+    Order follows ``df.columns`` after ``exclude_columns``. Rename targets disambiguate with
+    ``__2``, ``__3``, … among new names, then ``_2``, ``_3``, … against the rest of the schema.
+
+    :param df: Input wide dataframe.
+    :param labels: Block markers in column order (defaults to built-in forecast / CA block set).
+    :param exclude_columns: Column names ignored when scanning contiguous runs.
+    :type df: ~pyspark.sql.DataFrame
+    :type labels: collections.abc.Sequence[str]
+    :type exclude_columns: collections.abc.Collection[str]
+
+    :returns: Dataframe with renamed month columns.
+    :rtype: ~pyspark.sql.DataFrame
     """
     exclude = set(exclude_columns)
     cols = [c for c in df.columns if c not in exclude]

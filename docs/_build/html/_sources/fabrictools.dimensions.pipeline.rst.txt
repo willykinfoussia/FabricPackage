@@ -1,0 +1,4 @@
+fabrictools.dimensions.pipeline
+===============================
+
+.. automodule:: fabrictools.dimensions.pipeline

@@ -1,0 +1,4 @@
+fabrictools.prepare.resolve
+===========================
+
+.. automodule:: fabrictools.prepare.resolve

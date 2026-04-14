@@ -1,0 +1,21 @@
+API publique (import racine)
+=============================
+
+Référence des fonctions exposées par ``import fabrictools`` ou ``from fabrictools import write_lakehouse``, etc.
+
+.. automodule:: fabrictools
+
+Implémentation (par sous-package)
+-----------------------------------
+
+.. toctree::
+   :maxdepth: 4
+   :caption: Modules internes
+
+   fabrictools.core
+   fabrictools.dimensions
+   fabrictools.io
+   fabrictools.pipelines
+   fabrictools.prepare
+   fabrictools.quality
+   fabrictools.transform

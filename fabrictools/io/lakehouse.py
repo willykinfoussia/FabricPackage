@@ -25,34 +25,26 @@ def read_lakehouse(
     relative_path: str,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """
-    Read a dataset from a Fabric Lakehouse.
+    """Read a dataset from a Fabric Lakehouse.
 
-    The function tries formats in order: **Delta → Parquet → CSV**.  The first
-    one that succeeds is used, and the detected format is logged together with
-    the resulting shape.
+    Tries formats in order: **Delta → Parquet → CSV**. The first format that
+    succeeds is used; the detected format is logged with the resulting shape.
 
-    Parameters
-    ----------
-    lakehouse_name:
-        Display name of the Lakehouse (e.g. ``"BronzeLakehouse"``).
-    relative_path:
-        Path inside the Lakehouse root, relative to the ABFS base path
+    :param lakehouse_name: Display name of the Lakehouse (e.g. ``"BronzeLakehouse"``).
+    :param relative_path: Path inside the Lakehouse root, relative to the ABFS base
         (e.g. ``"sales/2024"`` or ``"Tables/customers"``).
-    spark:
-        Optional SparkSession.  When omitted the active session is used.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type lakehouse_name: str
+    :type relative_path: str
+    :type spark: ~pyspark.sql.SparkSession | None
 
-    Returns
-    -------
-    DataFrame
+    :returns: Loaded dataframe.
+    :rtype: ~pyspark.sql.DataFrame
 
-    Raises
-    ------
-    RuntimeError
-        When none of the supported formats can be read from the given path.
+    :raises RuntimeError: When none of the supported formats can be read from the path.
 
-    Examples
-    --------
+    .. rubric:: Example
+
     >>> df = read_lakehouse("BronzeLakehouse", "sales/2024")
     """
     _spark = spark or get_spark()
@@ -83,12 +75,22 @@ def resolve_lakehouse_read_candidate(
     relative_path: str,
     spark: Optional[SparkSession] = None,
 ) -> str:
-    """
-    Resolve the best candidate relative path for a Lakehouse read.
+    """Resolve the best candidate relative path for a Lakehouse read.
 
-    Rules:
-    - If candidate generation yields a single path, return it directly.
-    - If multiple candidates exist, try each path and return the first readable one.
+    If candidate generation yields a single path, return it directly. If multiple
+    candidates exist, try each path and return the first readable one.
+
+    :param lakehouse_name: Display name of the Lakehouse.
+    :param relative_path: Logical path under the Lakehouse root.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type lakehouse_name: str
+    :type relative_path: str
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Relative path string that was verified readable.
+    :rtype: str
+
+    :raises RuntimeError: When no candidate path can be read.
     """
     _spark = spark or get_spark()
     base = get_lakehouse_abfs_path(lakehouse_name)
@@ -222,38 +224,36 @@ def write_lakehouse(
     *,
     normalize_column_names: bool = True,
 ) -> None:
-    """
-    Write a DataFrame to a Fabric Lakehouse as a Delta table (default).
+    """Write a ``DataFrame`` to a Fabric Lakehouse (default format: Delta).
 
-    Parameters
-    ----------
-    df:
-        DataFrame to persist.
-    lakehouse_name:
-        Display name of the target Lakehouse.
-    relative_path:
-        Destination path inside the Lakehouse
-        (e.g. ``"sales_clean"`` or ``"Tables/sales_clean"``).
-    mode:
-        Spark write mode — ``"overwrite"`` (default), ``"append"``,
+    :param df: DataFrame to persist.
+    :param lakehouse_name: Display name of the target Lakehouse.
+    :param relative_path: Destination path inside the Lakehouse (e.g.
+        ``"sales_clean"`` or ``"Tables/sales_clean"``).
+    :param mode: Spark write mode: ``"overwrite"`` (default), ``"append"``,
         ``"ignore"``, or ``"error"``.
-    partition_by:
-        Optional list of column names to partition the output by.  Each name is
-        resolved like ``clean_data`` / ``merge_dataframes`` (physical name,
-        normalized unique label, or snake_case of the label).  Auto-detected date
-        partitions are appended when found in the DataFrame.
-    format:
-        Output format — ``"delta"`` (default), ``"parquet"``, or ``"csv"``.
-    spark:
-        Optional SparkSession.  When omitted the active session is used.
-    normalize_column_names:
-        When ``True`` (default), renames all columns with ``rename_columns_normalized``
-        (same snake_case / unique suffix rules as ``clean_data``) before resolving
-        ``partition_by`` and writing.  Set ``False`` to persist the DataFrame's
-        current physical column names unchanged.
+    :param partition_by: Optional column names to partition by. Each name is resolved
+        like :py:func:`fabrictools.clean_data` /
+        :py:func:`fabrictools.merge_dataframes` (physical name,
+        normalized unique label, or snake_case). Auto-detected date partitions are
+        appended when present on ``df``.
+    :param format: ``"delta"`` (default), ``"parquet"``, or ``"csv"``.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :param normalize_column_names: If ``True`` (default), run
+        :py:func:`fabrictools.rename_columns_normalized` before
+        resolving ``partition_by`` and writing. If ``False``, keep physical column
+        names unchanged.
+    :type df: ~pyspark.sql.DataFrame
+    :type lakehouse_name: str
+    :type relative_path: str
+    :type mode: str
+    :type partition_by: list[str] | None
+    :type format: str
+    :type spark: ~pyspark.sql.SparkSession | None
+    :type normalize_column_names: bool
 
-    Examples
-    --------
+    .. rubric:: Example
+
     >>> write_lakehouse(df, "SilverLakehouse", "sales_clean",
     ...                 mode="overwrite", partition_by=["year"])
     """
@@ -315,35 +315,31 @@ def merge_lakehouse(
     insert_set: Optional[dict] = None,
     spark: Optional[SparkSession] = None,
 ) -> None:
-    """
-    Upsert (merge) a DataFrame into an existing Delta table in a Lakehouse.
+    """Upsert (merge) a ``DataFrame`` into an existing Delta table in a Lakehouse.
 
-    Uses the Delta Lake ``DeltaTable.forPath`` merge API.  When
-    ``update_set`` and/or ``insert_set`` are ``None``, a ``whenMatchedUpdateAll``
-    / ``whenNotMatchedInsertAll`` strategy is applied automatically.
+    Uses Delta Lake ``DeltaTable.forPath``. When ``update_set`` and/or ``insert_set``
+    are ``None``, ``whenMatchedUpdateAll`` / ``whenNotMatchedInsertAll`` are used.
 
-    Parameters
-    ----------
-    source_df:
-        New data to merge into the target table.
-    lakehouse_name:
-        Display name of the Lakehouse that holds the target table.
-    relative_path:
-        Path of the Delta table inside the Lakehouse.
-    merge_condition:
-        SQL expression that joins source and target rows
-        (e.g. ``"src.id = tgt.id"``).
-    update_set:
-        Mapping of ``{target_col: source_expr}`` for matched rows.
-        Pass ``None`` to update all columns automatically.
-    insert_set:
-        Mapping of ``{target_col: source_expr}`` for new rows.
-        Pass ``None`` to insert all columns automatically.
-    spark:
-        Optional SparkSession.  When omitted the active session is used.
+    :param source_df: Rows to merge into the target table.
+    :param lakehouse_name: Lakehouse display name holding the target table.
+    :param relative_path: Path of the Delta table inside the Lakehouse.
+    :param merge_condition: SQL predicate joining source and target (e.g.
+        ``"src.id = tgt.id"``).
+    :param update_set: ``{target_col: source_expr}`` for matched rows, or ``None``
+        to update all columns.
+    :param insert_set: ``{target_col: source_expr}`` for new rows, or ``None`` to
+        insert all columns.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type source_df: ~pyspark.sql.DataFrame
+    :type lakehouse_name: str
+    :type relative_path: str
+    :type merge_condition: str
+    :type update_set: dict | None
+    :type insert_set: dict | None
+    :type spark: ~pyspark.sql.SparkSession | None
 
-    Examples
-    --------
+    .. rubric:: Example
+
     >>> merge_lakehouse(
     ...     new_df, "SilverLakehouse", "sales_clean",
     ...     merge_condition="src.id = tgt.id",
@@ -383,11 +379,24 @@ def delete_all_lakehouse_tables(
     exclude_tables: Optional[List[str]] = None,
     continue_on_error: bool = False,
 ) -> dict[str, Any]:
-    """
-    Hard-delete all discovered Lakehouse table folders.
+    """Hard-delete all discovered Lakehouse table folders.
 
-    Tables are discovered as ``Tables/<schema>/<table>`` and deleted with
+    Tables are discovered as ``Tables/<schema>/<table>`` and removed with
     ``notebookutils.fs.rm(<abfs>/Tables/<schema>/<table>, recurse=True)``.
+
+    :param lakehouse_name: Lakehouse display name to purge.
+    :param include_schemas: If set, only these schema names (case-insensitive).
+    :param exclude_tables: Table or ``schema.table`` names to skip (case-insensitive).
+    :param continue_on_error: If ``False`` (default), stop on first delete failure.
+    :type lakehouse_name: str
+    :type include_schemas: list[str] | None
+    :type exclude_tables: list[str] | None
+    :type continue_on_error: bool
+
+    :returns: Summary with counts and per-table ``relative_path`` / errors.
+    :rtype: dict
+
+    :raises ValueError: When ``notebookutils`` is unavailable (not in Fabric).
     """
     try:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415

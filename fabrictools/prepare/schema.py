@@ -30,10 +30,20 @@ def snapshot_source_schema(
     source_relative_path: str,
     spark: Optional[SparkSession] = None,
 ) -> str:
-    """
-    Snapshot source schema and profile stats into source config table.
+    """Persist per-column profile stats and optional Delta metadata beside the source table.
 
-    Returns the schema hash used for cache invalidation.
+    Writes to ``{source_relative_path}_schema_snapshot`` on the source Lakehouse.
+    The returned hash keys profiling cache rows in :py:func:`fabrictools.resolve_columns`.
+
+    :param source_lakehouse_name: Lakehouse containing the source table.
+    :param source_relative_path: Source table path.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type source_relative_path: str
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: MD5 hash of ``name:type`` pairs for the source schema.
+    :rtype: str
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)

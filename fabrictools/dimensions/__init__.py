@@ -1,4 +1,8 @@
-"""Dimensions package API."""
+"""Date and geography dimension builders plus :py:func:`fabrictools.generate_dimensions`.
+
+See :mod:`fabrictools.dimensions.date`, :mod:`fabrictools.dimensions.geo`,
+:mod:`fabrictools.dimensions.pipeline`.
+"""
 
 from __future__ import annotations
 

@@ -1,0 +1,4 @@
+fabrictools.core.paths
+======================
+
+.. automodule:: fabrictools.core.paths

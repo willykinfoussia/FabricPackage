@@ -1,0 +1,149 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FabricTools &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Référence API" href="modules.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">Référence API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">FabricTools</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fabrictools">
+<h1>FabricTools<a class="headerlink" href="#fabrictools" title="Link to this heading"></a></h1>
+<p><strong>fabrictools</strong> fournit des helpers PySpark orientés <a class="reference external" href="https://learn.microsoft.com/en-us/fabric/">Microsoft Fabric</a> pour lire et écrire dans les <strong>Lakehouses</strong> et <strong>Warehouses</strong>, préparer des données, construire des dimensions et appliquer des transformations courantes sur des <code class="docutils literal notranslate"><span class="pre">DataFrame</span></code>.</p>
+<section id="prerequis">
+<h2>Prérequis<a class="headerlink" href="#prerequis" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Environnement <strong>Spark</strong> (typiquement un notebook Fabric) avec <strong>PySpark</strong> déjà disponible.</p></li>
+<li><p>Pour un usage hors Fabric, installez l’extra <code class="docutils literal notranslate"><span class="pre">spark</span></code> du paquet (voir ci-dessous).</p></li>
+</ul>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
+<p>Depuis le dépôt (développement):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="s2">&quot;.[spark]&quot;</span>
+</pre></div>
+</div>
+<p>Pour générer cette documentation localement:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="s2">&quot;.[docs]&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="reference-api">
+<h2>Référence API<a class="headerlink" href="#reference-api" title="Link to this heading"></a></h2>
+<p><strong>API recommandée</strong> : importez depuis le paquet racine, par exemple
+<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">fabrictools</span> <span class="pre">import</span> <span class="pre">read_lakehouse,</span> <span class="pre">write_lakehouse</span></code>. Sous <strong>Référence API</strong>,
+« API publique » et les pages par domaine (I/O, Qualité, etc.) listent ces symboles ; la section <strong>Implémentation</strong> regroupe
+les sous-packages Python pour contribuer ou déboguer.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">Référence API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_publique.html">API publique (import racine)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html">Noyau applicatif (core)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html">Dimensions (calendrier et géographie)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html">I/O Lakehouse et Warehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html">Pipelines — configuration des jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html">Couche préparée (prepared)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html">Qualité des données et pipelines Silver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.transform.html">Transformations DataFrame</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="modules.html" class="btn btn-neutral float-right" title="Référence API" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

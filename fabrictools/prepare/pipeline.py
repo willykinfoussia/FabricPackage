@@ -70,8 +70,42 @@ def prepare_and_write_data(
     overwrite_semantic_model: bool = True,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """
-    Orchestrate source -> prepared processing for one table.
+    """Run the full prepared pipeline for one source table (schema, resolve, transform, write).
+
+    Optionally generates aggregations and publishes a semantic model when
+    ``enable_semantic_model_publish`` is ``True`` (requires Fabric Semantic Link).
+
+    :param source_lakehouse_name: Source Lakehouse name.
+    :param source_relative_path: Source table path.
+    :param target_lakehouse_name: Target Lakehouse for the prepared Delta table.
+    :param target_relative_path: Target path for the prepared table.
+    :param mode: Spark write mode for the prepared table.
+    :param sample_size: Profiling sample size for :py:func:`fabrictools.resolve_columns`.
+    :param profiling_confidence_threshold: Minimum confidence to trust profiling cache hits.
+    :param max_partitions_guard: Upper bound for partition column selection (see :py:func:`fabrictools.write_prepared_table`).
+    :param vacuum_retention_hours: Delta ``VACUUM`` retention when maintenance runs.
+    :param enable_semantic_model_publish: If ``True``, call :py:func:`fabrictools.publish_semantic_model`.
+    :param semantic_workspace: Fabric workspace for semantic publish (required when publish enabled).
+    :param semantic_model_name: Model display name in the workspace.
+    :param overwrite_semantic_model: Replace existing semantic model when publishing.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type source_relative_path: str
+    :type target_lakehouse_name: str
+    :type target_relative_path: str
+    :type mode: str
+    :type sample_size: int
+    :type profiling_confidence_threshold: float
+    :type max_partitions_guard: int
+    :type vacuum_retention_hours: int
+    :type enable_semantic_model_publish: bool
+    :type semantic_workspace: str | None
+    :type semantic_model_name: str
+    :type overwrite_semantic_model: bool
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: The prepared ``DataFrame`` that was written.
+    :rtype: ~pyspark.sql.DataFrame
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
@@ -141,7 +175,44 @@ def prepare_and_write_all_tables(
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
-    """Bulk prepared pipeline orchestration with canonical config parsing."""
+    """Bulk prepared pipeline: discovery or ``tables_config``, then :py:func:`fabrictools.prepare_and_write_data` per job.
+
+    :param source_lakehouse_name: Source Lakehouse.
+    :param target_lakehouse_name: Target Lakehouse for prepared outputs.
+    :param mode: Default write mode for discovered jobs.
+    :param tables_config: Optional explicit job list (see :mod:`fabrictools.pipelines.config`).
+    :param include_schemas: Discovery schema filter.
+    :param exclude_tables: Discovery exclusion list.
+    :param sample_size: Forwarded to each :py:func:`fabrictools.prepare_and_write_data` call.
+    :param profiling_confidence_threshold: Forwarded to each call.
+    :param max_partitions_guard: Forwarded to each call.
+    :param vacuum_retention_hours: Forwarded to each call.
+    :param enable_semantic_model_publish: Forwarded to each call.
+    :param semantic_workspace: Forwarded to each call.
+    :param semantic_model_name: Forwarded to each call.
+    :param overwrite_semantic_model: Forwarded to each call.
+    :param continue_on_error: If ``False``, abort on first table failure.
+    :param spark: Optional ``SparkSession``.
+    :type source_lakehouse_name: str
+    :type target_lakehouse_name: str
+    :type mode: str
+    :type tables_config: list[dict] | None
+    :type include_schemas: list[str] | None
+    :type exclude_tables: list[str] | None
+    :type sample_size: int
+    :type profiling_confidence_threshold: float
+    :type max_partitions_guard: int
+    :type vacuum_retention_hours: int
+    :type enable_semantic_model_publish: bool
+    :type semantic_workspace: str | None
+    :type semantic_model_name: str
+    :type overwrite_semantic_model: bool
+    :type continue_on_error: bool
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Summary dict with counts and per-table success/failure entries.
+    :rtype: dict
+    """
     _spark = spark or get_spark()
     table_jobs = _build_jobs(
         source_lakehouse_name=source_lakehouse_name,

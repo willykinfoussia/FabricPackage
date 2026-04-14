@@ -17,11 +17,16 @@ _SCHEMA_SNAPSHOT_TABLE_SUFFIX = "_schema_snapshot"
 
 
 def filter_pipeline_discovered_tables(relative_paths: list[str]) -> list[str]:
-    """
-    Drop fabrictools internal tables and schema snapshot folders from discovery.
+    """Remove internal fabrictools tables and schema snapshot paths from a path list.
 
-    Excludes tables whose name ends with ``_schema_snapshot`` and the fixed
-    names ``pipeline_audit_log``, ``prefix_rules``, and ``profiling_cache``.
+    Drops names ending with ``_schema_snapshot`` and fixed names
+    ``pipeline_audit_log``, ``prefix_rules``, and ``profiling_cache``.
+
+    :param relative_paths: ``Tables/<schema>/<table>`` style relative paths.
+    :type relative_paths: list[str]
+
+    :returns: Filtered paths in original order.
+    :rtype: list[str]
     """
     kept: list[str] = []
     for relative_path in relative_paths:
@@ -38,7 +43,14 @@ def filter_pipeline_discovered_tables(relative_paths: list[str]) -> list[str]:
 
 
 def get_fs_entry_name(fs_entry: Any) -> str:
-    """Extract a clean directory/file name from a notebookutils.fs.ls entry."""
+    """Return a directory or file name from a ``notebookutils.fs.ls`` entry.
+
+    :param fs_entry: Object with ``name`` or ``path`` as provided by Fabric APIs.
+    :type fs_entry: Any
+
+    :returns: Normalized leaf name, or empty string if none.
+    :rtype: str
+    """
     raw_name = getattr(fs_entry, "name", "")
     if raw_name:
         return str(raw_name).strip().strip("/")
@@ -55,10 +67,21 @@ def list_lakehouse_tables(
     include_schemas: Optional[List[str]] = None,
     exclude_tables: Optional[List[str]] = None,
 ) -> List[str]:
-    """
-    List table relative paths from a Lakehouse as ``Tables/<schema>/<table>``.
+    """List table paths under a Lakehouse as ``Tables/<schema>/<table>``.
 
-    Discovery is file-system based, by scanning ``<abfs>/Tables/<schema>/<table>``.
+    Uses filesystem listing under ``<abfs>/Tables/<schema>/<table>``.
+
+    :param lakehouse_name: Lakehouse display name.
+    :param include_schemas: If set, only these schemas (case-insensitive).
+    :param exclude_tables: Table names or ``schema.table`` to exclude (case-insensitive).
+    :type lakehouse_name: str
+    :type include_schemas: list[str] | None
+    :type exclude_tables: list[str] | None
+
+    :returns: Sorted relative paths.
+    :rtype: list[str]
+
+    :raises ValueError: When ``notebookutils`` is unavailable (not in Fabric).
     """
     try:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
@@ -113,10 +136,19 @@ def list_lakehouse_tables_for_pipeline(
     include_schemas: Optional[List[str]] = None,
     exclude_tables: Optional[List[str]] = None,
 ) -> List[str]:
-    """
-    Discover tables like :func:`list_lakehouse_tables`, then apply
-    :func:`filter_pipeline_discovered_tables` so bulk pipelines skip internal
-    metadata and snapshot paths.
+    """Like :py:func:`list_lakehouse_tables`, then :py:func:`filter_pipeline_discovered_tables`.
+
+    Bulk pipelines use this to skip internal metadata and schema snapshot tables.
+
+    :param lakehouse_name: Lakehouse display name.
+    :param include_schemas: Optional schema allow-list (case-insensitive).
+    :param exclude_tables: Optional table / ``schema.table`` deny-list.
+    :type lakehouse_name: str
+    :type include_schemas: list[str] | None
+    :type exclude_tables: list[str] | None
+
+    :returns: Sorted, pipeline-safe relative table paths.
+    :rtype: list[str]
     """
     return filter_pipeline_discovered_tables(
         list_lakehouse_tables(

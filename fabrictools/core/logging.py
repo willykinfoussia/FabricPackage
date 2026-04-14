@@ -20,7 +20,13 @@ _logger = logging.getLogger("fabrictools")
 
 
 def log(message: str, level: str = "info") -> None:
-    """Emit a timestamped log message."""
+    """Emit a timestamped line on the ``fabrictools`` logger.
+
+    :param message: Text to log.
+    :param level: One of ``info``, ``warning``, ``error``, ``debug`` (case-insensitive).
+    :type message: str
+    :type level: str
+    """
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     lvl = _LEVELS.get(level.lower(), logging.INFO)
     _logger.log(lvl, "[%s] %s", ts, message)

@@ -1,4 +1,4 @@
-"""Data quality subpackage."""
+"""Data quality: cleaning, scanning, and bronze→silver pipelines (:mod:`fabrictools.quality.clean`, :mod:`fabrictools.quality.scan`, :mod:`fabrictools.quality.pipeline`)."""
 
 from fabrictools.quality.clean import add_silver_metadata, clean_data
 from fabrictools.quality.pipeline import clean_and_write_all_tables, clean_and_write_data

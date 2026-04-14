@@ -21,7 +21,17 @@ def _read_property(container: object, key: str) -> str:
 
 
 def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
-    """Build ordered candidate relative paths for Lakehouse reads."""
+    """Build ordered candidate relative paths for Lakehouse reads.
+
+    Normalizes slashes, then may prepend ``Tables/dbo`` or ``Files`` when the path
+    omits those prefixes (Fabric layout).
+
+    :param relative_path: User-supplied path under the Lakehouse.
+    :type relative_path: str
+
+    :returns: Unique candidates in resolution order.
+    :rtype: list[str]
+    """
     normalized = relative_path.strip().strip("/").replace("\\", "/")
     if not normalized:
         return [normalized]
@@ -57,7 +67,14 @@ def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
 
 
 def build_lakehouse_write_path(relative_path: str) -> str:
-    """Build a normalized Lakehouse write path."""
+    """Normalize a Lakehouse write path (``Tables/dbo/...`` or ``Files/...``).
+
+    :param relative_path: Destination path fragment from the caller.
+    :type relative_path: str
+
+    :returns: Canonical relative path for writes.
+    :rtype: str
+    """
     normalized = relative_path.strip().strip("/").replace("\\", "/")
     if not normalized:
         return normalized
@@ -80,7 +97,16 @@ def build_lakehouse_write_path(relative_path: str) -> str:
 
 
 def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
-    """Return the full ABFS path for a Fabric Lakehouse."""
+    """Resolve the full ABFS base path for a Lakehouse display name.
+
+    :param lakehouse_name: Lakehouse name as shown in Fabric.
+    :type lakehouse_name: str
+
+    :returns: ``abfsPath`` from lakehouse properties.
+    :rtype: str
+
+    :raises ValueError: If ``notebookutils`` is missing or resolution fails.
+    """
     try:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
 
@@ -98,7 +124,16 @@ def get_lakehouse_abfs_path(lakehouse_name: str) -> str:
 
 
 def get_warehouse_jdbc_url(warehouse_name: str) -> str:
-    """Return the JDBC connection URL for a Fabric Warehouse."""
+    """Build a JDBC URL for a Fabric Warehouse (SQL endpoint + database).
+
+    :param warehouse_name: Warehouse display name in Fabric.
+    :type warehouse_name: str
+
+    :returns: JDBC URL string for Spark ``jdbc`` format reads/writes.
+    :rtype: str
+
+    :raises ValueError: If ``notebookutils`` is missing or resolution fails.
+    """
     try:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
 

@@ -108,7 +108,35 @@ def build_dimension_country(
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """Build `dimension_country` from `countrystatecity-countries`."""
+    """Build ``dimension_country`` from the ``countrystatecity-countries`` package.
+
+    :param countries_limit: Optional cap on countries processed (source list order).
+    :param fail_on_source_error: If ``True``, raise on source errors; else log and return empty frame.
+    :param lakehouse_name: Optional Lakehouse for Delta output.
+    :param lakehouse_relative_path: Path under Lakehouse (defaults via ``default_relative_path``).
+    :param warehouse_name: Optional Warehouse for JDBC output.
+    :param warehouse_table: Fully qualified warehouse table.
+    :param default_relative_path: Default Lakehouse relative path segment.
+    :param mode: Spark write mode.
+    :param batch_size: JDBC batch size for warehouse writes.
+    :param spark: Optional ``SparkSession``.
+    :type countries_limit: int | None
+    :type fail_on_source_error: bool
+    :type lakehouse_name: str | None
+    :type lakehouse_relative_path: str | None
+    :type warehouse_name: str | None
+    :type warehouse_table: str | None
+    :type default_relative_path: str
+    :type mode: str
+    :type batch_size: int
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Country dimension dataframe.
+    :rtype: ~pyspark.sql.DataFrame
+
+    :raises ImportError: When ``countrystatecity-countries`` is not installed.
+    :raises RuntimeError: When ``fail_on_source_error`` is ``True`` and building fails.
+    """
     _spark = spark or get_spark()
 
     try:
@@ -223,13 +251,43 @@ def build_dimension_city(
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
 ) -> DataFrame:
-    """Build `dimension_city` from `countrystatecity-countries`.
+    """Build ``dimension_city`` from ``countrystatecity-countries`` with optional filters.
 
-    Optional filters narrow down which countries (and thus cities) are
-    included.  ``countries`` accepts any mix of ``country_code_2``,
-    ``country_code_3`` or ``country_name`` values (case-insensitive).
-    ``regions`` and ``subregions`` also accept case-insensitive values.
-    All filters are combined with AND logic.
+    ``countries`` may list ``country_code_2``, ``country_code_3``, or ``country_name``
+    values (case-insensitive). ``regions`` and ``subregions`` narrow by geography;
+    filters combine with AND logic.
+
+    :param countries_limit: Optional cap on countries iterated.
+    :param include_states_metadata: If ``True``, resolve state names via ``get_states_of_country``.
+    :param fail_on_source_error: If ``True``, raise on failure; else return empty frame after logging.
+    :param regions: Allow-list of region names (uppercased internally).
+    :param subregions: Allow-list of subregion names.
+    :param countries: Allow-list of country identifiers or names.
+    :param lakehouse_name: Optional Lakehouse for Delta output.
+    :param lakehouse_relative_path: Lakehouse path for the dimension table.
+    :param warehouse_name: Optional Warehouse name.
+    :param warehouse_table: Fully qualified warehouse table.
+    :param default_relative_path: Default Lakehouse path segment.
+    :param mode: Spark write mode.
+    :param batch_size: JDBC batch size.
+    :param spark: Optional ``SparkSession``.
+    :type countries_limit: int | None
+    :type include_states_metadata: bool
+    :type fail_on_source_error: bool
+    :type regions: list[str] | None
+    :type subregions: list[str] | None
+    :type countries: list[str] | None
+    :type lakehouse_name: str | None
+    :type lakehouse_relative_path: str | None
+    :type warehouse_name: str | None
+    :type warehouse_table: str | None
+    :type default_relative_path: str
+    :type mode: str
+    :type batch_size: int
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: City dimension dataframe.
+    :rtype: ~pyspark.sql.DataFrame
     """
     _spark = spark or get_spark()
     regions_filter = _normalize_filter_set(regions)

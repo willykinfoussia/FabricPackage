@@ -1,0 +1,578 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fabrictools.io.lakehouse &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules.html">Référence API</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fabrictools.io.lakehouse</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fabrictools.io.lakehouse</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Lakehouse I/O facade module.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">SparkSession</span>  <span class="c1"># type: ignore[reportMissingImports]</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntegralType</span>  <span class="c1"># type: ignore[reportMissingImports]</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">log</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.core</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">build_lakehouse_read_path_candidates</span><span class="p">,</span>
+    <span class="n">build_lakehouse_write_path</span><span class="p">,</span>
+    <span class="n">get_lakehouse_abfs_path</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_spark</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.io.discovery</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_lakehouse_tables</span>
+
+<span class="c1"># ── Read ─────────────────────────────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">read_lakehouse</span><span class="p">(</span>
+    <span class="n">lakehouse_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">spark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SparkSession</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read a dataset from a Fabric Lakehouse.</span>
+
+<span class="sd">    Tries formats in order: **Delta → Parquet → CSV**. The first format that</span>
+<span class="sd">    succeeds is used; the detected format is logged with the resulting shape.</span>
+
+<span class="sd">    :param lakehouse_name: Display name of the Lakehouse (e.g. ``&quot;BronzeLakehouse&quot;``).</span>
+<span class="sd">    :param relative_path: Path inside the Lakehouse root, relative to the ABFS base</span>
+<span class="sd">        (e.g. ``&quot;sales/2024&quot;`` or ``&quot;Tables/customers&quot;``).</span>
+<span class="sd">    :param spark: Optional ``SparkSession``; when omitted the active session is used.</span>
+<span class="sd">    :type lakehouse_name: str</span>
+<span class="sd">    :type relative_path: str</span>
+<span class="sd">    :type spark: ~pyspark.sql.SparkSession | None</span>
+
+<span class="sd">    :returns: Loaded dataframe.</span>
+<span class="sd">    :rtype: ~pyspark.sql.DataFrame</span>
+
+<span class="sd">    :raises RuntimeError: When none of the supported formats can be read from the path.</span>
+
+<span class="sd">    .. rubric:: Example</span>
+
+<span class="sd">    &gt;&gt;&gt; df = read_lakehouse(&quot;BronzeLakehouse&quot;, &quot;sales/2024&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_spark</span> <span class="o">=</span> <span class="n">spark</span> <span class="ow">or</span> <span class="n">get_spark</span><span class="p">()</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">get_lakehouse_abfs_path</span><span class="p">(</span><span class="n">lakehouse_name</span><span class="p">)</span>
+    <span class="n">candidate_relative_paths</span> <span class="o">=</span> <span class="n">build_lakehouse_read_path_candidates</span><span class="p">(</span><span class="n">relative_path</span><span class="p">)</span>
+
+    <span class="n">failures</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">candidate_relative_path</span> <span class="ow">in</span> <span class="n">candidate_relative_paths</span><span class="p">:</span>
+        <span class="n">full_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">candidate_relative_path</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">_try_read_formats</span><span class="p">(</span><span class="n">_spark</span><span class="p">,</span> <span class="n">full_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">candidate_relative_path</span> <span class="o">!=</span> <span class="n">relative_path</span><span class="p">:</span>
+                <span class="n">log</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Resolved relative_path &#39;</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s2">&#39; -&gt; &#39;</span><span class="si">{</span><span class="n">candidate_relative_path</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">log</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">df</span><span class="o">.</span><span class="n">count</span><span class="p">()</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> rows · </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2"> columns&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">df</span>
+        <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">failures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">attempted_paths</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">candidate</span><span class="si">}</span><span class="s2">&#39;&quot;</span> <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">candidate_relative_paths</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Could not read from any candidate path for relative_path=&#39;</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s2">&#39;. &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;Tried: </span><span class="si">{</span><span class="n">attempted_paths</span><span class="si">}</span><span class="s2">. Details: </span><span class="si">{</span><span class="s1">&#39; | &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">failures</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="resolve_lakehouse_read_candidate">
+<a class="viewcode-back" href="../../../fabrictools.io.html#fabrictools.io.lakehouse.resolve_lakehouse_read_candidate">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">resolve_lakehouse_read_candidate</span><span class="p">(</span>
+    <span class="n">lakehouse_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">spark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SparkSession</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the best candidate relative path for a Lakehouse read.</span>
+
+<span class="sd">    If candidate generation yields a single path, return it directly. If multiple</span>
+<span class="sd">    candidates exist, try each path and return the first readable one.</span>
+
+<span class="sd">    :param lakehouse_name: Display name of the Lakehouse.</span>
+<span class="sd">    :param relative_path: Logical path under the Lakehouse root.</span>
+<span class="sd">    :param spark: Optional ``SparkSession``; when omitted the active session is used.</span>
+<span class="sd">    :type lakehouse_name: str</span>
+<span class="sd">    :type relative_path: str</span>
+<span class="sd">    :type spark: ~pyspark.sql.SparkSession | None</span>
+
+<span class="sd">    :returns: Relative path string that was verified readable.</span>
+<span class="sd">    :rtype: str</span>
+
+<span class="sd">    :raises RuntimeError: When no candidate path can be read.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_spark</span> <span class="o">=</span> <span class="n">spark</span> <span class="ow">or</span> <span class="n">get_spark</span><span class="p">()</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">get_lakehouse_abfs_path</span><span class="p">(</span><span class="n">lakehouse_name</span><span class="p">)</span>
+    <span class="n">candidate_relative_paths</span> <span class="o">=</span> <span class="n">build_lakehouse_read_path_candidates</span><span class="p">(</span><span class="n">relative_path</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">candidate_relative_paths</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">candidate_relative_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">failures</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">candidate_relative_path</span> <span class="ow">in</span> <span class="n">candidate_relative_paths</span><span class="p">:</span>
+        <span class="n">full_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">candidate_relative_path</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">_try_read_formats</span><span class="p">(</span><span class="n">_spark</span><span class="p">,</span> <span class="n">full_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">candidate_relative_path</span> <span class="o">!=</span> <span class="n">relative_path</span><span class="p">:</span>
+                <span class="n">log</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;  Resolved relative_path &#39;</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s2">&#39; -&gt; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">candidate_relative_path</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="n">candidate_relative_path</span>
+        <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">failures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">attempted_paths</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">candidate</span><span class="si">}</span><span class="s2">&#39;&quot;</span> <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">candidate_relative_paths</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Could not resolve a readable candidate for relative_path=&#39;</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s2">&#39;. &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;Tried: </span><span class="si">{</span><span class="n">attempted_paths</span><span class="si">}</span><span class="s2">. Details: </span><span class="si">{</span><span class="s1">&#39; | &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">failures</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_try_read_formats</span><span class="p">(</span><span class="n">spark</span><span class="p">:</span> <span class="n">SparkSession</span><span class="p">,</span> <span class="n">full_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Attempt Delta → Parquet → CSV, return the first successful DataFrame.&quot;&quot;&quot;</span>
+    <span class="c1"># Delta (preferred in Fabric)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">full_path</span><span class="p">)</span>
+        <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Format detected: Delta&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">df</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="c1"># Parquet</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">&quot;parquet&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">full_path</span><span class="p">)</span>
+        <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Format detected: Parquet&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">df</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="c1"># CSV — last resort</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;header&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;inferSchema&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;multiLine&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;escape&quot;</span><span class="p">,</span> <span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">csv</span><span class="p">(</span><span class="n">full_path</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Format detected: CSV&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">df</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Could not read &#39;</span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2">&#39; as Delta, Parquet, or CSV: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+
+<span class="c1"># ── Write ────────────────────────────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_dedupe_preserve_order</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a list without duplicates while preserving insertion order.&quot;&quot;&quot;</span>
+    <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">deduped</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">deduped</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">deduped</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_detect_partition_columns</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Auto-detect year/month/day partition columns.</span>
+
+<span class="sd">    Detection order:</span>
+<span class="sd">    1) standard names with underscore: _year/_month/_day</span>
+<span class="sd">    2) standard names without underscore: year/month/day</span>
+<span class="sd">    3) fallback on integer-like columns whose names match</span>
+<span class="sd">       year|annee, month|mois, day|jour</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">standard_with_underscore</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;_year&quot;</span><span class="p">,</span> <span class="s2">&quot;_month&quot;</span><span class="p">,</span> <span class="s2">&quot;_day&quot;</span><span class="p">]</span>
+    <span class="n">standard_without_underscore</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;year&quot;</span><span class="p">,</span> <span class="s2">&quot;month&quot;</span><span class="p">,</span> <span class="s2">&quot;day&quot;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">col_name</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">for</span> <span class="n">col_name</span> <span class="ow">in</span> <span class="n">standard_with_underscore</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">standard_with_underscore</span>
+    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">col_name</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">for</span> <span class="n">col_name</span> <span class="ow">in</span> <span class="n">standard_without_underscore</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">standard_without_underscore</span>
+
+    <span class="n">schema_fields</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="s2">&quot;schema&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;fields&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">year_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(?:^|_)(year|annee)(?:$|_)&quot;</span><span class="p">)</span>
+    <span class="n">month_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(?:^|_)(month|mois)(?:$|_)&quot;</span><span class="p">)</span>
+    <span class="n">day_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(?:^|_)(day|jour)(?:$|_)&quot;</span><span class="p">)</span>
+
+    <span class="n">detected</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">schema_fields</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">dataType</span><span class="p">,</span> <span class="n">IntegralType</span><span class="p">):</span>
+            <span class="k">continue</span>
+
+        <span class="n">normalized_name</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s2">&quot;year&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">detected</span> <span class="ow">and</span> <span class="n">year_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">normalized_name</span><span class="p">):</span>
+            <span class="n">detected</span><span class="p">[</span><span class="s2">&quot;year&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="s2">&quot;month&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">detected</span> <span class="ow">and</span> <span class="n">month_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">normalized_name</span><span class="p">):</span>
+            <span class="n">detected</span><span class="p">[</span><span class="s2">&quot;month&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="s2">&quot;day&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">detected</span> <span class="ow">and</span> <span class="n">day_regex</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">normalized_name</span><span class="p">):</span>
+            <span class="n">detected</span><span class="p">[</span><span class="s2">&quot;day&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="n">ordered_detected</span> <span class="o">=</span> <span class="p">[</span><span class="n">detected</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;year&quot;</span><span class="p">,</span> <span class="s2">&quot;month&quot;</span><span class="p">,</span> <span class="s2">&quot;day&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">detected</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ordered_detected</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ordered_detected</span>
+    <span class="k">return</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">write_lakehouse</span><span class="p">(</span>
+    <span class="n">df</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">lakehouse_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;overwrite&quot;</span><span class="p">,</span>
+    <span class="n">partition_by</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;delta&quot;</span><span class="p">,</span>
+    <span class="n">spark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SparkSession</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">normalize_column_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write a ``DataFrame`` to a Fabric Lakehouse (default format: Delta).</span>
+
+<span class="sd">    :param df: DataFrame to persist.</span>
+<span class="sd">    :param lakehouse_name: Display name of the target Lakehouse.</span>
+<span class="sd">    :param relative_path: Destination path inside the Lakehouse (e.g.</span>
+<span class="sd">        ``&quot;sales_clean&quot;`` or ``&quot;Tables/sales_clean&quot;``).</span>
+<span class="sd">    :param mode: Spark write mode: ``&quot;overwrite&quot;`` (default), ``&quot;append&quot;``,</span>
+<span class="sd">        ``&quot;ignore&quot;``, or ``&quot;error&quot;``.</span>
+<span class="sd">    :param partition_by: Optional column names to partition by. Each name is resolved</span>
+<span class="sd">        like :py:func:`fabrictools.clean_data` /</span>
+<span class="sd">        :py:func:`fabrictools.merge_dataframes` (physical name,</span>
+<span class="sd">        normalized unique label, or snake_case). Auto-detected date partitions are</span>
+<span class="sd">        appended when present on ``df``.</span>
+<span class="sd">    :param format: ``&quot;delta&quot;`` (default), ``&quot;parquet&quot;``, or ``&quot;csv&quot;``.</span>
+<span class="sd">    :param spark: Optional ``SparkSession``; when omitted the active session is used.</span>
+<span class="sd">    :param normalize_column_names: If ``True`` (default), run</span>
+<span class="sd">        :py:func:`fabrictools.rename_columns_normalized` before</span>
+<span class="sd">        resolving ``partition_by`` and writing. If ``False``, keep physical column</span>
+<span class="sd">        names unchanged.</span>
+<span class="sd">    :type df: ~pyspark.sql.DataFrame</span>
+<span class="sd">    :type lakehouse_name: str</span>
+<span class="sd">    :type relative_path: str</span>
+<span class="sd">    :type mode: str</span>
+<span class="sd">    :type partition_by: list[str] | None</span>
+<span class="sd">    :type format: str</span>
+<span class="sd">    :type spark: ~pyspark.sql.SparkSession | None</span>
+<span class="sd">    :type normalize_column_names: bool</span>
+
+<span class="sd">    .. rubric:: Example</span>
+
+<span class="sd">    &gt;&gt;&gt; write_lakehouse(df, &quot;SilverLakehouse&quot;, &quot;sales_clean&quot;,</span>
+<span class="sd">    ...                 mode=&quot;overwrite&quot;, partition_by=[&quot;year&quot;])</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_</span> <span class="o">=</span> <span class="n">spark</span> <span class="ow">or</span> <span class="n">get_spark</span><span class="p">()</span>  <span class="c1"># validates spark availability early</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">get_lakehouse_abfs_path</span><span class="p">(</span><span class="n">lakehouse_name</span><span class="p">)</span>
+    <span class="n">resolved_relative_path</span> <span class="o">=</span> <span class="n">build_lakehouse_write_path</span><span class="p">(</span><span class="n">relative_path</span><span class="p">)</span>
+    <span class="n">full_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">resolved_relative_path</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="n">resolved_relative_path</span> <span class="o">!=</span> <span class="n">relative_path</span><span class="p">:</span>
+        <span class="n">log</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Auto-corrected write relative_path &#39;</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;-&gt; &#39;</span><span class="si">{</span><span class="n">resolved_relative_path</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+        <span class="p">)</span>
+    <span class="n">log</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Writing to Lakehouse &#39;</span><span class="si">{</span><span class="n">lakehouse_name</span><span class="si">}</span><span class="s2">&#39; → </span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;[format=</span><span class="si">{</span><span class="nb">format</span><span class="si">}</span><span class="s2">, mode=</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">]&quot;</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Lazy import: fabrictools.transform.columns → quality.clean → fabrictools.io</span>
+    <span class="c1"># would otherwise create an import cycle while io.__init__ loads lakehouse.</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">fabrictools.transform.columns</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># noqa: PLC0415</span>
+        <span class="n">_resolve_column_name</span><span class="p">,</span>
+        <span class="n">rename_columns_normalized</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">normalize_column_names</span><span class="p">:</span>
+        <span class="n">original_cols</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">rename_columns_normalized</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">!=</span> <span class="n">original_cols</span><span class="p">:</span>
+            <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Column names normalized (clean_data-style) before write&quot;</span><span class="p">)</span>
+
+    <span class="n">user_partitions</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">_resolve_column_name</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;DataFrame&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">(</span><span class="n">partition_by</span> <span class="ow">or</span> <span class="p">[])</span>
+    <span class="p">]</span>
+    <span class="n">auto_detected_partitions</span> <span class="o">=</span> <span class="n">_detect_partition_columns</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+    <span class="n">effective_partition_by</span> <span class="o">=</span> <span class="n">_dedupe_preserve_order</span><span class="p">(</span>
+        <span class="n">user_partitions</span> <span class="o">+</span> <span class="n">auto_detected_partitions</span>
+    <span class="p">)</span>
+
+    <span class="n">writer</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">format</span><span class="p">)</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;overwriteSchema&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mode</span><span class="p">(</span><span class="n">mode</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">effective_partition_by</span><span class="p">:</span>
+        <span class="n">writer</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="o">*</span><span class="n">effective_partition_by</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">auto_detected_partitions</span><span class="p">:</span>
+            <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Auto-detected partitions: &quot;</span> <span class="o">+</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">auto_detected_partitions</span><span class="p">))</span>
+        <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Partition columns: &quot;</span> <span class="o">+</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">effective_partition_by</span><span class="p">))</span>
+    <span class="n">writer</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">full_path</span><span class="p">)</span>
+    <span class="n">log</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Write complete → </span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># ── Merge (upsert) ────────────────────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">merge_lakehouse</span><span class="p">(</span>
+    <span class="n">source_df</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">lakehouse_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">merge_condition</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">update_set</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">insert_set</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">spark</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SparkSession</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Upsert (merge) a ``DataFrame`` into an existing Delta table in a Lakehouse.</span>
+
+<span class="sd">    Uses Delta Lake ``DeltaTable.forPath``. When ``update_set`` and/or ``insert_set``</span>
+<span class="sd">    are ``None``, ``whenMatchedUpdateAll`` / ``whenNotMatchedInsertAll`` are used.</span>
+
+<span class="sd">    :param source_df: Rows to merge into the target table.</span>
+<span class="sd">    :param lakehouse_name: Lakehouse display name holding the target table.</span>
+<span class="sd">    :param relative_path: Path of the Delta table inside the Lakehouse.</span>
+<span class="sd">    :param merge_condition: SQL predicate joining source and target (e.g.</span>
+<span class="sd">        ``&quot;src.id = tgt.id&quot;``).</span>
+<span class="sd">    :param update_set: ``{target_col: source_expr}`` for matched rows, or ``None``</span>
+<span class="sd">        to update all columns.</span>
+<span class="sd">    :param insert_set: ``{target_col: source_expr}`` for new rows, or ``None`` to</span>
+<span class="sd">        insert all columns.</span>
+<span class="sd">    :param spark: Optional ``SparkSession``; when omitted the active session is used.</span>
+<span class="sd">    :type source_df: ~pyspark.sql.DataFrame</span>
+<span class="sd">    :type lakehouse_name: str</span>
+<span class="sd">    :type relative_path: str</span>
+<span class="sd">    :type merge_condition: str</span>
+<span class="sd">    :type update_set: dict | None</span>
+<span class="sd">    :type insert_set: dict | None</span>
+<span class="sd">    :type spark: ~pyspark.sql.SparkSession | None</span>
+
+<span class="sd">    .. rubric:: Example</span>
+
+<span class="sd">    &gt;&gt;&gt; merge_lakehouse(</span>
+<span class="sd">    ...     new_df, &quot;SilverLakehouse&quot;, &quot;sales_clean&quot;,</span>
+<span class="sd">    ...     merge_condition=&quot;src.id = tgt.id&quot;,</span>
+<span class="sd">    ... )</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">delta.tables</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeltaTable</span>  <span class="c1"># type: ignore[import-untyped]  # noqa: PLC0415</span>
+
+    <span class="n">_spark</span> <span class="o">=</span> <span class="n">spark</span> <span class="ow">or</span> <span class="n">get_spark</span><span class="p">()</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">get_lakehouse_abfs_path</span><span class="p">(</span><span class="n">lakehouse_name</span><span class="p">)</span>
+    <span class="n">full_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">log</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Merging into Lakehouse &#39;</span><span class="si">{</span><span class="n">lakehouse_name</span><span class="si">}</span><span class="s2">&#39; → </span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">log</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Condition: </span><span class="si">{</span><span class="n">merge_condition</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">target</span> <span class="o">=</span> <span class="n">DeltaTable</span><span class="o">.</span><span class="n">forPath</span><span class="p">(</span><span class="n">_spark</span><span class="p">,</span> <span class="n">full_path</span><span class="p">)</span>
+    <span class="n">merge_builder</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">target</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;tgt&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">source_df</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;src&quot;</span><span class="p">),</span> <span class="n">merge_condition</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">update_set</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">merge_builder</span> <span class="o">=</span> <span class="n">merge_builder</span><span class="o">.</span><span class="n">whenMatchedUpdate</span><span class="p">(</span><span class="nb">set</span><span class="o">=</span><span class="n">update_set</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">merge_builder</span> <span class="o">=</span> <span class="n">merge_builder</span><span class="o">.</span><span class="n">whenMatchedUpdateAll</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">insert_set</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">merge_builder</span> <span class="o">=</span> <span class="n">merge_builder</span><span class="o">.</span><span class="n">whenNotMatchedInsert</span><span class="p">(</span><span class="n">values</span><span class="o">=</span><span class="n">insert_set</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">merge_builder</span> <span class="o">=</span> <span class="n">merge_builder</span><span class="o">.</span><span class="n">whenNotMatchedInsertAll</span><span class="p">()</span>
+
+    <span class="n">merge_builder</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+    <span class="n">log</span><span class="p">(</span><span class="s2">&quot;  Merge complete&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">delete_all_lakehouse_tables</span><span class="p">(</span>
+    <span class="n">lakehouse_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">include_schemas</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">exclude_tables</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">continue_on_error</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Hard-delete all discovered Lakehouse table folders.</span>
+
+<span class="sd">    Tables are discovered as ``Tables/&lt;schema&gt;/&lt;table&gt;`` and removed with</span>
+<span class="sd">    ``notebookutils.fs.rm(&lt;abfs&gt;/Tables/&lt;schema&gt;/&lt;table&gt;, recurse=True)``.</span>
+
+<span class="sd">    :param lakehouse_name: Lakehouse display name to purge.</span>
+<span class="sd">    :param include_schemas: If set, only these schema names (case-insensitive).</span>
+<span class="sd">    :param exclude_tables: Table or ``schema.table`` names to skip (case-insensitive).</span>
+<span class="sd">    :param continue_on_error: If ``False`` (default), stop on first delete failure.</span>
+<span class="sd">    :type lakehouse_name: str</span>
+<span class="sd">    :type include_schemas: list[str] | None</span>
+<span class="sd">    :type exclude_tables: list[str] | None</span>
+<span class="sd">    :type continue_on_error: bool</span>
+
+<span class="sd">    :returns: Summary with counts and per-table ``relative_path`` / errors.</span>
+<span class="sd">    :rtype: dict</span>
+
+<span class="sd">    :raises ValueError: When ``notebookutils`` is unavailable (not in Fabric).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">notebookutils</span>  <span class="c1"># type: ignore[import-untyped]  # noqa: PLC0415</span>
+    <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;notebookutils is not available — are you running inside &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Microsoft Fabric? (</span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+    <span class="n">base</span> <span class="o">=</span> <span class="n">get_lakehouse_abfs_path</span><span class="p">(</span><span class="n">lakehouse_name</span><span class="p">)</span>
+    <span class="n">table_paths</span> <span class="o">=</span> <span class="n">list_lakehouse_tables</span><span class="p">(</span>
+        <span class="n">lakehouse_name</span><span class="o">=</span><span class="n">lakehouse_name</span><span class="p">,</span>
+        <span class="n">include_schemas</span><span class="o">=</span><span class="n">include_schemas</span><span class="p">,</span>
+        <span class="n">exclude_tables</span><span class="o">=</span><span class="n">exclude_tables</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">table_paths</span><span class="p">:</span>
+        <span class="n">log</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;No tables found in Lakehouse &#39;</span><span class="si">{</span><span class="n">lakehouse_name</span><span class="si">}</span><span class="s2">&#39; for purge.&quot;</span><span class="p">,</span>
+            <span class="n">level</span><span class="o">=</span><span class="s2">&quot;warning&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;total_tables&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;deleted_tables&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;failed_tables&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">&quot;failures&quot;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="p">}</span>
+
+    <span class="n">deleted_entries</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">failure_entries</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">total_tables</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">table_paths</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">table_relative_path</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">table_paths</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">full_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">table_relative_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">log</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">total_tables</span><span class="si">}</span><span class="s2">] Hard-deleting table path &#39;</span><span class="si">{</span><span class="n">full_path</span><span class="si">}</span><span class="s2">&#39;...&quot;</span><span class="p">)</span>
+            <span class="n">notebookutils</span><span class="o">.</span><span class="n">fs</span><span class="o">.</span><span class="n">rm</span><span class="p">(</span><span class="n">full_path</span><span class="p">,</span> <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">deleted_entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;relative_path&quot;</span><span class="p">:</span> <span class="n">table_relative_path</span><span class="p">,</span>
+                    <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">full_path</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">failure_entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;relative_path&quot;</span><span class="p">:</span> <span class="n">table_relative_path</span><span class="p">,</span>
+                    <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">table_relative_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+            <span class="n">log</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">total_tables</span><span class="si">}</span><span class="s2">] Failed to hard-delete &#39;</span><span class="si">{</span><span class="n">table_relative_path</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">level</span><span class="o">=</span><span class="s2">&quot;warning&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">continue_on_error</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;total_tables&quot;</span><span class="p">:</span> <span class="n">total_tables</span><span class="p">,</span>
+        <span class="s2">&quot;deleted_tables&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">deleted_entries</span><span class="p">),</span>
+        <span class="s2">&quot;failed_tables&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">failure_entries</span><span class="p">),</span>
+        <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">deleted_entries</span><span class="p">,</span>
+        <span class="s2">&quot;failures&quot;</span><span class="p">:</span> <span class="n">failure_entries</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;read_lakehouse&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;resolve_lakehouse_read_candidate&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;write_lakehouse&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;merge_lakehouse&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;delete_all_lakehouse_tables&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

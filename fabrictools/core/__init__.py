@@ -1,4 +1,9 @@
-"""Core shared utilities for fabrictools."""
+"""Core shared utilities for fabrictools.
+
+Exports logging, Spark session access, and Fabric path / JDBC resolution helpers.
+See submodules :mod:`fabrictools.core.logging`, :mod:`fabrictools.core.paths`,
+:mod:`fabrictools.core.spark`.
+"""
 
 from fabrictools.core.logging import log
 from fabrictools.core.paths import (

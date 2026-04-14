@@ -1,0 +1,4 @@
+fabrictools.core.logging
+========================
+
+.. automodule:: fabrictools.core.logging

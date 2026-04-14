@@ -1,0 +1,4 @@
+fabrictools.quality.pipeline
+============================
+
+.. automodule:: fabrictools.quality.pipeline

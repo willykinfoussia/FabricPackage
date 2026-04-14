@@ -1,0 +1,579 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transformations DataFrame &mdash; FabricTools 0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8fa8b3e9"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Qualité des données et pipelines Silver" href="fabrictools.quality.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FabricTools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contenu</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">Référence API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="api_publique.html">API publique (import racine)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.core.html">Noyau applicatif (core)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.dimensions.html">Dimensions (calendrier et géographie)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.io.html">I/O Lakehouse et Warehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.pipelines.html">Pipelines — configuration des jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.prepare.html">Couche préparée (prepared)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fabrictools.quality.html">Qualité des données et pipelines Silver</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Transformations DataFrame</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.coalesce_dim"><code class="docutils literal notranslate"><span class="pre">coalesce_dim()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.dataframe_last_nonnull_wide_month_from_long"><code class="docutils literal notranslate"><span class="pre">dataframe_last_nonnull_wide_month_from_long()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.dataframe_pivot_category_wide_month_from_long"><code class="docutils literal notranslate"><span class="pre">dataframe_pivot_category_wide_month_from_long()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.dataframe_unpivot_wide_month_suffix"><code class="docutils literal notranslate"><span class="pre">dataframe_unpivot_wide_month_suffix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.drop_rows_over_empty_percent"><code class="docutils literal notranslate"><span class="pre">drop_rows_over_empty_percent()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.empty_or_null"><code class="docutils literal notranslate"><span class="pre">empty_or_null()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.filter_by_value_list"><code class="docutils literal notranslate"><span class="pre">filter_by_value_list()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.merge_dataframes"><code class="docutils literal notranslate"><span class="pre">merge_dataframes()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.month_start_from_ca_monthly_col"><code class="docutils literal notranslate"><span class="pre">month_start_from_ca_monthly_col()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.norm_text"><code class="docutils literal notranslate"><span class="pre">norm_text()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.remove_columns"><code class="docutils literal notranslate"><span class="pre">remove_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.rename_columns_month_year_block_labels"><code class="docutils literal notranslate"><span class="pre">rename_columns_month_year_block_labels()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.rename_columns_normalized"><code class="docutils literal notranslate"><span class="pre">rename_columns_normalized()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.rename_columns_pq_serial_to_dates"><code class="docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_dates()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.rename_columns_pq_serial_to_mois_annee"><code class="docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_mois_annee()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.resolve_dataframe_column"><code class="docutils literal notranslate"><span class="pre">resolve_dataframe_column()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.transform_wide_month_suffix"><code class="docutils literal notranslate"><span class="pre">transform_wide_month_suffix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fabrictools.transform.wide_value_columns"><code class="docutils literal notranslate"><span class="pre">wide_value_columns()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FabricTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">Référence API</a></li>
+      <li class="breadcrumb-item active">Transformations DataFrame</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/fabrictools.transform.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fabrictools.transform.columns">
+<span id="transformations-dataframe"></span><h1>Transformations DataFrame<a class="headerlink" href="#module-fabrictools.transform.columns" title="Link to this heading"></a></h1>
+<p>Column name resolution (physical vs clean_data-style normalized) and helpers.</p>
+<p id="module-fabrictools.transform.filter">Filter DataFrames by a list of values on one column (type-aware, no casts).</p>
+<p id="module-fabrictools.transform.merge">Join a main DataFrame to a right side with prefixed, normalized column names.</p>
+<p id="module-fabrictools.transform.rows">Row-level filters based on how many columns are empty (see <code class="docutils literal notranslate"><span class="pre">empty_or_null</span></code>).</p>
+<p id="module-fabrictools.transform.text">Column expressions for normalized text and dimension defaults.</p>
+<p id="module-fabrictools.transform.wide_month_suffix">Unpivot and reshape wide month columns that share a block suffix (e.g. `` [CA Monthly]``).</p>
+<p id="module-fabrictools.transform">DataFrame transforms: column tools, filters, merges, and wide-month reshaping.</p>
+<p>See submodules <a class="reference internal" href="#module-fabrictools.transform.columns" title="fabrictools.transform.columns"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.transform.columns</span></code></a>, <a class="reference internal" href="#module-fabrictools.transform.filter" title="fabrictools.transform.filter"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.transform.filter</span></code></a>,
+<a class="reference internal" href="#module-fabrictools.transform.merge" title="fabrictools.transform.merge"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.transform.merge</span></code></a>, <a class="reference internal" href="#module-fabrictools.transform.rows" title="fabrictools.transform.rows"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.transform.rows</span></code></a>,
+<a class="reference internal" href="#module-fabrictools.transform.text" title="fabrictools.transform.text"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.transform.text</span></code></a>, <a class="reference internal" href="#module-fabrictools.transform.wide_month_suffix" title="fabrictools.transform.wide_month_suffix"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fabrictools.transform.wide_month_suffix</span></code></a>.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.coalesce_dim">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">coalesce_dim</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">src</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.Column</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.Column</span></span></span><a class="headerlink" href="#fabrictools.transform.coalesce_dim" title="Link to this definition"></a></dt>
+<dd><p>String cast of <code class="docutils literal notranslate"><span class="pre">src</span></code>; null or blank becomes the literal <code class="docutils literal notranslate"><span class="pre">0</span></code> as string (dimension-friendly).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>src</strong> (<em>Column</em>) – Source column.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>String <code class="docutils literal notranslate"><span class="pre">Column</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Column</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.dataframe_last_nonnull_wide_month_from_long">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">dataframe_last_nonnull_wide_month_from_long</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long_df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">order_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">variable_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'MoisCol'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Valeur'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month_start_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'MonthStart'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_month_start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'MonthStart'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_year</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Year'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_month</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Month'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Value'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.dataframe_last_nonnull_wide_month_from_long" title="Link to this definition"></a></dt>
+<dd><p>For each distinct <code class="docutils literal notranslate"><span class="pre">variable_column</span></code>, keep the row with greatest <code class="docutils literal notranslate"><span class="pre">order_column</span></code> where <code class="docutils literal notranslate"><span class="pre">value_column</span></code> is non-null; emit typed month/value columns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long_df</strong> (<em>DataFrame</em>) – Long dataframe (e.g. from <a class="reference internal" href="#fabrictools.transform.dataframe_unpivot_wide_month_suffix" title="fabrictools.transform.dataframe_unpivot_wide_month_suffix"><code class="xref py py-func docutils literal notranslate"><span class="pre">dataframe_unpivot_wide_month_suffix()</span></code></a>).</p></li>
+<li><p><strong>order_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Tie-break column (descending); must exist on <code class="docutils literal notranslate"><span class="pre">long_df</span></code>.</p></li>
+<li><p><strong>variable_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Month variable name column.</p></li>
+<li><p><strong>value_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Measure column.</p></li>
+<li><p><strong>month_start_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Parsed month start on <code class="docutils literal notranslate"><span class="pre">long_df</span></code>.</p></li>
+<li><p><strong>output_month_start</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output date column name.</p></li>
+<li><p><strong>output_year</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output year column name.</p></li>
+<li><p><strong>output_month</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output month-of-year column name.</p></li>
+<li><p><strong>output_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output numeric value column name.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>One row per <code class="docutils literal notranslate"><span class="pre">variable_column</span></code> with cast types, or empty schema if inputs missing.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.dataframe_pivot_category_wide_month_from_long">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">dataframe_pivot_category_wide_month_from_long</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long_df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">category_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">pivot_categories</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fill_value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">variable_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'MoisCol'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Valeur'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month_start_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'MonthStart'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_year</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Year'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_month</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Month'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">montant_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Montant'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.dataframe_pivot_category_wide_month_from_long" title="Link to this definition"></a></dt>
+<dd><p>Sum <code class="docutils literal notranslate"><span class="pre">value_column</span></code> by <code class="docutils literal notranslate"><span class="pre">month_start_column</span></code> and <code class="docutils literal notranslate"><span class="pre">category_column</span></code>, pivot categories wide, add year/month columns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long_df</strong> (<em>DataFrame</em>) – Long dataframe with month, category, and value.</p></li>
+<li><p><strong>category_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Dimension to pivot.</p></li>
+<li><p><strong>pivot_categories</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Category values that become column names.</p></li>
+<li><p><strong>fill_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Fill null pivot cells after aggregation.</p></li>
+<li><p><strong>variable_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Variable column name (must exist on <code class="docutils literal notranslate"><span class="pre">long_df</span></code> for early-exit checks).</p></li>
+<li><p><strong>value_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Measure to sum.</p></li>
+<li><p><strong>month_start_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Date key for grouping.</p></li>
+<li><p><strong>output_year</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of year output column.</p></li>
+<li><p><strong>output_month</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of month output column.</p></li>
+<li><p><strong>montant_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Internal aggregate column name before pivot.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Wide dataframe <code class="docutils literal notranslate"><span class="pre">Year</span></code>, <code class="docutils literal notranslate"><span class="pre">Month</span></code>, one column per category.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">pivot_categories</span></code> is empty.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.dataframe_unpivot_wide_month_suffix">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">dataframe_unpivot_wide_month_suffix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">df:</span> <span class="pre">pyspark.sql.DataFrame,</span> <span class="pre">*,</span> <span class="pre">id_columns:</span> <span class="pre">~collections.abc.Sequence[str],</span> <span class="pre">value_columns_suffix:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">value_columns:</span> <span class="pre">~collections.abc.Sequence[str]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">exclude_columns:</span> <span class="pre">~collections.abc.Collection[str]</span> <span class="pre">=</span> <span class="pre">(),</span> <span class="pre">variable_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'MoisCol',</span> <span class="pre">value_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'Valeur',</span> <span class="pre">month_start_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'MonthStart',</span> <span class="pre">month_start_from_column_name:</span> <span class="pre">~collections.abc.Callable[[str],</span> <span class="pre">~datetime.date</span> <span class="pre">|</span> <span class="pre">None]</span> <span class="pre">=</span> <span class="pre">&lt;function</span> <span class="pre">month_start_from_ca_monthly_col&gt;</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.dataframe_unpivot_wide_month_suffix" title="Link to this definition"></a></dt>
+<dd><p>Unpivot wide month columns to long form and parse <code class="docutils literal notranslate"><span class="pre">month_start_column</span></code> from the variable name.</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">value_columns</span></code> is set, it takes precedence over <code class="docutils literal notranslate"><span class="pre">value_columns_suffix</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Wide dataframe.</p></li>
+<li><p><strong>id_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Identifier columns kept as-is.</p></li>
+<li><p><strong>value_columns_suffix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Suffix selecting value columns (via <a class="reference internal" href="#fabrictools.transform.wide_value_columns" title="fabrictools.transform.wide_value_columns"><code class="xref py py-func docutils literal notranslate"><span class="pre">wide_value_columns()</span></code></a>).</p></li>
+<li><p><strong>value_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Explicit list of value column names (optional).</p></li>
+<li><p><strong>exclude_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Collection" title="(in Python v3.14)"><em>collections.abc.Collection</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Excluded from value detection when using suffix.</p></li>
+<li><p><strong>variable_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Unpivot variable column name.</p></li>
+<li><p><strong>value_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Unpivot value column name.</p></li>
+<li><p><strong>month_start_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output column for parsed month start dates.</p></li>
+<li><p><strong>month_start_from_column_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.14)"><em>collections.abc.Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>date</em><em> | </em><em>None</em><em>]</em>) – Callable mapping variable name to <code class="docutils literal notranslate"><span class="pre">date</span></code> (default: <a class="reference internal" href="api_publique_transform.html#fabrictools.month_start_from_ca_monthly_col" title="fabrictools.month_start_from_ca_monthly_col"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.month_start_from_ca_monthly_col()</span></code></a>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Long dataframe with ids, variable, value, and month start.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.drop_rows_over_empty_percent">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">drop_rows_over_empty_percent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_empty_percent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.drop_rows_over_empty_percent" title="Link to this definition"></a></dt>
+<dd><p>Drop rows where the fraction of empty cells (see <a class="reference internal" href="api_publique_transform.html#fabrictools.empty_or_null" title="fabrictools.empty_or_null"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.empty_or_null()</span></code></a>) exceeds <code class="docutils literal notranslate"><span class="pre">max_empty_percent</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>max_empty_percent</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Upper bound in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>; rows with empty ratio <strong>strictly greater</strong> than this are removed.</p></li>
+<li><p><strong>columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Columns to score; <code class="docutils literal notranslate"><span class="pre">None</span></code> means all columns. Names resolved like <a class="reference internal" href="api_publique_transform.html#fabrictools.resolve_dataframe_column" title="fabrictools.resolve_dataframe_column"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.resolve_dataframe_column()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered dataframe.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">max_empty_percent</span></code> is outside <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>, if <code class="docutils literal notranslate"><span class="pre">columns</span></code> is an empty sequence, or if no columns remain to score.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.empty_or_null">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">empty_or_null</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">c</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.Column</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.Column</span></span></span><a class="headerlink" href="#fabrictools.transform.empty_or_null" title="Link to this definition"></a></dt>
+<dd><p>Boolean column: true if <code class="docutils literal notranslate"><span class="pre">c</span></code> is null or blank after string cast and trim.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>c</strong> (<em>Column</em>) – Input column expression.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Boolean <code class="docutils literal notranslate"><span class="pre">Column</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Column</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.filter_by_value_list">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">filter_by_value_list</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.filter_by_value_list" title="Link to this definition"></a></dt>
+<dd><p>Keep or drop rows where <code class="docutils literal notranslate"><span class="pre">column</span></code> is in <code class="docutils literal notranslate"><span class="pre">values</span></code> (no column cast).</p>
+<p>For string-like dtypes, compares <code class="docutils literal notranslate"><span class="pre">trim(column)</span></code> to <code class="docutils literal notranslate"><span class="pre">values</span></code>. <code class="docutils literal notranslate"><span class="pre">str</span></code> entries
+in <code class="docutils literal notranslate"><span class="pre">values</span></code> are stripped.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Logical or physical column name (resolved like <a class="reference internal" href="api_publique_transform.html#fabrictools.resolve_dataframe_column" title="fabrictools.resolve_dataframe_column"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.resolve_dataframe_column()</span></code></a>).</p></li>
+<li><p><strong>values</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a>) – Membership list; non-strings kept as-is.</p></li>
+<li><p><strong>exclude</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), drop rows in <code class="docutils literal notranslate"><span class="pre">values</span></code>; if <code class="docutils literal notranslate"><span class="pre">False</span></code>, keep only those rows.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered dataframe.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.merge_dataframes">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">merge_dataframes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">main</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">join_df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">join_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keys</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">how</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'left'</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">join_prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.merge_dataframes" title="Link to this definition"></a></dt>
+<dd><p>Left-join <code class="docutils literal notranslate"><span class="pre">main</span></code> to <code class="docutils literal notranslate"><span class="pre">join_df</span></code> and project right columns as <code class="docutils literal notranslate"><span class="pre">{prefix}_{suffix}</span></code>.</p>
+<p>Prefix is snake_case from, in order: inferred <code class="docutils literal notranslate"><span class="pre">join_df</span></code> variable name at the
+call site, else first <code class="docutils literal notranslate"><span class="pre">SubqueryAlias</span></code> on <code class="docutils literal notranslate"><span class="pre">join_df</span></code>’s analyzed plan, else
+<code class="docutils literal notranslate"><span class="pre">join</span></code> (see <code class="docutils literal notranslate"><span class="pre">DEFAULT_JOIN_PREFIX</span></code>). Pass <code class="docutils literal notranslate"><span class="pre">join_prefix</span></code> to force a value. Suffixes match
+<a class="reference internal" href="api_publique_qualite.html#fabrictools.clean_data" title="fabrictools.clean_data"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.clean_data()</span></code></a> uniqueness rules.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>main</strong> (<em>DataFrame</em>) – Left dataframe.</p></li>
+<li><p><strong>join_df</strong> (<em>DataFrame</em>) – Right dataframe (only <code class="docutils literal notranslate"><span class="pre">join_columns</span></code> projected, plus key temps).</p></li>
+<li><p><strong>join_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Right-side columns to expose with prefixed names.</p></li>
+<li><p><strong>keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>) – <code class="docutils literal notranslate"><span class="pre">(main_col,</span> <span class="pre">join_col)</span></code> pairs for the join predicate (AND); names resolved per frame.</p></li>
+<li><p><strong>how</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Spark join type (e.g. <code class="docutils literal notranslate"><span class="pre">left</span></code>, <code class="docutils literal notranslate"><span class="pre">inner</span></code>).</p></li>
+<li><p><strong>join_prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Optional explicit prefix (snake_cased); overrides inference.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Joined dataframe with temporary key columns dropped.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">keys</span></code> is empty.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.month_start_from_ca_monthly_col">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">month_start_from_ca_monthly_col</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">col_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.date" title="(in Python v3.14)"><span class="pre">date</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="headerlink" href="#fabrictools.transform.month_start_from_ca_monthly_col" title="Link to this definition"></a></dt>
+<dd><p>Parse first-of-month from a column name: French <em>mois année</em> head, optional `` [label]`` suffix stripped.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>col_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Wide column name (e.g. <code class="docutils literal notranslate"><span class="pre">janvier_2024</span> <span class="pre">[CA</span> <span class="pre">Monthly]</span></code>).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Parsed month start, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if parsing fails.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.date" title="(in Python v3.14)">datetime.date</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.norm_text">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">norm_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.Column</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.Column</span></span></span><a class="headerlink" href="#fabrictools.transform.norm_text" title="Link to this definition"></a></dt>
+<dd><p>Lowercase string with control chars stripped and spaces removed (Power Query <code class="docutils literal notranslate"><span class="pre">Text.Clean</span></code> style).</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">expr</span></code> is a <code class="docutils literal notranslate"><span class="pre">str</span></code>, it is wrapped with <code class="docutils literal notranslate"><span class="pre">F.lit</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>expr</strong> (<em>Column</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Spark column or string literal.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Transformed column expression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Column</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.remove_columns">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">remove_columns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.remove_columns" title="Link to this definition"></a></dt>
+<dd><p>Drop columns by physical name or by the same resolution rules as <a class="reference internal" href="api_publique_transform.html#fabrictools.merge_dataframes" title="fabrictools.merge_dataframes"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.merge_dataframes()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – One or more labels; duplicates resolving to the same physical column are dropped once.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">df</span></code> without the resolved columns.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If no names are passed or a name cannot be resolved.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.rename_columns_month_year_block_labels">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">rename_columns_month_year_block_labels</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('Coûts</span> <span class="pre">prévisionnels</span> <span class="pre">(par</span> <span class="pre">mois)',</span> <span class="pre">'Coûts</span> <span class="pre">prévisionnels</span> <span class="pre">cumulés',</span> <span class="pre">'Avancement</span> <span class="pre">prévisionnel',</span> <span class="pre">'CA</span> <span class="pre">prévisionnel</span> <span class="pre">cumulé',</span> <span class="pre">'CA</span> <span class="pre">Monthly')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Collection" title="(in Python v3.14)"><span class="pre">Collection</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('__spark_row_order__',)</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.rename_columns_month_year_block_labels" title="Link to this definition"></a></dt>
+<dd><p>Rename contiguous French <em>mois année</em> column blocks using ordered <code class="docutils literal notranslate"><span class="pre">labels</span></code> (projection-style).</p>
+<p>Order follows <code class="docutils literal notranslate"><span class="pre">df.columns</span></code> after <code class="docutils literal notranslate"><span class="pre">exclude_columns</span></code>. Rename targets disambiguate with
+<code class="docutils literal notranslate"><span class="pre">__2</span></code>, <code class="docutils literal notranslate"><span class="pre">__3</span></code>, … among new names, then <code class="docutils literal notranslate"><span class="pre">_2</span></code>, <code class="docutils literal notranslate"><span class="pre">_3</span></code>, … against the rest of the schema.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input wide dataframe.</p></li>
+<li><p><strong>labels</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Block markers in column order (defaults to built-in forecast / CA block set).</p></li>
+<li><p><strong>exclude_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Collection" title="(in Python v3.14)"><em>collections.abc.Collection</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Column names ignored when scanning contiguous runs.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataframe with renamed month columns.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.rename_columns_normalized">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">rename_columns_normalized</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.rename_columns_normalized" title="Link to this definition"></a></dt>
+<dd><p>Rename every column to snake_case with <code class="docutils literal notranslate"><span class="pre">_2</span></code>, <code class="docutils literal notranslate"><span class="pre">_3</span></code>, … disambiguation.</p>
+<p>Uses the same name scheme as the rename step in
+<a class="reference internal" href="api_publique_qualite.html#fabrictools.clean_data" title="fabrictools.clean_data"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.clean_data()</span></code></a>. Does not cast types, replace blanks,
+deduplicate rows, or drop rows.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataframe with updated column names where needed.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.rename_columns_pq_serial_to_dates">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">rename_columns_pq_serial_to_dates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'%Y-%m-%d'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_suffix_in_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.rename_columns_pq_serial_to_dates" title="Link to this definition"></a></dt>
+<dd><p>Rename columns whose names embed a Power Query / Excel day serial (epoch <code class="docutils literal notranslate"><span class="pre">PQ_EPOCH</span></code>).</p>
+<p>Non-matching columns are unchanged. Target collisions get <code class="docutils literal notranslate"><span class="pre">_2</span></code>, <code class="docutils literal notranslate"><span class="pre">_3</span></code>, … suffixes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>date_format</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">strftime</span></code> format for the date portion of new names.</p></li>
+<li><p><strong>prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Text prepended before the formatted date.</p></li>
+<li><p><strong>include_suffix_in_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, append parsed numeric suffix after the serial segment.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataframe with renamed columns.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.rename_columns_pq_serial_to_mois_annee">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">rename_columns_pq_serial_to_mois_annee</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_suffix_in_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capitalize_month</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.rename_columns_pq_serial_to_mois_annee" title="Link to this definition"></a></dt>
+<dd><p>Like <a class="reference internal" href="#fabrictools.transform.rename_columns_pq_serial_to_dates" title="fabrictools.transform.rename_columns_pq_serial_to_dates"><code class="xref py py-func docutils literal notranslate"><span class="pre">rename_columns_pq_serial_to_dates()</span></code></a> but labels use French <em>mois année</em> (e.g. <code class="docutils literal notranslate"><span class="pre">janvier_2024</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Input dataframe.</p></li>
+<li><p><strong>prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Prepended before the month-year token.</p></li>
+<li><p><strong>include_suffix_in_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Append <code class="docutils literal notranslate"><span class="pre">_{suffix}</span></code> when a numeric suffix follows the serial in the source name.</p></li>
+<li><p><strong>capitalize_month</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, capitalize the month word (e.g. <code class="docutils literal notranslate"><span class="pre">Janvier_2024</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Renamed dataframe.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.resolve_dataframe_column">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">resolve_dataframe_column</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="headerlink" href="#fabrictools.transform.resolve_dataframe_column" title="Link to this definition"></a></dt>
+<dd><p>Resolve <code class="docutils literal notranslate"><span class="pre">name</span></code> to the physical column name on <code class="docutils literal notranslate"><span class="pre">df</span></code>.</p>
+<p>Accepts the physical name, a <a class="reference internal" href="api_publique_qualite.html#fabrictools.clean_data" title="fabrictools.clean_data"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.clean_data()</span></code></a>-style
+normalized label, or snake_case (same rules as <a class="reference internal" href="api_publique_transform.html#fabrictools.merge_dataframes" title="fabrictools.merge_dataframes"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.merge_dataframes()</span></code></a> / <a class="reference internal" href="api_publique_transform.html#fabrictools.remove_columns" title="fabrictools.remove_columns"><code class="xref py py-func docutils literal notranslate"><span class="pre">fabrictools.remove_columns()</span></code></a>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Dataframe whose schema is searched.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Logical, normalized, or physical column label.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Physical column name present on <code class="docutils literal notranslate"><span class="pre">df</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> cannot be resolved.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.transform_wide_month_suffix">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">transform_wide_month_suffix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">df:</span> <span class="pre">pyspark.sql.DataFrame,</span> <span class="pre">*,</span> <span class="pre">id_columns:</span> <span class="pre">~collections.abc.Sequence[str],</span> <span class="pre">aggregation:</span> <span class="pre">~typing.Literal['last_nonnull',</span> <span class="pre">'pivot_sum'],</span> <span class="pre">value_columns_suffix:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">value_columns:</span> <span class="pre">~collections.abc.Sequence[str]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">exclude_columns:</span> <span class="pre">~collections.abc.Collection[str]</span> <span class="pre">=</span> <span class="pre">(),</span> <span class="pre">variable_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'MoisCol',</span> <span class="pre">value_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'Valeur',</span> <span class="pre">month_start_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'MonthStart',</span> <span class="pre">month_start_from_column_name:</span> <span class="pre">~collections.abc.Callable[[str],</span> <span class="pre">~datetime.date</span> <span class="pre">|</span> <span class="pre">None]</span> <span class="pre">=</span> <span class="pre">&lt;function</span> <span class="pre">month_start_from_ca_monthly_col&gt;,</span> <span class="pre">order_column:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">output_value:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'Value',</span> <span class="pre">output_month_start:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'MonthStart',</span> <span class="pre">output_year:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'Year',</span> <span class="pre">output_month:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'Month',</span> <span class="pre">category_column:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">pivot_categories:</span> <span class="pre">~collections.abc.Sequence[str]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">fill_value:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">montant_column:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'Montant'</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyspark.sql.DataFrame</span></span></span><a class="headerlink" href="#fabrictools.transform.transform_wide_month_suffix" title="Link to this definition"></a></dt>
+<dd><p>Run <a class="reference internal" href="#fabrictools.transform.dataframe_unpivot_wide_month_suffix" title="fabrictools.transform.dataframe_unpivot_wide_month_suffix"><code class="xref py py-func docutils literal notranslate"><span class="pre">dataframe_unpivot_wide_month_suffix()</span></code></a> then <code class="docutils literal notranslate"><span class="pre">last_nonnull</span></code> or <code class="docutils literal notranslate"><span class="pre">pivot_sum</span></code> aggregation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Wide source dataframe.</p></li>
+<li><p><strong>id_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Passed through to unpivot.</p></li>
+<li><p><strong>aggregation</strong> (<em>Literal</em><em>[</em><em>'last_nonnull'</em><em>, </em><em>'pivot_sum'</em><em>]</em>) – <code class="docutils literal notranslate"><span class="pre">last_nonnull</span></code> (needs <code class="docutils literal notranslate"><span class="pre">order_column</span></code>) or <code class="docutils literal notranslate"><span class="pre">pivot_sum</span></code> (needs <code class="docutils literal notranslate"><span class="pre">category_column</span></code> and <code class="docutils literal notranslate"><span class="pre">pivot_categories</span></code>).</p></li>
+<li><p><strong>value_columns_suffix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Passed through to unpivot.</p></li>
+<li><p><strong>value_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Passed through to unpivot.</p></li>
+<li><p><strong>exclude_columns</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Collection" title="(in Python v3.14)"><em>collections.abc.Collection</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Passed through to unpivot.</p></li>
+<li><p><strong>variable_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Long-form variable column name.</p></li>
+<li><p><strong>value_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Long-form value column name.</p></li>
+<li><p><strong>month_start_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Long-form month start column name.</p></li>
+<li><p><strong>month_start_from_column_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.14)"><em>collections.abc.Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>date</em><em> | </em><em>None</em><em>]</em>) – Parser for month start from variable name.</p></li>
+<li><p><strong>order_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Source-wide column for <code class="docutils literal notranslate"><span class="pre">last_nonnull</span></code> ordering (resolved on <code class="docutils literal notranslate"><span class="pre">df</span></code>).</p></li>
+<li><p><strong>output_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output value column for <code class="docutils literal notranslate"><span class="pre">last_nonnull</span></code>.</p></li>
+<li><p><strong>output_month_start</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output month start for <code class="docutils literal notranslate"><span class="pre">last_nonnull</span></code>.</p></li>
+<li><p><strong>output_year</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output year for both aggregations where applicable.</p></li>
+<li><p><strong>output_month</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Output month for both aggregations where applicable.</p></li>
+<li><p><strong>category_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Source column for <code class="docutils literal notranslate"><span class="pre">pivot_sum</span></code> (resolved on <code class="docutils literal notranslate"><span class="pre">df</span></code>).</p></li>
+<li><p><strong>pivot_categories</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.14)"><em>collections.abc.Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>) – Category list for <code class="docutils literal notranslate"><span class="pre">pivot_sum</span></code>.</p></li>
+<li><p><strong>fill_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Pivot fill for <code class="docutils literal notranslate"><span class="pre">pivot_sum</span></code>.</p></li>
+<li><p><strong>montant_column</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Internal sum column name for pivot path.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Aggregated dataframe per selected mode.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>DataFrame</em></p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">aggregation</span></code> is unknown or required parameters are missing.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fabrictools.transform.wide_value_columns">
+<span class="sig-prename descclassname"><span class="pre">fabrictools.transform.</span></span><span class="sig-name descname"><span class="pre">wide_value_columns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyspark.sql.DataFrame</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">suffix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Collection" title="(in Python v3.14)"><span class="pre">Collection</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#fabrictools.transform.wide_value_columns" title="Link to this definition"></a></dt>
+<dd><p>List physical columns whose names end with <code class="docutils literal notranslate"><span class="pre">suffix</span></code> and are not in <code class="docutils literal notranslate"><span class="pre">exclude</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>DataFrame</em>) – Wide dataframe.</p></li>
+<li><p><strong>suffix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Suffix substring to match (e.g. block label including leading space if stored that way).</p></li>
+<li><p><strong>exclude</strong> (<a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Collection" title="(in Python v3.14)"><em>collections.abc.Collection</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Column names to skip.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Ordered column names from <code class="docutils literal notranslate"><span class="pre">df.columns</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fabrictools.quality.html" class="btn btn-neutral float-left" title="Qualité des données et pipelines Silver" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Kinfoussia Willy.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
