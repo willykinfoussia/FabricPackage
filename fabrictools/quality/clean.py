@@ -75,7 +75,7 @@ def _replace_empty_strings_with_nulls(df: DataFrame) -> DataFrame:
     return transformed_df
 
 
-# Date-only strings (avoids classifying datetimes as date and dropping the time part).
+# Date-only shape (no time suffix). Used for diagnostics in mismatch logs, not for casting rules.
 # Allows 1–2 digit month/day; ISO yyyy-first dash, European dd-MM-yyyy / US MM-dd-yyyy hyphen, slash, dot.
 _DATE_ONLY_PATTERN = (
     r"^("
@@ -99,7 +99,7 @@ def _log_date_column_mismatch_example(
     trimmed,
     parsed_date,
 ) -> None:
-    """Log one row that fails date-only detection (shape or parse)."""
+    """Log one row where ``to_date`` coalesce fails for a non-null cell."""
     rows = mismatch_df.select(
         F.col(col_name).alias("raw"),
         trimmed.alias("trimmed"),
@@ -109,10 +109,6 @@ def _log_date_column_mismatch_example(
     preview = [tuple(row) for row in rows]
     log(
         f"detect_and_cast_columns: column {col_name!r} skipped as date; "
-        f"example row (raw, trimmed, matches_date_only_shape, parsed_date): {preview!r}"
-    )
-    print(f"detect_and_cast_columns: column {col_name!r} skipped as date; ")
-    print(
         f"example row (raw, trimmed, matches_date_only_shape, parsed_date): {preview!r}"
     )
 
@@ -144,12 +140,14 @@ def _log_parsed_date_sample(
 def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
-    Order of detection (first match wins): **date** (``to_date`` with multiple
-    patterns—European forms before US for ambiguous day/month), **timestamp**
-    (``to_timestamp`` with several patterns plus ISO ``T``), **integer** (full
-    string matches ``^[+-]?\\d+$``), **double** (decimal/scientific), else the
-    column remains ``string``. Columns that are all-null are skipped; null cells are
-    kept through casts.
+    Order of detection (first match wins): **date** (uniform non-null success of a
+    ``to_date`` chain over several patterns—European forms before US for ambiguous
+    day/month; strings with a trailing time-of-day may still yield a calendar day and
+    are cast to ``date``, dropping the time part), **timestamp** (``to_timestamp``
+    with several patterns plus ISO ``T``), **integer** (full string matches
+    ``^[+-]?\\d+$``), **double** (decimal/scientific), else the column remains
+    ``string``. Columns that are all-null are skipped; null cells are kept through
+    casts.
 
     Sets ``spark.sql.legacy.timeParserPolicy`` to ``LEGACY`` for the duration of the
     call and restores the previous session value afterward.
@@ -191,8 +189,7 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                 F.to_date(trimmed, "M.d.yyyy"),
             )
             date_mismatch = df.filter(
-                F.col(col_name).isNotNull()
-                & ~(trimmed.rlike(_DATE_ONLY_PATTERN) & parsed_date.isNotNull())
+                F.col(col_name).isNotNull() & parsed_date.isNull()
             ).limit(1)
             date_mismatch_count = date_mismatch.count()
             if date_mismatch_count == 0:
