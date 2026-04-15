@@ -13,7 +13,6 @@ from pyspark.sql.types import (
     DoubleType,
     IntegerType,
     StringType,
-    TimestampType,
 )
 
 from fabrictools.core import log
@@ -141,10 +140,12 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
     Order of detection (first match wins): **date** (uniform non-null success of a
-    ``to_date`` chain over several patterns—European forms before US for ambiguous
-    day/month; strings with a trailing time-of-day may still yield a calendar day and
-    are cast to ``date``, dropping the time part), **timestamp** (``to_timestamp``
-    with several patterns plus ISO ``T``), **integer** (full string matches
+    ``to_date`` / ``to_timestamp`` chain over several patterns—European forms before
+    US for ambiguous day/month; strings with a trailing time-of-day may still yield a
+    calendar day and are cast to ``date``, dropping the time part; US slash dates with
+    12-hour clock and AM/PM suffix are handled via ``h:mm[:ss] a`` patterns), **timestamp**
+    (``to_timestamp`` with several patterns including US 12h + AM/PM, 24h, plus ISO ``T``),
+    **integer** (full string matches
     ``^[+-]?\\d+$``), **double** (decimal/scientific), else the column remains
     ``string``. Columns that are all-null are skipped; null cells are kept through
     casts.
@@ -187,6 +188,10 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                 F.to_date(trimmed, "M/d/yyyy"),
                 F.to_date(trimmed, "MM.dd.yyyy"),
                 F.to_date(trimmed, "M.d.yyyy"),
+                F.to_timestamp(trimmed, "M/d/yyyy h:mm:ss a").cast(DateType()),
+                F.to_timestamp(trimmed, "MM/dd/yyyy h:mm:ss a").cast(DateType()),
+                F.to_timestamp(trimmed, "M/d/yyyy h:mm a").cast(DateType()),
+                F.to_timestamp(trimmed, "MM/dd/yyyy h:mm a").cast(DateType()),
             )
             date_mismatch = df.filter(
                 F.col(col_name).isNotNull() & parsed_date.isNull()
@@ -213,6 +218,10 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                 F.to_timestamp(trimmed, "d/M/yyyy HH:mm:ss"),
                 F.to_timestamp(trimmed, "MM/dd/yyyy HH:mm:ss"),
                 F.to_timestamp(trimmed, "M/d/yyyy HH:mm:ss"),
+                F.to_timestamp(trimmed, "M/d/yyyy h:mm:ss a"),
+                F.to_timestamp(trimmed, "MM/dd/yyyy h:mm:ss a"),
+                F.to_timestamp(trimmed, "M/d/yyyy h:mm a"),
+                F.to_timestamp(trimmed, "MM/dd/yyyy h:mm a"),
                 F.to_timestamp(trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
             )
             ts_mismatch = df.filter(
