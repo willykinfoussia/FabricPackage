@@ -54,10 +54,12 @@ dev = [
 docs = [
     "sphinx>=7.0",
     "sphinx-rtd-theme>=2.0",
+    "sphinxcontrib-mermaid>=0.9.2",
 ]
 
 [project.urls]
 Homepage = "https://github.com/willykinfoussia/FabricPackage"
+Documentation = "https://willykinfoussia.github.io/FabricPackage/"
 Repository = "https://github.com/willykinfoussia/FabricPackage"
 Issues = "https://github.com/willykinfoussia/FabricPackage/issues"
 

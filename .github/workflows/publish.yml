@@ -23,6 +23,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Verify README version matches fabrictools/_version.py
+        run: python scripts/sync_readme_version.py --check
+
       - name: Install build tools
         run: pip install build twine
 

@@ -1,7 +1,11 @@
 # fabrictools
 
+**Version :** 0.6.1
+
 Bibliotheque Python pour simplifier le travail de donnees dans Microsoft Fabric.  
 Vous utilisez des fonctions courtes pour lire, nettoyer, fusionner et publier vos tables, sans gerer des chemins techniques complexes.
+
+Documentation detaillee (reference API et guides Sphinx) : [https://willykinfoussia.github.io/FabricPackage/](https://willykinfoussia.github.io/FabricPackage/)
 
 ---
 
@@ -10,6 +14,7 @@ Vous utilisez des fonctions courtes pour lire, nettoyer, fusionner et publier vo
 - [Pourquoi utiliser fabrictools](#pourquoi-utiliser-fabrictools)
 - [Prerequis](#prerequis)
 - [Installation](#installation)
+- [Documentation en ligne](#documentation-en-ligne)
 - [Premiers pas (5 minutes)](#premiers-pas-5-minutes)
 - [Tutoriel interactif : projet fictif NovaRetail](#tutoriel-interactif--projet-fictif-novaretail)
 - [Index rapide : toutes les fonctions publiques](#index-rapide--toutes-les-fonctions-publiques)
@@ -39,6 +44,7 @@ Vous utilisez des fonctions courtes pour lire, nettoyer, fusionner et publier vo
 - Un notebook attache a un Lakehouse pour les operations Lakehouse
 
 Bon a savoir :
+
 - Dans Fabric, `pyspark` et `delta-spark` sont deja disponibles.
 - Hors Fabric, certaines fonctions de resolution de chemins peuvent echouer (ex: absence de `notebookutils`).
 
@@ -59,6 +65,12 @@ pip install "fabrictools[visualization]"
 
 ---
 
+## Documentation en ligne
+
+- Site Sphinx (API, guides) : [https://willykinfoussia.github.io/FabricPackage/](https://willykinfoussia.github.io/FabricPackage/)
+
+---
+
 ## Premiers pas (5 minutes)
 
 ```python
@@ -70,6 +82,7 @@ df.show(5)
 ```
 
 Ensuite, vous pouvez faire :
+
 1. Nettoyer les donnees (`clean_data`)
 2. Ajouter des metadonnees (`add_silver_metadata`)
 3. Ecrire vers un Lakehouse cible (`write_lakehouse`)
@@ -91,6 +104,8 @@ flowchart LR
     preparedStep --> preparedLakehouse["PreparedLakehouse"]
     preparedLakehouse --> warehouseStep["Warehouse + BI"]
 ```
+
+
 
 ### Etape 1 - Lire les ventes brutes
 
@@ -441,6 +456,157 @@ out = ft.merge_dataframes(
 # Ex. colonnes : projets_client, projets_type_projet, projets_nom_client
 ```
 
+#### `drop_rows_over_empty_percent`
+
+Supprime les lignes dont la part de cellules vides (null ou chaine vide apres trim, voir `empty_or_null`) sur les colonnes evaluees est **strictement superieure** a `max_empty_percent` (`0` a `1`).
+
+```python
+df_kept = ft.drop_rows_over_empty_percent(df, 0.5)
+```
+
+#### `remove_columns`
+
+Retire une ou plusieurs colonnes ; les noms sont resolus comme pour `merge_dataframes` (nom physique, libelle normalise ou snake_case).
+
+```python
+df2 = ft.remove_columns(df, "Colonne inutile")
+```
+
+#### `rename_columns_normalized`
+
+Renomme toutes les colonnes en snake_case avec des suffixes `_2`, `_3`, … si besoin (meme logique que l’etape de renommage de `clean_data`).
+
+```python
+df2 = ft.rename_columns_normalized(df)
+```
+
+#### `rename_columns_pq_serial_to_dates`
+
+Detecte les noms de colonnes contenant un numero de serie Excel / Power Query et les renomme avec une date (`strftime` configurable).
+
+```python
+df2 = ft.rename_columns_pq_serial_to_dates(df, date_format="%Y-%m-%d")
+```
+
+#### `rename_columns_pq_serial_to_mois_annee`
+
+Comme `rename_columns_pq_serial_to_dates`, avec des etiquettes *mois annee* en francais (ex. `janvier_2024`).
+
+```python
+df2 = ft.rename_columns_pq_serial_to_mois_annee(df)
+```
+
+#### `rename_columns_month_year_block_labels`
+
+Repere des blocs contigus de colonnes *mois annee* (francais) et ajoute un marqueur de bloc dans le nom (libelles ordonnes par defaut pour des projections type couts / CA).
+
+```python
+df2 = ft.rename_columns_month_year_block_labels(df)
+```
+
+#### `month_start_from_ca_monthly_col`
+
+Parse le premier jour du mois a partir d’un nom de colonne large (tete *mois annee* francais, suffixe optionnel `[label]`).
+
+```python
+m = ft.month_start_from_ca_monthly_col("janvier_2024 [CA Monthly]")
+```
+
+#### `resolve_dataframe_column`
+
+Retourne le nom physique d’une colonne a partir d’un libelle logique, normalise comme apres `clean_data`, ou snake_case.
+
+```python
+col = ft.resolve_dataframe_column(df, "Nom affiche")
+```
+
+#### `wide_value_columns`
+
+Liste les colonnes dont le nom se termine par un suffixe donne (ex. bloc `[CA Monthly]`), hors exclusions.
+
+```python
+value_cols = ft.wide_value_columns(df, suffix=" [CA Monthly]")
+```
+
+#### `dataframe_unpivot_wide_month_suffix`
+
+Passe du format large (plusieurs colonnes mois) au format long : identifiants + colonne variable + valeur + `MonthStart` deduit du nom de colonne.
+
+```python
+long_df = ft.dataframe_unpivot_wide_month_suffix(
+    df,
+    id_columns=["Projet"],
+    value_columns_suffix=" [CA Monthly]",
+)
+```
+
+#### `dataframe_last_nonnull_wide_month_from_long`
+
+Sur un long (ex. sortie d’`dataframe_unpivot_wide_month_suffix`), pour chaque mois variable garde la ligne avec le plus grand `order_column` ou la valeur est non nulle ; produit annee, mois et valeur.
+
+```python
+last_df = ft.dataframe_last_nonnull_wide_month_from_long(
+    long_df,
+    order_column="DateReference",
+)
+```
+
+#### `dataframe_pivot_category_wide_month_from_long`
+
+A partir d’un long avec categorie, somme les mesures par mois et pivote les categories en colonnes larges (`Year`, `Month`, une colonne par categorie).
+
+```python
+wide_df = ft.dataframe_pivot_category_wide_month_from_long(
+    long_df,
+    category_column="TypeCout",
+    pivot_categories=["Prevu", "Reel"],
+)
+```
+
+#### `transform_wide_month_suffix`
+
+Enchaine unpivot puis soit `last_nonnull` (avec `order_column`), soit `pivot_sum` (avec `category_column` et `pivot_categories`).
+
+```python
+out = ft.transform_wide_month_suffix(
+    df,
+    id_columns=["Projet"],
+    aggregation="last_nonnull",
+    value_columns_suffix=" [CA Monthly]",
+    order_column="DateOrdre",
+)
+```
+
+#### `norm_text`
+
+Expression Spark : chaine en minuscules, caracteres de controle retires, espaces supprimes (style Power Query `Text.Clean`).
+
+```python
+from pyspark.sql import functions as F
+
+df2 = df.withColumn("cle", ft.norm_text(F.col("Libelle")))
+```
+
+#### `empty_or_null`
+
+Expression Spark : vrai si null ou chaine vide apres cast string et trim (utilise par `drop_rows_over_empty_percent`).
+
+```python
+from pyspark.sql import functions as F
+
+df2 = df.filter(~ft.empty_or_null(F.col("Commentaire")))
+```
+
+#### `coalesce_dim`
+
+Cast string ; null ou vide devient la chaine `"0"` (pratique pour des cles dimension).
+
+```python
+from pyspark.sql import functions as F
+
+df2 = df.withColumn("id_dim", ft.coalesce_dim(F.col("code")))
+```
+
 ---
 
 ## FAQ
@@ -474,10 +640,12 @@ Oui, c'est une action destructive. Commencez avec `dry_run=True` pour verifier l
 
 ## Support
 
+- Documentation : [https://willykinfoussia.github.io/FabricPackage/](https://willykinfoussia.github.io/FabricPackage/)
 - Ouvrir une issue GitHub : [Issues](https://github.com/willykinfoussia/FabricPackage/issues)
 - Consulter le depot : [Repository](https://github.com/willykinfoussia/FabricPackage)
 
 Pour aider rapidement, partagez :
+
 - la fonction utilisee
 - un exemple de parametres
 - le message d'erreur complet
@@ -486,9 +654,7 @@ Pour aider rapidement, partagez :
 
 ## Ressources mainteneur
 
-Guide de publication PyPI : [docs/PYPI_PUBLISH.md](docs/PYPI_PUBLISH.md)
-
-Documentation Sphinx : le workflow [`.github/workflows/docs-pages.yml`](.github/workflows/docs-pages.yml) construit les pages HTML et les publie sur GitHub Pages. Dans le depot GitHub, activez une fois **Settings → Pages → Build and deployment → Source : GitHub Actions** (et non une branche `docs/`). Le declenchement sur `push` utilise la branche `main` et les chemins `docs/`, `fabrictools/` et `pyproject.toml` ; un lancement manuel reste possible via **Actions → Deploy Sphinx docs to GitHub Pages → Run workflow**.
+- Mettre a jour la ligne **Version** du README a partir de `fabrictools/_version.py` : depuis la racine du depot, lancer `python scripts/sync_readme_version.py`. La CI verifie l’alignement sur les pull requests (voir `.github/workflows/readme-version.yml`).
 
 ---
 

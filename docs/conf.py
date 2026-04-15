@@ -38,6 +38,7 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx.ext.mathjax",
     "sphinx.ext.ifconfig",
+    "sphinxcontrib.mermaid",
 ]
 
 templates_path = ["_templates"]
