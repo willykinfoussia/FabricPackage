@@ -1,6 +1,6 @@
 # fabrictools
 
-**Version :** 0.6.1
+**Version :** 0.6.2 — définie dans [`fabrictools/_version.py`](fabrictools/_version.py).
 
 Bibliotheque Python pour simplifier le travail de donnees dans Microsoft Fabric.  
 Vous utilisez des fonctions courtes pour lire, nettoyer, fusionner et publier vos tables, sans gerer des chemins techniques complexes.
@@ -649,12 +649,6 @@ Pour aider rapidement, partagez :
 - la fonction utilisee
 - un exemple de parametres
 - le message d'erreur complet
-
----
-
-## Ressources mainteneur
-
-- Mettre a jour la ligne **Version** du README a partir de `fabrictools/_version.py` : depuis la racine du depot, lancer `python scripts/sync_readme_version.py`. La CI verifie l’alignement sur les pull requests (voir `.github/workflows/readme-version.yml`).
 
 ---
 
