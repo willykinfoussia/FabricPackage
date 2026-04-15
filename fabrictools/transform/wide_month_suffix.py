@@ -30,6 +30,10 @@ def wide_value_columns(
 
     :returns: Ordered column names from ``df.columns``.
     :rtype: list[str]
+
+    .. rubric:: Example
+
+    >>> cols = wide_value_columns(df, suffix=" [CA Monthly]")  # doctest: +SKIP
     """
     ex = set(exclude)
     return [c for c in df.columns if c.endswith(suffix) and c not in ex]
@@ -126,6 +130,14 @@ def dataframe_unpivot_wide_month_suffix(
 
     :returns: Long dataframe with ids, variable, value, and month start.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> long_df = dataframe_unpivot_wide_month_suffix(  # doctest: +SKIP
+    ...     wide_df,
+    ...     id_columns=["project_id"],
+    ...     value_columns_suffix=" [CA Monthly]",
+    ... )
     """
     id_resolved = _resolve_id_columns(df, id_columns)
     id_set = set(id_resolved)
@@ -198,6 +210,12 @@ def dataframe_last_nonnull_wide_month_from_long(
 
     :returns: One row per ``variable_column`` with cast types, or empty schema if inputs missing.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> latest = dataframe_last_nonnull_wide_month_from_long(  # doctest: +SKIP
+    ...     long_df, order_column="as_of_date"
+    ... )
     """
     spark = long_df.sparkSession
     if variable_column not in long_df.columns:
@@ -270,6 +288,14 @@ def dataframe_pivot_category_wide_month_from_long(
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``pivot_categories`` is empty.
+
+    .. rubric:: Example
+
+    >>> wide = dataframe_pivot_category_wide_month_from_long(  # doctest: +SKIP
+    ...     long_df,
+    ...     category_column="cost_type",
+    ...     pivot_categories=("Actual", "Forecast"),
+    ... )
     """
     spark = long_df.sparkSession
     cats = list(pivot_categories)
@@ -388,6 +414,16 @@ def transform_wide_month_suffix(
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``aggregation`` is unknown or required parameters are missing.
+
+    .. rubric:: Example
+
+    >>> summary = transform_wide_month_suffix(  # doctest: +SKIP
+    ...     wide_df,
+    ...     id_columns=["project_id"],
+    ...     aggregation="last_nonnull",
+    ...     value_columns_suffix=" [CA Monthly]",
+    ...     order_column="snapshot_date",
+    ... )
     """
     long_df = dataframe_unpivot_wide_month_suffix(
         df,

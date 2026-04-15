@@ -5,12 +5,6 @@ FabricTools
 
 .. _Microsoft Fabric: https://learn.microsoft.com/en-us/fabric/
 
-Documentation publiée
------------------------
-
-La version en ligne de cette documentation est publiée sur GitHub Pages :
-`FabricTools — documentation <https://willykinfoussia.github.io/FabricPackage/>`_.
-
 Dépôt et suivi :
 
 - `Dépôt GitHub <https://github.com/willykinfoussia/FabricPackage>`_

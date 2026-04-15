@@ -446,6 +446,15 @@ def resolve_columns(
 
     :returns: One :class:`fabrictools.prepare.resolve.ResolvedColumn` dict per resolved column (not every source column if some stay unresolved).
     :rtype: list
+
+    .. rubric:: Example
+
+    >>> mappings = resolve_columns(  # doctest: +SKIP
+    ...     "BronzeLakehouse",
+    ...     "dbo.RawInvoices",
+    ...     schema_hash=known_hash,
+    ...     sample_size=1000,
+    ... )
     """
     _spark = spark or get_spark()
     df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)

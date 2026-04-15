@@ -64,6 +64,12 @@ def filter_by_value_list(
 
     :returns: Filtered dataframe.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> filtered = filter_by_value_list(  # doctest: +SKIP
+    ...     df, "status", ["VOID", "CANCELLED"], exclude=True
+    ... )
     """
     resolved = _resolve_column_name(df, column, side="DataFrame")
     dtype = _column_dtype(df, resolved)

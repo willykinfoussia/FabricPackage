@@ -40,7 +40,7 @@ def read_warehouse(
 
     .. rubric:: Example
 
-    >>> df = read_warehouse("MyWarehouse", "SELECT * FROM dbo.sales")
+    >>> df = read_warehouse("MyWarehouse", "SELECT * FROM dbo.sales")  # doctest: +SKIP
     """
     _spark = spark or get_spark()
     jdbc_url = get_warehouse_jdbc_url(warehouse_name)
@@ -86,7 +86,7 @@ def write_warehouse(
 
     .. rubric:: Example
 
-    >>> write_warehouse(df, "MyWarehouse", "dbo.sales_clean", mode="append")
+    >>> write_warehouse(df, "MyWarehouse", "dbo.sales_clean", mode="append")  # doctest: +SKIP
     """
     _ = spark or get_spark()
     jdbc_url = get_warehouse_jdbc_url(warehouse_name)

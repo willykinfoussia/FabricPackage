@@ -106,6 +106,16 @@ def prepare_and_write_data(
 
     :returns: The prepared ``DataFrame`` that was written.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> prepared_df = prepare_and_write_data(  # doctest: +SKIP
+    ...     "BronzeLakehouse",
+    ...     "dbo.RawInvoices",
+    ...     "GoldLakehouse",
+    ...     "Tables/dbo/Prepared_Invoices",
+    ...     mode="overwrite",
+    ... )
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
@@ -212,6 +222,15 @@ def prepare_and_write_all_tables(
 
     :returns: Summary dict with counts and per-table success/failure entries.
     :rtype: dict
+
+    .. rubric:: Example
+
+    >>> summary = prepare_and_write_all_tables(  # doctest: +SKIP
+    ...     "BronzeLakehouse",
+    ...     "GoldLakehouse",
+    ...     mode="overwrite",
+    ...     include_schemas=["dbo"],
+    ... )
     """
     _spark = spark or get_spark()
     table_jobs = _build_jobs(

@@ -37,6 +37,11 @@ def scan_data_errors(
     :returns: Dict with keys ``summary_df``, ``figure``, ``issue_totals``, ``collisions``,
         and optionally ``sample_rows`` (Spark dataframe, plotly figure, lists, dict).
     :rtype: dict
+
+    .. rubric:: Example
+
+    >>> report = scan_data_errors(df, include_samples=True, display_results=False)  # doctest: +SKIP
+    >>> assert "summary_df" in report  # doctest: +SKIP
     """
     log("Scanning data quality issues...")
     normalized_df = _replace_empty_strings_with_nulls(df)

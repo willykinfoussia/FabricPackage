@@ -242,6 +242,12 @@ def transform_to_prepared(
 
     :returns: Single ``select`` result with prepared column names.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> prepared_df = transform_to_prepared(  # doctest: +SKIP
+    ...     "BronzeLakehouse", "dbo.RawInvoices", resolved_mappings
+    ... )
     """
     _spark = spark or get_spark()
     df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
@@ -371,6 +377,16 @@ def write_prepared_table(
     :type max_partitions_guard: int
     :type vacuum_retention_hours: int
     :type spark: ~pyspark.sql.SparkSession | None
+
+    .. rubric:: Example
+
+    >>> write_prepared_table(  # doctest: +SKIP
+    ...     prepared_df,
+    ...     resolved_mappings,
+    ...     "GoldLakehouse",
+    ...     "Tables/dbo/Prepared_Invoices",
+    ...     mode="overwrite",
+    ... )
     """
     _spark = spark or get_spark()
     date_partitions = [

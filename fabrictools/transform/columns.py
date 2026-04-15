@@ -161,6 +161,10 @@ def resolve_dataframe_column(df: DataFrame, name: str) -> str:
     :rtype: str
 
     :raises ValueError: If ``name`` cannot be resolved.
+
+    .. rubric:: Example
+
+    >>> physical = resolve_dataframe_column(df, "Customer ID")  # doctest: +SKIP
     """
     return _resolve_column_name(df, name, side="DataFrame")
 
@@ -177,6 +181,10 @@ def rename_columns_normalized(df: DataFrame) -> DataFrame:
 
     :returns: Dataframe with updated column names where needed.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> renamed = rename_columns_normalized(messy_cols_df)  # doctest: +SKIP
     """
     cols = list(df.columns)
     normalized = _build_unique_column_names(cols)
@@ -197,6 +205,10 @@ def remove_columns(df: DataFrame, *columns: str) -> DataFrame:
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If no names are passed or a name cannot be resolved.
+
+    .. rubric:: Example
+
+    >>> slim = remove_columns(df, "temp_flag", "raw_json_blob")  # doctest: +SKIP
     """
     if not columns:
         raise ValueError("remove_columns requires at least one column name")
@@ -232,6 +244,12 @@ def rename_columns_pq_serial_to_dates(
 
     :returns: Dataframe with renamed columns.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> dated = rename_columns_pq_serial_to_dates(  # doctest: +SKIP
+    ...     pq_wide_df, date_format="%Y-%m-%d", prefix="d_"
+    ... )
     """
     return _rename_columns_pq_serial_common(
         df,
@@ -261,6 +279,12 @@ def rename_columns_pq_serial_to_mois_annee(
 
     :returns: Renamed dataframe.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> labeled = rename_columns_pq_serial_to_mois_annee(  # doctest: +SKIP
+    ...     pq_wide_df, prefix="m_", capitalize_month=True
+    ... )
     """
     return _rename_columns_pq_serial_common(
         df,
@@ -414,6 +438,10 @@ def month_start_from_ca_monthly_col(col_name: str) -> Optional[date]:
 
     :returns: Parsed month start, or ``None`` if parsing fails.
     :rtype: datetime.date | None
+
+    .. rubric:: Example
+
+    >>> d0 = month_start_from_ca_monthly_col("janvier_2024 [CA Monthly]")  # doctest: +SKIP
     """
     base = col_name.split(" [", 1)[0] if " [" in col_name else col_name
     return _try_parse_month_year(base)
@@ -439,6 +467,12 @@ def rename_columns_month_year_block_labels(
 
     :returns: Dataframe with renamed month columns.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> tagged = rename_columns_month_year_block_labels(  # doctest: +SKIP
+    ...     wide_projection_df, labels=("Block A", "Block B")
+    ... )
     """
     exclude = set(exclude_columns)
     cols = [c for c in df.columns if c not in exclude]

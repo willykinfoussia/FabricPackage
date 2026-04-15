@@ -1,7 +1,5 @@
 # fabrictools
 
-**Version :** 0.6.2 — définie dans [`fabrictools/_version.py`](fabrictools/_version.py).
-
 Bibliotheque Python pour simplifier le travail de donnees dans Microsoft Fabric.  
 Vous utilisez des fonctions courtes pour lire, nettoyer, fusionner et publier vos tables, sans gerer des chemins techniques complexes.
 

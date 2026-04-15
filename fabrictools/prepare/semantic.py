@@ -60,6 +60,16 @@ def publish_semantic_model(
 
     :returns: Status dictionary (``status``, ``reason`` or ``error``, counts, etc.).
     :rtype: dict
+
+    .. rubric:: Example
+
+    >>> status = publish_semantic_model(  # doctest: +SKIP
+    ...     "GoldLakehouse",
+    ...     agg_tables,
+    ...     resolved_mappings,
+    ...     semantic_workspace="Analytics WS",
+    ...     semantic_model_name="PreparedSales",
+    ... )
     """
     _spark = spark or get_spark()
 

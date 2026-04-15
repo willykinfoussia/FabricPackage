@@ -50,6 +50,17 @@ def clean_and_write_data(
 
     :returns: The Silver dataframe that was written.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> silver_df = clean_and_write_data(  # doctest: +SKIP
+    ...     "BronzeLakehouse",
+    ...     "dbo.Orders",
+    ...     "SilverLakehouse",
+    ...     "Tables/dbo/Cleaned_Orders",
+    ...     mode="overwrite",
+    ...     partition_by=["_year", "_month"],
+    ... )
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
@@ -143,6 +154,18 @@ def clean_and_write_all_tables(
     :returns: Summary dict with ``total_tables``, ``successful_tables``, ``failed_tables``,
         ``tables``, ``failures``.
     :rtype: dict
+
+    .. rubric:: Example
+
+    >>> summary = clean_and_write_all_tables(  # doctest: +SKIP
+    ...     "BronzeLakehouse",
+    ...     "SilverLakehouse",
+    ...     mode="overwrite",
+    ...     include_schemas=["dbo"],
+    ...     exclude_tables=["dbo.LegacyArchive"],
+    ... )
+    >>> summary["successful_tables"]  # doctest: +SKIP
+    8
     """
     _spark = spark or get_spark()
     table_jobs = _build_jobs(

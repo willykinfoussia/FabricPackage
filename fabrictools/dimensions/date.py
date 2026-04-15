@@ -67,6 +67,15 @@ def build_dimension_date(
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``fiscal_year_start_month`` is outside 1..12.
+
+    .. rubric:: Example
+
+    >>> dim_date = build_dimension_date(  # doctest: +SKIP
+    ...     start_date="2024-01-01",
+    ...     end_date="2024-12-31",
+    ...     lakehouse_name="GoldLakehouse",
+    ...     lakehouse_relative_path="dimension_date",
+    ... )
     """
     _spark = spark or get_spark()
     if fiscal_year_start_month < 1 or fiscal_year_start_month > 12:

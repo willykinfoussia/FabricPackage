@@ -93,6 +93,29 @@ _PARSED_DATE_SAMPLE_LIMIT = 5
 _TIME_PARSER_POLICY_KEY = "spark.sql.legacy.timeParserPolicy"
 
 
+def _log_date_column_mismatch_example(
+    col_name: str,
+    mismatch_df: DataFrame,
+    trimmed,
+    parsed_date,
+) -> None:
+    """Log one row that fails date-only detection (shape or parse)."""
+    rows = (
+        mismatch_df.select(
+            F.col(col_name).alias("raw"),
+            trimmed.alias("trimmed"),
+            trimmed.rlike(_DATE_ONLY_PATTERN).alias("matches_date_only_shape"),
+            parsed_date.alias("parsed_date"),
+        )
+        .collect()
+    )
+    preview = [tuple(row) for row in rows]
+    log(
+        f"detect_and_cast_columns: column {col_name!r} skipped as date; "
+        f"example row (raw, trimmed, matches_date_only_shape, parsed_date): {preview!r}"
+    )
+
+
 def _log_parsed_date_sample(
     df: DataFrame,
     col_name: str,
@@ -177,6 +200,10 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                     F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
                 )
                 continue
+
+            _log_date_column_mismatch_example(
+                col_name, date_mismatch, trimmed, parsed_date
+            )
 
             parsed_ts = F.coalesce(
                 F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),
@@ -280,6 +307,14 @@ def add_silver_metadata(
 
     :returns: ``df`` with metadata and partition columns appended/overwritten.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> silver_df = add_silver_metadata(  # doctest: +SKIP
+    ...     bronze_df,
+    ...     source_lakehouse_name="BronzeLakehouse",
+    ...     source_relative_path="dbo.RawOrders",
+    ... )
     """
     partition_source_col = next(
         (
@@ -337,6 +372,10 @@ def clean_data(
 
     :returns: Cleaned dataframe.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> cleaned = clean_data(raw_df, drop_duplicates=True, drop_all_null_rows=True)  # doctest: +SKIP
     """
     before_rows = df.count()
     before_cols = len(df.columns)

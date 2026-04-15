@@ -13,7 +13,6 @@ behaviour are documented on the **defining modules** (and mirrored in Sphinx):
 
 from __future__ import annotations
 
-from fabrictools._version import __version__
 from fabrictools.dimensions import (
     build_dimension_city,
     build_dimension_country,

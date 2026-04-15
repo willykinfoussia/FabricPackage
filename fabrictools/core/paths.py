@@ -1,10 +1,45 @@
-"""Path resolution helpers for Microsoft Fabric resources."""
+"""Path resolution helpers for Microsoft Fabric resources.
+
+Lakehouse helpers accept slash paths and SQL-style ``schema.table`` (first dot only)
+when the string has no path separators, e.g. ``dbo.PdC Extraction`` → ``dbo/PdC Extraction``.
+"""
 
 from __future__ import annotations
 
 from typing import List
 
 from fabrictools.core.logging import log
+
+# Do not treat ``schema.remainder`` as SQL notation when the path looks like a file.
+_DOT_PATH_FILE_SUFFIXES: tuple[str, ...] = (
+    ".parquet",
+    ".csv",
+    ".json",
+    ".orc",
+    ".avro",
+    ".delta",
+    ".txt",
+    ".gz",
+    ".zip",
+)
+_DOT_PATH_REMAINDER_AS_EXT: frozenset[str] = frozenset(
+    {"parquet", "csv", "json", "orc", "avro", "delta", "txt", "gz", "zip"}
+)
+
+
+def _expand_first_dot_schema_prefix(normalized: str) -> str:
+    """Turn ``schema.table`` (single segment, first dot) into ``schema/table``."""
+    if "/" in normalized or "." not in normalized:
+        return normalized
+    lower = normalized.lower()
+    if lower.endswith(_DOT_PATH_FILE_SUFFIXES):
+        return normalized
+    schema, remainder = normalized.split(".", 1)
+    if not schema or not remainder:
+        return normalized
+    if remainder.lower() in _DOT_PATH_REMAINDER_AS_EXT:
+        return normalized
+    return f"{schema}/{remainder}"
 
 
 def _read_property(container: object, key: str) -> str:
@@ -23,8 +58,9 @@ def _read_property(container: object, key: str) -> str:
 def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
     """Build ordered candidate relative paths for Lakehouse reads.
 
-    Normalizes slashes, then may prepend ``Tables/dbo`` or ``Files`` when the path
-    omits those prefixes (Fabric layout).
+    Normalizes slashes, maps SQL-style ``schema.table`` (e.g. ``dbo.PdC Extraction``)
+    to ``schema/table`` when there is no slash, then may prepend ``Tables/dbo`` or
+    ``Files`` when the path omits those prefixes (Fabric layout).
 
     :param relative_path: User-supplied path under the Lakehouse.
     :type relative_path: str
@@ -36,6 +72,7 @@ def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
     if not normalized:
         return [normalized]
 
+    normalized = _expand_first_dot_schema_prefix(normalized)
     parts = [part for part in normalized.split("/") if part]
     first = parts[0].lower()
     candidates: List[str] = ["/".join(parts)]
@@ -69,6 +106,9 @@ def build_lakehouse_read_path_candidates(relative_path: str) -> List[str]:
 def build_lakehouse_write_path(relative_path: str) -> str:
     """Normalize a Lakehouse write path (``Tables/dbo/...`` or ``Files/...``).
 
+    Accepts SQL-style ``schema.table`` (e.g. ``dbo.PdC Extraction``) when there is no
+    slash; it is mapped to ``schema/table`` before applying Fabric layout rules.
+
     :param relative_path: Destination path fragment from the caller.
     :type relative_path: str
 
@@ -79,6 +119,7 @@ def build_lakehouse_write_path(relative_path: str) -> str:
     if not normalized:
         return normalized
 
+    normalized = _expand_first_dot_schema_prefix(normalized)
     parts = [part for part in normalized.split("/") if part]
     first = parts[0].lower()
     if first == "files":

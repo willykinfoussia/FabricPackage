@@ -44,6 +44,12 @@ def snapshot_source_schema(
 
     :returns: MD5 hash of ``name:type`` pairs for the source schema.
     :rtype: str
+
+    .. rubric:: Example
+
+    >>> schema_hash = snapshot_source_schema(  # doctest: +SKIP
+    ...     "BronzeLakehouse", "dbo.RawInvoices"
+    ... )
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)

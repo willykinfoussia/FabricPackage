@@ -32,7 +32,8 @@ def read_lakehouse(
 
     :param lakehouse_name: Display name of the Lakehouse (e.g. ``"BronzeLakehouse"``).
     :param relative_path: Path inside the Lakehouse root, relative to the ABFS base
-        (e.g. ``"sales/2024"`` or ``"Tables/customers"``).
+        (e.g. ``"sales/2024"``, ``"Tables/customers"``, or SQL-style ``"dbo.MyTable"`` /
+        ``"dbo.PdC Extraction"`` with spaces in the table name).
     :param spark: Optional ``SparkSession``; when omitted the active session is used.
     :type lakehouse_name: str
     :type relative_path: str
@@ -45,7 +46,7 @@ def read_lakehouse(
 
     .. rubric:: Example
 
-    >>> df = read_lakehouse("BronzeLakehouse", "sales/2024")
+    >>> df = read_lakehouse("BronzeLakehouse", "sales/2024")  # doctest: +SKIP
     """
     _spark = spark or get_spark()
     base = get_lakehouse_abfs_path(lakehouse_name)
@@ -81,7 +82,8 @@ def resolve_lakehouse_read_candidate(
     candidates exist, try each path and return the first readable one.
 
     :param lakehouse_name: Display name of the Lakehouse.
-    :param relative_path: Logical path under the Lakehouse root.
+    :param relative_path: Logical path under the Lakehouse root (slash path or
+        SQL-style ``schema.table``, e.g. ``dbo.PdC Extraction``).
     :param spark: Optional ``SparkSession``; when omitted the active session is used.
     :type lakehouse_name: str
     :type relative_path: str
@@ -91,6 +93,12 @@ def resolve_lakehouse_read_candidate(
     :rtype: str
 
     :raises RuntimeError: When no candidate path can be read.
+
+    .. rubric:: Example
+
+    >>> resolved = resolve_lakehouse_read_candidate(  # doctest: +SKIP
+    ...     "BronzeLakehouse", "dbo.SalesOrders"
+    ... )
     """
     _spark = spark or get_spark()
     base = get_lakehouse_abfs_path(lakehouse_name)
@@ -229,7 +237,7 @@ def write_lakehouse(
     :param df: DataFrame to persist.
     :param lakehouse_name: Display name of the target Lakehouse.
     :param relative_path: Destination path inside the Lakehouse (e.g.
-        ``"sales_clean"`` or ``"Tables/sales_clean"``).
+        ``"sales_clean"``, ``"Tables/sales_clean"``, or ``"dbo.PdC Extraction"``).
     :param mode: Spark write mode: ``"overwrite"`` (default), ``"append"``,
         ``"ignore"``, or ``"error"``.
     :param partition_by: Optional column names to partition by. Each name is resolved
@@ -254,8 +262,9 @@ def write_lakehouse(
 
     .. rubric:: Example
 
-    >>> write_lakehouse(df, "SilverLakehouse", "sales_clean",
-    ...                 mode="overwrite", partition_by=["year"])
+    >>> write_lakehouse(  # doctest: +SKIP
+    ...     df, "SilverLakehouse", "sales_clean", mode="overwrite", partition_by=["year"]
+    ... )
     """
     _ = spark or get_spark()  # validates spark availability early
     base = get_lakehouse_abfs_path(lakehouse_name)
@@ -322,7 +331,8 @@ def merge_lakehouse(
 
     :param source_df: Rows to merge into the target table.
     :param lakehouse_name: Lakehouse display name holding the target table.
-    :param relative_path: Path of the Delta table inside the Lakehouse.
+    :param relative_path: Path of the Delta table inside the Lakehouse (same rules as
+        :py:func:`write_lakehouse`, including ``schema.table`` with spaces).
     :param merge_condition: SQL predicate joining source and target (e.g.
         ``"src.id = tgt.id"``).
     :param update_set: ``{target_col: source_expr}`` for matched rows, or ``None``
@@ -340,8 +350,10 @@ def merge_lakehouse(
 
     .. rubric:: Example
 
-    >>> merge_lakehouse(
-    ...     new_df, "SilverLakehouse", "sales_clean",
+    >>> merge_lakehouse(  # doctest: +SKIP
+    ...     new_df,
+    ...     "SilverLakehouse",
+    ...     "sales_clean",
     ...     merge_condition="src.id = tgt.id",
     ... )
     """
@@ -349,7 +361,13 @@ def merge_lakehouse(
 
     _spark = spark or get_spark()
     base = get_lakehouse_abfs_path(lakehouse_name)
-    full_path = f"{base}/{relative_path}"
+    resolved_relative_path = build_lakehouse_write_path(relative_path)
+    full_path = f"{base}/{resolved_relative_path}"
+    if resolved_relative_path != relative_path:
+        log(
+            f"Auto-corrected merge relative_path '{relative_path}' "
+            f"-> '{resolved_relative_path}'"
+        )
     log(f"Merging into Lakehouse '{lakehouse_name}' → {full_path}")
     log(f"  Condition: {merge_condition}")
 
@@ -397,6 +415,15 @@ def delete_all_lakehouse_tables(
     :rtype: dict
 
     :raises ValueError: When ``notebookutils`` is unavailable (not in Fabric).
+
+    .. rubric:: Example
+
+    >>> summary = delete_all_lakehouse_tables(  # doctest: +SKIP
+    ...     "DevLakehouse",
+    ...     include_schemas=["dbo"],
+    ...     exclude_tables=["dbo.KeepThis"],
+    ...     continue_on_error=True,
+    ... )
     """
     try:
         import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415

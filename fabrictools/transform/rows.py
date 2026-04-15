@@ -32,6 +32,12 @@ def drop_rows_over_empty_percent(
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``max_empty_percent`` is outside ``[0, 1]``, if ``columns`` is an empty sequence, or if no columns remain to score.
+
+    .. rubric:: Example
+
+    >>> pruned = drop_rows_over_empty_percent(  # doctest: +SKIP
+    ...     df, 0.5, columns=["col_a", "col_b", "col_c"]
+    ... )
     """
     if not 0 <= max_empty_percent <= 1:
         raise ValueError(

@@ -136,6 +136,13 @@ def build_dimension_country(
 
     :raises ImportError: When ``countrystatecity-countries`` is not installed.
     :raises RuntimeError: When ``fail_on_source_error`` is ``True`` and building fails.
+
+    .. rubric:: Example
+
+    >>> countries = build_dimension_country(  # doctest: +SKIP
+    ...     lakehouse_name="GoldLakehouse",
+    ...     lakehouse_relative_path="dimension_country",
+    ... )
     """
     _spark = spark or get_spark()
 
@@ -288,6 +295,14 @@ def build_dimension_city(
 
     :returns: City dimension dataframe.
     :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> cities = build_dimension_city(  # doctest: +SKIP
+    ...     lakehouse_name="GoldLakehouse",
+    ...     lakehouse_relative_path="dimension_city",
+    ...     countries=["FR", "DE"],
+    ... )
     """
     _spark = spark or get_spark()
     regions_filter = _normalize_filter_set(regions)

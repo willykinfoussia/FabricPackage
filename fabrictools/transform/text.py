@@ -18,6 +18,10 @@ def norm_text(expr: Union[Column, str]) -> Column:
 
     :returns: Transformed column expression.
     :rtype: ~pyspark.sql.Column
+
+    .. rubric:: Example
+
+    >>> df.withColumn("key_norm", norm_text("Customer Name"))  # doctest: +SKIP
     """
     c = F.lit(expr) if isinstance(expr, str) else expr
     as_str = F.coalesce(c.cast("string"), F.lit(""))
@@ -35,6 +39,10 @@ def empty_or_null(c: Column) -> Column:
 
     :returns: Boolean ``Column``.
     :rtype: ~pyspark.sql.Column
+
+    .. rubric:: Example
+
+    >>> df.filter(empty_or_null(F.col("notes")))  # doctest: +SKIP
     """
     s = F.coalesce(c.cast("string"), F.lit(""))
     return c.isNull() | (F.trim(s) == F.lit(""))
@@ -48,6 +56,10 @@ def coalesce_dim(src: Column) -> Column:
 
     :returns: String ``Column``.
     :rtype: ~pyspark.sql.Column
+
+    .. rubric:: Example
+
+    >>> df.withColumn("dim_id", coalesce_dim(F.col("legacy_code")))  # doctest: +SKIP
     """
     return F.when(
         src.isNull() | (F.trim(F.coalesce(src.cast("string"), F.lit(""))) == F.lit("")),

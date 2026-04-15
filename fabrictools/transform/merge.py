@@ -235,6 +235,16 @@ def merge_dataframes(
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``keys`` is empty.
+
+    .. rubric:: Example
+
+    >>> out = merge_dataframes(  # doctest: +SKIP
+    ...     orders,
+    ...     customers,
+    ...     join_columns=["name", "segment"],
+    ...     keys=[("customer_id", "id")],
+    ...     join_prefix="cust",
+    ... )
     """
     if not keys:
         raise ValueError("keys must contain at least one (main_key, join_key) pair")

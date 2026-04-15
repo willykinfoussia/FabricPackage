@@ -91,6 +91,15 @@ def generate_dimensions(
     :rtype: dict[str, ~pyspark.sql.DataFrame]
 
     :raises ValueError: If all dimension flags are ``False``.
+
+    .. rubric:: Example
+
+    >>> dims = generate_dimensions(  # doctest: +SKIP
+    ...     lakehouse_name="GoldLakehouse",
+    ...     include_date=True,
+    ...     include_country=True,
+    ...     include_city=False,
+    ... )
     """
     _spark = spark or get_spark()
     generated: dict[str, DataFrame] = {}

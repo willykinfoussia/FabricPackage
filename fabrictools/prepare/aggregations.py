@@ -64,6 +64,15 @@ def generate_prepared_aggregations(
 
     :returns: Map of logical aggregation name to written relative path.
     :rtype: dict[str, str]
+
+    .. rubric:: Example
+
+    >>> paths = generate_prepared_aggregations(  # doctest: +SKIP
+    ...     "BronzeLakehouse",
+    ...     "GoldLakehouse",
+    ...     "Tables/dbo/Prepared_Sales",
+    ...     resolved_mappings,
+    ... )
     """
     _spark = spark or get_spark()
     prepared_df = read_lakehouse(target_lakehouse_name, target_relative_path, spark=_spark)
