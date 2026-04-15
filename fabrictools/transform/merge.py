@@ -220,8 +220,8 @@ def merge_dataframes(
 
     :param main: Left dataframe.
     :param join_df: Right dataframe (only ``join_columns`` projected, plus key temps).
-    :param join_columns: Right-side columns to expose with prefixed names.
-    :param keys: ``(main_col, join_col)`` pairs for the join predicate (AND); names resolved per frame.
+    :param join_columns: Right-side columns to expose with prefixed names; labels that do not resolve on ``join_df`` are omitted.
+    :param keys: ``(main_col, join_col)`` pairs for the join predicate (AND); names resolved per frame. Pairs where either side does not resolve are skipped; if none resolve, ``main`` is returned unchanged.
     :param how: Spark join type (e.g. ``left``, ``inner``).
     :param join_prefix: Optional explicit prefix (snake_cased); overrides inference.
     :type main: ~pyspark.sql.DataFrame
@@ -259,17 +259,19 @@ def merge_dataframes(
             raw_prefix = DEFAULT_JOIN_PREFIX
     prefix = _to_snake_case(raw_prefix)
 
-    resolved_keys = [
-        (
-            _resolve_column_name(main, mk, side="main"),
-            _resolve_column_name(join_df, jk, side="join_df"),
-        )
-        for mk, jk in keys
-    ]
+    valid_pairs: list[tuple[str, str]] = []
+    for mk, jk in keys:
+        mk_res = _resolve_column_name(main, mk, side="main")
+        jk_res = _resolve_column_name(join_df, jk, side="join_df")
+        if mk_res is not None and jk_res is not None:
+            valid_pairs.append((mk_res, jk_res))
 
-    temp_names = [f"_ft_join_k{i}" for i in range(len(keys))]
+    if not valid_pairs:
+        return main
+
+    temp_names = [f"_ft_join_k{i}" for i in range(len(valid_pairs))]
     exprs = []
-    for i, (_mk_res, jk_res) in enumerate(resolved_keys):
+    for i, (_mk_res, jk_res) in enumerate(valid_pairs):
         exprs.append(F.col(jk_res).alias(temp_names[i]))
 
     normalized_suffixes = _build_unique_column_names(
@@ -277,12 +279,14 @@ def merge_dataframes(
     )
     for requested, suffix in zip(join_columns, normalized_suffixes):
         actual = _resolve_column_name(join_df, requested, side="join_df")
+        if actual is None:
+            continue
         exprs.append(F.col(actual).alias(f"{prefix}_{suffix}"))
 
     right_proj = join_df.select(*exprs)
 
     cond = None
-    for i, (mk_res, _jk_res) in enumerate(resolved_keys):
+    for i, (mk_res, _jk_res) in enumerate(valid_pairs):
         part = F.col(mk_res) == F.col(temp_names[i])
         cond = part if cond is None else (cond & part)
 

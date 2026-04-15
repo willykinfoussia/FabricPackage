@@ -130,7 +130,9 @@ def _rename_columns_pq_serial_common(
     return out
 
 
-def _resolve_column_name(df: DataFrame, name: str, *, side: str = "DataFrame") -> str:
+def _resolve_column_name(
+    df: DataFrame, name: str, *, side: str = "DataFrame"
+) -> Optional[str]:
     cols = [f.name for f in df.schema.fields]
     if name in cols:
         return name
@@ -143,7 +145,7 @@ def _resolve_column_name(df: DataFrame, name: str, *, side: str = "DataFrame") -
     return None
 
 
-def resolve_dataframe_column(df: DataFrame, name: str) -> str:
+def resolve_dataframe_column(df: DataFrame, name: str) -> Optional[str]:
     """Resolve ``name`` to the physical column name on ``df``.
 
     Accepts the physical name, a :py:func:`fabrictools.clean_data`-style
@@ -154,10 +156,8 @@ def resolve_dataframe_column(df: DataFrame, name: str) -> str:
     :type df: ~pyspark.sql.DataFrame
     :type name: str
 
-    :returns: Physical column name present on ``df``.
-    :rtype: str
-
-    :raises ValueError: If ``name`` cannot be resolved.
+    :returns: Physical column name present on ``df``, or ``None`` if ``name`` cannot be resolved.
+    :rtype: str | None
 
     .. rubric:: Example
 
@@ -194,14 +194,14 @@ def remove_columns(df: DataFrame, *columns: str) -> DataFrame:
     """Drop columns by physical name or by the same resolution rules as :py:func:`fabrictools.merge_dataframes`.
 
     :param df: Input dataframe.
-    :param columns: One or more labels; duplicates resolving to the same physical column are dropped once.
+    :param columns: One or more labels; duplicates resolving to the same physical column are dropped once. Labels that do not resolve to a column on ``df`` are ignored.
     :type df: ~pyspark.sql.DataFrame
     :type columns: str
 
-    :returns: ``df`` without the resolved columns.
+    :returns: ``df`` without the resolved columns (unchanged if every label is unknown).
     :rtype: ~pyspark.sql.DataFrame
 
-    :raises ValueError: If no names are passed or a name cannot be resolved.
+    :raises ValueError: If no names are passed.
 
     .. rubric:: Example
 
@@ -213,6 +213,8 @@ def remove_columns(df: DataFrame, *columns: str) -> DataFrame:
     seen: set[str] = set()
     for name in columns:
         actual = _resolve_column_name(df, name, side="DataFrame")
+        if actual is None:
+            continue
         if actual not in seen:
             seen.add(actual)
             resolved.append(actual)

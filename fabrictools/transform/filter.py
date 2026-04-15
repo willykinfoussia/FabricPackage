@@ -54,7 +54,7 @@ def filter_by_value_list(
     in ``values`` are stripped.
 
     :param df: Input dataframe.
-    :param column: Logical or physical column name (resolved like :py:func:`fabrictools.resolve_dataframe_column`).
+    :param column: Logical or physical column name (resolved like :py:func:`fabrictools.resolve_dataframe_column`). If it does not resolve, ``df`` is returned unchanged.
     :param values: Membership list; non-strings kept as-is.
     :param exclude: If ``True`` (default), drop rows in ``values``; if ``False``, keep only those rows.
     :type df: ~pyspark.sql.DataFrame
@@ -72,6 +72,8 @@ def filter_by_value_list(
     ... )
     """
     resolved = _resolve_column_name(df, column, side="DataFrame")
+    if resolved is None:
+        return df
     dtype = _column_dtype(df, resolved)
     expr = F.trim(F.col(resolved)) if _is_string_like(dtype) else F.col(resolved)
     literals = _prepare_values(values)

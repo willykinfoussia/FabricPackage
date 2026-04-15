@@ -23,7 +23,7 @@ def drop_rows_over_empty_percent(
 
     :param df: Input dataframe.
     :param max_empty_percent: Upper bound in ``[0, 1]``; rows with empty ratio **strictly greater** than this are removed.
-    :param columns: Columns to score; ``None`` means all columns. Names resolved like :py:func:`fabrictools.resolve_dataframe_column`.
+    :param columns: Columns to score; ``None`` means all columns. Names resolved like :py:func:`fabrictools.resolve_dataframe_column`; unknown labels are skipped, and if none remain all columns are used.
     :type df: ~pyspark.sql.DataFrame
     :type max_empty_percent: float
     :type columns: collections.abc.Sequence[str] | None
@@ -54,9 +54,13 @@ def drop_rows_over_empty_percent(
         seen: set[str] = set()
         for name in columns:
             actual = _resolve_column_name(df, name, side="DataFrame")
+            if actual is None:
+                continue
             if actual not in seen:
                 seen.add(actual)
                 resolved.append(actual)
+        if not resolved:
+            resolved = [f.name for f in df.schema.fields]
 
     n = len(resolved)
     if n == 0:

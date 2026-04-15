@@ -40,7 +40,11 @@ def wide_value_columns(
 
 
 def _resolve_id_columns(df: DataFrame, id_columns: Sequence[str]) -> list[str]:
-    return [resolve_dataframe_column(df, c) for c in id_columns]
+    return [
+        c
+        for c in (resolve_dataframe_column(df, col) for col in id_columns)
+        if c is not None
+    ]
 
 
 def _collect_value_columns(
@@ -60,10 +64,12 @@ def _collect_value_columns(
         raise ValueError(
             "Provide value_columns or value_columns_suffix (one of them is required)."
         )
-    # Drop duplicates while preserving order
+    # Drop duplicates while preserving order (omit unresolved names)
     seen: set[str] = set()
     deduped: list[str] = []
     for c in out:
+        if c is None:
+            continue
         if c not in seen:
             seen.add(c)
             deduped.append(c)
@@ -110,7 +116,7 @@ def dataframe_unpivot_wide_month_suffix(
     If ``value_columns`` is set, it takes precedence over ``value_columns_suffix``.
 
     :param df: Wide dataframe.
-    :param id_columns: Identifier columns kept as-is.
+    :param id_columns: Identifier columns kept as-is; labels that do not resolve on ``df`` are omitted.
     :param value_columns_suffix: Suffix selecting value columns (via :py:func:`wide_value_columns`).
     :param value_columns: Explicit list of value column names (optional).
     :param exclude_columns: Excluded from value detection when using suffix.
@@ -381,12 +387,12 @@ def transform_wide_month_suffix(
     :param value_column: Long-form value column name.
     :param month_start_column: Long-form month start column name.
     :param month_start_from_column_name: Parser for month start from variable name.
-    :param order_column: Source-wide column for ``last_nonnull`` ordering (resolved on ``df``).
+    :param order_column: Source-wide column for ``last_nonnull`` ordering (resolved on ``df``). If it does not resolve, the long unpivot result is returned unchanged.
     :param output_value: Output value column for ``last_nonnull``.
     :param output_month_start: Output month start for ``last_nonnull``.
     :param output_year: Output year for both aggregations where applicable.
     :param output_month: Output month for both aggregations where applicable.
-    :param category_column: Source column for ``pivot_sum`` (resolved on ``df``).
+    :param category_column: Source column for ``pivot_sum`` (resolved on ``df``). If it does not resolve, the long unpivot result is returned unchanged.
     :param pivot_categories: Category list for ``pivot_sum``.
     :param fill_value: Pivot fill for ``pivot_sum``.
     :param montant_column: Internal sum column name for pivot path.
@@ -410,7 +416,7 @@ def transform_wide_month_suffix(
     :type fill_value: float
     :type montant_column: str
 
-    :returns: Aggregated dataframe per selected mode.
+    :returns: Aggregated dataframe per selected mode, or the long unpivot only when ``order_column`` / ``category_column`` does not resolve as above.
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``aggregation`` is unknown or required parameters are missing.
@@ -440,6 +446,8 @@ def transform_wide_month_suffix(
         if order_column is None:
             raise ValueError("order_column is required when aggregation='last_nonnull'.")
         oc = resolve_dataframe_column(df, order_column)
+        if oc is None:
+            return long_df
         return dataframe_last_nonnull_wide_month_from_long(
             long_df,
             order_column=oc,
@@ -457,6 +465,8 @@ def transform_wide_month_suffix(
                 "category_column and pivot_categories are required when aggregation='pivot_sum'."
             )
         cc = resolve_dataframe_column(df, category_column)
+        if cc is None:
+            return long_df
         return dataframe_pivot_category_wide_month_from_long(
             long_df,
             category_column=cc,

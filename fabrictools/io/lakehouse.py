@@ -294,8 +294,12 @@ def write_lakehouse(
             log("  Column names normalized (clean_data-style) before write")
 
     user_partitions = [
-        _resolve_column_name(df, col, side="DataFrame")
-        for col in (partition_by or [])
+        p
+        for p in (
+            _resolve_column_name(df, col, side="DataFrame")
+            for col in (partition_by or [])
+        )
+        if p is not None
     ]
     auto_detected_partitions = _detect_partition_columns(df)
     effective_partition_by = _dedupe_preserve_order(
