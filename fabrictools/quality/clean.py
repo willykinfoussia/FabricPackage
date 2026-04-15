@@ -92,50 +92,6 @@ _PARSED_DATE_SAMPLE_LIMIT = 5
 _TIME_PARSER_POLICY_KEY = "spark.sql.legacy.timeParserPolicy"
 
 
-def _log_date_column_mismatch_example(
-    col_name: str,
-    mismatch_df: DataFrame,
-    trimmed,
-    parsed_date,
-) -> None:
-    """Log one row where ``to_date`` coalesce fails for a non-null cell."""
-    rows = mismatch_df.select(
-        F.col(col_name).alias("raw"),
-        trimmed.alias("trimmed"),
-        trimmed.rlike(_DATE_ONLY_PATTERN).alias("matches_date_only_shape"),
-        parsed_date.alias("parsed_date"),
-    ).collect()
-    preview = [tuple(row) for row in rows]
-    log(
-        f"detect_and_cast_columns: column {col_name!r} skipped as date; "
-        f"example row (raw, trimmed, matches_date_only_shape, parsed_date): {preview!r}"
-    )
-
-
-def _log_parsed_date_sample(
-    df: DataFrame,
-    col_name: str,
-    trimmed,
-    parsed_date,
-) -> None:
-    """Materialize a few rows so the coalesce(to_date...) result is visible in logs."""
-    rows = (
-        df.filter(F.col(col_name).isNotNull())
-        .select(
-            F.col(col_name).alias("raw"),
-            trimmed.alias("trimmed"),
-            parsed_date.alias("parsed_date"),
-        )
-        .limit(_PARSED_DATE_SAMPLE_LIMIT)
-        .collect()
-    )
-    preview = [tuple(row) for row in rows]
-    log(
-        f"detect_and_cast_columns: column {col_name!r} parsed_date sample "
-        f"(raw, trimmed, parsed_date), up to {_PARSED_DATE_SAMPLE_LIMIT} rows: {preview!r}"
-    )
-
-
 def detect_and_cast_columns(df: DataFrame) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
@@ -203,10 +159,6 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                     F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
                 )
                 continue
-
-            _log_date_column_mismatch_example(
-                col_name, date_mismatch, trimmed, parsed_date
-            )
 
             parsed_ts = F.coalesce(
                 F.to_timestamp(trimmed, "yyyy-MM-dd HH:mm:ss"),

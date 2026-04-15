@@ -140,10 +140,7 @@ def _resolve_column_name(df: DataFrame, name: str, *, side: str = "DataFrame") -
     candidate = _to_snake_case(name)
     if candidate in norm_list:
         return cols[norm_list.index(candidate)]
-    raise ValueError(
-        f"{side} DataFrame has no column {name!r} "
-        f"(not a physical name nor a name normalized like clean_data)"
-    )
+    return None
 
 
 def resolve_dataframe_column(df: DataFrame, name: str) -> str:
