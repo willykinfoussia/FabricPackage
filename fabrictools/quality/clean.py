@@ -22,9 +22,7 @@ from fabrictools.io import resolve_lakehouse_read_candidate
 
 def _to_snake_case(name: str) -> str:
     normalized = unicodedata.normalize("NFKD", name.strip())
-    cleaned = "".join(
-        ch for ch in normalized if not unicodedata.combining(ch)
-    )
+    cleaned = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     cleaned = re.sub(r"[^0-9A-Za-z]+", "_", cleaned)
     cleaned = re.sub(r"_+", "_", cleaned).strip("_").lower()
     if not cleaned:
@@ -62,7 +60,9 @@ def _normalized_name_collisions(columns: List[str]) -> dict[str, List[str]]:
 
 def _replace_empty_strings_with_nulls(df: DataFrame) -> DataFrame:
     string_columns = [
-        field.name for field in df.schema.fields if isinstance(field.dataType, StringType)
+        field.name
+        for field in df.schema.fields
+        if isinstance(field.dataType, StringType)
     ]
     transformed_df = df
     for col_name in string_columns:
@@ -100,18 +100,19 @@ def _log_date_column_mismatch_example(
     parsed_date,
 ) -> None:
     """Log one row that fails date-only detection (shape or parse)."""
-    rows = (
-        mismatch_df.select(
-            F.col(col_name).alias("raw"),
-            trimmed.alias("trimmed"),
-            trimmed.rlike(_DATE_ONLY_PATTERN).alias("matches_date_only_shape"),
-            parsed_date.alias("parsed_date"),
-        )
-        .collect()
-    )
+    rows = mismatch_df.select(
+        F.col(col_name).alias("raw"),
+        trimmed.alias("trimmed"),
+        trimmed.rlike(_DATE_ONLY_PATTERN).alias("matches_date_only_shape"),
+        parsed_date.alias("parsed_date"),
+    ).collect()
     preview = [tuple(row) for row in rows]
     log(
         f"detect_and_cast_columns: column {col_name!r} skipped as date; "
+        f"example row (raw, trimmed, matches_date_only_shape, parsed_date): {preview!r}"
+    )
+    print(f"detect_and_cast_columns: column {col_name!r} skipped as date; ")
+    print(
         f"example row (raw, trimmed, matches_date_only_shape, parsed_date): {preview!r}"
     )
 
@@ -261,6 +262,7 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
         else:
             spark.conf.set(_TIME_PARSER_POLICY_KEY, previous_time_parser_policy)
 
+
 def add_silver_metadata(
     df: DataFrame,
     source_lakehouse_name: str,
@@ -351,6 +353,7 @@ def add_silver_metadata(
         f"(partition source: {partition_source_label})"
     )
     return metadata_df
+
 
 def clean_data(
     df: DataFrame,
