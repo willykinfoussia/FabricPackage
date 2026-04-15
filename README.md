@@ -488,6 +488,8 @@ Pour aider rapidement, partagez :
 
 Guide de publication PyPI : [docs/PYPI_PUBLISH.md](docs/PYPI_PUBLISH.md)
 
+Documentation Sphinx : le workflow [`.github/workflows/docs-pages.yml`](.github/workflows/docs-pages.yml) construit les pages HTML et les publie sur GitHub Pages. Dans le depot GitHub, activez une fois **Settings → Pages → Build and deployment → Source : GitHub Actions** (et non une branche `docs/`). Le declenchement sur `push` utilise la branche `main` et les chemins `docs/`, `fabrictools/` et `pyproject.toml` ; un lancement manuel reste possible via **Actions → Deploy Sphinx docs to GitHub Pages → Run workflow**.
+
 ---
 
 ## Licence
