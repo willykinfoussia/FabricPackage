@@ -207,7 +207,7 @@ def merge_dataframes(
     keys: Sequence[tuple[str, str]],
     how: str = "left",
     *,
-    join_prefix: str = "",
+    join_prefix: str | None = None,
     join_column_names: Sequence[str] | None = None,
 ) -> DataFrame:
     """Left-join ``main`` to ``join_df`` and project right columns as ``{prefix}_{suffix}``.
@@ -259,6 +259,10 @@ def merge_dataframes(
         raw_prefix = _try_infer_join_prefix_from_call_site()
         if not raw_prefix:
             raw_prefix = _try_join_prefix_from_dataframe_alias(join_df)
+    
+    if not raw_prefix:
+        raw_prefix = "join"
+        
     prefix = _to_snake_case(raw_prefix)
 
     valid_pairs: list[tuple[str, str]] = []
@@ -284,7 +288,13 @@ def merge_dataframes(
         actual = _resolve_column_name(join_df, requested, side="join_df")
         if actual is None:
             continue
-        exprs.append(F.col(actual).alias(f"{prefix}_{suffix}"))
+            
+        if join_column_names is not None:
+            final_name = suffix
+        else:
+            final_name = f"{prefix}_{suffix}" if prefix else suffix
+            
+        exprs.append(F.col(actual).alias(final_name))
 
     right_proj = join_df.select(*exprs)
 
