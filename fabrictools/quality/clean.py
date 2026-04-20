@@ -92,7 +92,7 @@ _PARSED_DATE_SAMPLE_LIMIT = 5
 _TIME_PARSER_POLICY_KEY = "spark.sql.legacy.timeParserPolicy"
 
 
-def detect_and_cast_columns(df: DataFrame) -> DataFrame:
+def detect_and_cast_columns(df: DataFrame, verbose: bool = True) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
     Order of detection (first match wins): **date** (uniform non-null success of a
@@ -212,13 +212,14 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                     ),
                 )
             else:
-                mismatch_row = float_mismatch.collect()
-                if mismatch_row:
-                    bad_value = mismatch_row[0][col_name]
-                    log(
-                        f"Column '{col_name}' could not be cast to a number. Mismatch value: {bad_value!r}",
-                        level="warning",
-                    )
+                if verbose:
+                    mismatch_row = float_mismatch.collect()
+                    if mismatch_row:
+                        bad_value = mismatch_row[0][col_name]
+                        log(
+                            f"Column '{col_name}' could not be cast to a number. Mismatch value: {bad_value!r}",
+                            level="warning",
+                        )
                 continue
         return transformed_df
     finally:
@@ -240,6 +241,7 @@ def add_silver_metadata(
     month_col: str = "_month",
     day_col: str = "_day",
     spark: Optional[SparkSession] = None,
+    verbose: bool = True,
 ) -> DataFrame:
     """Add Silver-layer metadata columns (ingestion time, source path, date parts).
 
@@ -311,12 +313,13 @@ def add_silver_metadata(
         .withColumn(day_col, F.dayofmonth(partition_expression))
     )
     partition_source_label = partition_source_col or ingestion_timestamp_col
-    log(
-        "Silver metadata added: "
-        f"{ingestion_timestamp_col}, {source_layer_col}, {source_path_col}, "
-        f"{year_col}, {month_col}, {day_col} "
-        f"(partition source: {partition_source_label})"
-    )
+    if verbose:
+        log(
+            "Silver metadata added: "
+            f"{ingestion_timestamp_col}, {source_layer_col}, {source_path_col}, "
+            f"{year_col}, {month_col}, {day_col} "
+            f"(partition source: {partition_source_label})"
+        )
     return metadata_df
 
 
@@ -324,6 +327,7 @@ def clean_data(
     df: DataFrame,
     drop_duplicates: bool = True,
     drop_all_null_rows: bool = True,
+    verbose: bool = True,
 ) -> DataFrame:
     """Normalize names, trim empty strings to null, infer types, optionally dedupe.
 
@@ -351,7 +355,7 @@ def clean_data(
     normalized_columns = _build_unique_column_names(df.columns)
     cleaned_df = df.toDF(*normalized_columns)
     cleaned_df = _replace_empty_strings_with_nulls(cleaned_df)
-    cleaned_df = detect_and_cast_columns(cleaned_df)
+    cleaned_df = detect_and_cast_columns(cleaned_df, verbose=verbose)
 
     if drop_duplicates:
         cleaned_df = cleaned_df.dropDuplicates()
@@ -360,10 +364,11 @@ def clean_data(
 
     after_rows = cleaned_df.count()
     after_cols = len(cleaned_df.columns)
-    log(
-        f"Data cleaned: rows {before_rows:,} -> {after_rows:,} | "
-        f"columns {before_cols} -> {after_cols}"
-    )
+    if verbose:
+        log(
+            f"Data cleaned: rows {before_rows:,} -> {after_rows:,} | "
+            f"columns {before_cols} -> {after_cols}"
+        )
     return cleaned_df
 
 

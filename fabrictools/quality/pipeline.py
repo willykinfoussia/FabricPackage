@@ -30,6 +30,7 @@ def clean_and_write_data(
     mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
     spark: Optional[SparkSession] = None,
+    verbose: bool = True,
 ) -> DataFrame:
     """Read one Lakehouse path, clean, add Silver metadata, and write the target path.
 
@@ -64,12 +65,13 @@ def clean_and_write_data(
     """
     _spark = spark or get_spark()
     source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
-    cleaned_df = clean_data(source_df)
+    cleaned_df = clean_data(source_df, verbose=verbose)
     silver_df = add_silver_metadata(
         cleaned_df,
         source_lakehouse_name=source_lakehouse_name,
         source_relative_path=source_relative_path,
         spark=_spark,
+        verbose=verbose,
     )
     write_lakehouse(
         silver_df,
@@ -124,6 +126,7 @@ def clean_and_write_all_tables(
     exclude_tables: Optional[list[str]] = None,
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
+    verbose: bool = True,
 ) -> dict[str, Any]:
     """Bulk clean/write (or merge) using discovery or an explicit ``tables_config``.
 
@@ -178,10 +181,11 @@ def clean_and_write_all_tables(
     )
 
     if not table_jobs:
-        log(
-            f"No tables found in Lakehouse '{source_lakehouse_name}' for bulk clean/write.",
-            level="warning",
-        )
+        if verbose:
+            log(
+                f"No tables found in Lakehouse '{source_lakehouse_name}' for bulk clean/write.",
+                level="warning",
+            )
         return {
             "total_tables": 0,
             "successful_tables": 0,
@@ -194,10 +198,11 @@ def clean_and_write_all_tables(
     failures: list[dict[str, str]] = []
     total_tables = len(table_jobs)
 
-    log(
-        f"Bulk clean/write started: {total_tables} table(s) "
-        f"from '{source_lakehouse_name}' to '{target_lakehouse_name}'."
-    )
+    if verbose:
+        log(
+            f"Bulk clean/write started: {total_tables} table(s) "
+            f"from '{source_lakehouse_name}' to '{target_lakehouse_name}'."
+        )
 
     for index, table_job in enumerate(table_jobs, start=1):
         src = str(table_job["source_relative_path"])
@@ -206,7 +211,8 @@ def clean_and_write_all_tables(
         table_partition_by = table_job.get("partition_by")
         merge_condition = table_job.get("merge_condition")
 
-        log(f"[{index}/{total_tables}] Processing '{src}' -> '{tgt}' [mode={table_mode}]...")
+        if verbose:
+            log(f"[{index}/{total_tables}] Processing '{src}' -> '{tgt}' [mode={table_mode}]...")
         try:
             if table_mode in {"overwrite", "append"}:
                 clean_and_write_data(
@@ -217,15 +223,17 @@ def clean_and_write_all_tables(
                     mode=table_mode,
                     partition_by=table_partition_by,
                     spark=_spark,
+                    verbose=verbose,
                 )
             else:
                 source_df = read_lakehouse(source_lakehouse_name, src, spark=_spark)
-                cleaned_df = clean_data(source_df)
+                cleaned_df = clean_data(source_df, verbose=verbose)
                 silver_df = add_silver_metadata(
                     cleaned_df,
                     source_lakehouse_name=source_lakehouse_name,
                     source_relative_path=src,
                     spark=_spark,
+                    verbose=verbose,
                 )
                 merge_lakehouse(
                     source_df=silver_df,
@@ -251,7 +259,8 @@ def clean_and_write_all_tables(
                     "error": str(exc),
                 }
             )
-            log(f"[{index}/{total_tables}] Failed for '{src}': {exc}", level="warning")
+            if verbose:
+                log(f"[{index}/{total_tables}] Failed for '{src}': {exc}", level="warning")
             if not continue_on_error:
                 raise
 
