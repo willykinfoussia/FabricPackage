@@ -14,8 +14,6 @@ from pyspark.sql import functions as F
 from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
 from fabrictools.transform.columns import _resolve_column_name
 
-DEFAULT_JOIN_PREFIX = "join"
-
 
 def _is_merge_dataframes_call(node: ast.AST) -> bool:
     if not isinstance(node, ast.Call):
@@ -209,7 +207,8 @@ def merge_dataframes(
     keys: Sequence[tuple[str, str]],
     how: str = "left",
     *,
-    join_prefix: str | None = None,
+    join_prefix: str = "",
+    join_column_names: Sequence[str] | None = None,
 ) -> DataFrame:
     """Left-join ``main`` to ``join_df`` and project right columns as ``{prefix}_{suffix}``.
 
@@ -221,6 +220,7 @@ def merge_dataframes(
     :param main: Left dataframe.
     :param join_df: Right dataframe (only ``join_columns`` projected, plus key temps).
     :param join_columns: Right-side columns to expose with prefixed names; labels that do not resolve on ``join_df`` are omitted.
+    :param join_column_names: Optional output names for ``join_columns`` (same order, same length). If omitted, ``join_columns`` names are reused.
     :param keys: ``(main_col, join_col)`` pairs for the join predicate (AND); names resolved per frame. Pairs where either side does not resolve are skipped; if none resolve, ``main`` is returned unchanged.
     :param how: Spark join type (e.g. ``left``, ``inner``).
     :param join_prefix: Optional explicit prefix (snake_cased); overrides inference.
@@ -230,6 +230,7 @@ def merge_dataframes(
     :type keys: collections.abc.Sequence[tuple[str, str]]
     :type how: str
     :type join_prefix: str | None
+    :type join_column_names: collections.abc.Sequence[str] | None
 
     :returns: Joined dataframe with temporary key columns dropped.
     :rtype: ~pyspark.sql.DataFrame
@@ -249,14 +250,15 @@ def merge_dataframes(
     if not keys:
         raise ValueError("keys must contain at least one (main_key, join_key) pair")
 
+    if join_column_names is not None and len(join_column_names) != len(join_columns):
+        raise ValueError("join_column_names must have the same length as join_columns")
+
     if join_prefix is not None:
         raw_prefix = join_prefix
     else:
         raw_prefix = _try_infer_join_prefix_from_call_site()
         if not raw_prefix:
             raw_prefix = _try_join_prefix_from_dataframe_alias(join_df)
-        if not raw_prefix:
-            raw_prefix = DEFAULT_JOIN_PREFIX
     prefix = _to_snake_case(raw_prefix)
 
     valid_pairs: list[tuple[str, str]] = []
@@ -274,8 +276,9 @@ def merge_dataframes(
     for i, (_mk_res, jk_res) in enumerate(valid_pairs):
         exprs.append(F.col(jk_res).alias(temp_names[i]))
 
+    output_names = join_column_names if join_column_names is not None else join_columns
     normalized_suffixes = _build_unique_column_names(
-        [_to_snake_case(requested) for requested in join_columns]
+        [_to_snake_case(requested) for requested in output_names]
     )
     for requested, suffix in zip(join_columns, normalized_suffixes):
         actual = _resolve_column_name(join_df, requested, side="join_df")
