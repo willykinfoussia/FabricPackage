@@ -6,6 +6,7 @@ See submodules :mod:`fabrictools.transform.columns`, :mod:`fabrictools.transform
 """
 
 from fabrictools.transform.columns import (
+    cast_columns,
     month_start_from_ca_monthly_col,
     remove_columns,
     rename_columns_month_year_block_labels,
@@ -27,6 +28,7 @@ from fabrictools.transform.wide_month_suffix import (
 )
 
 __all__ = [
+    "cast_columns",
     "coalesce_dim",
     "dataframe_last_nonnull_wide_month_from_long",
     "dataframe_pivot_category_wide_month_from_long",

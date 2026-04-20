@@ -7,9 +7,11 @@ import re
 import unicodedata
 from collections.abc import Callable, Collection, Sequence
 from datetime import date, timedelta
-from typing import Optional
+from typing import Optional, Union
 
 from pyspark.sql import DataFrame
+import pyspark.sql.functions as F
+from pyspark.sql.types import DataType
 
 from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
 
@@ -482,4 +484,37 @@ def rename_columns_month_year_block_labels(
     for old, new in pairs:
         if old != new:
             out = out.withColumnRenamed(old, new)
+    return out
+
+
+def cast_columns(
+    df: DataFrame,
+    type_map: dict[str, Union[str, DataType]],
+) -> DataFrame:
+    """Cast multiple columns to new types using a mapping dictionary.
+
+    Uses physical column names, clean_data-style normalized labels, or snake_case 
+    to resolve columns in the dataframe. Non-matching keys are ignored.
+
+    :param df: Input dataframe.
+    :param type_map: A dictionary mapping column names to target Spark types (as strings or DataType).
+    :type df: ~pyspark.sql.DataFrame
+    :type type_map: dict[str, str | ~pyspark.sql.types.DataType]
+
+    :returns: Dataframe with cast columns.
+    :rtype: ~pyspark.sql.DataFrame
+
+    .. rubric:: Example
+
+    >>> df_cast = cast_columns(df, {  # doctest: +SKIP
+    ...     "Mon ID Client": "int",
+    ...     "Montant_Total": "decimal(18,2)",
+    ...     "date_creation": "date",
+    ... })
+    """
+    out = df
+    for name, target_type in type_map.items():
+        actual = _resolve_column_name(df, name, side="DataFrame")
+        if actual is not None:
+            out = out.withColumn(actual, F.col(actual).cast(target_type))
     return out

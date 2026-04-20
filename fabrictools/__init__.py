@@ -44,6 +44,7 @@ from fabrictools.quality.pipeline import (
 )
 from fabrictools.quality.scan import scan_data_errors
 from fabrictools.transform import (
+    cast_columns,
     coalesce_dim,
     dataframe_last_nonnull_wide_month_from_long,
     dataframe_pivot_category_wide_month_from_long,
@@ -90,6 +91,7 @@ _EXPORT_REGISTRY = {
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
     "filter_by_value_list": filter_by_value_list,
     "drop_rows_over_empty_percent": drop_rows_over_empty_percent,
+    "cast_columns": cast_columns,
     "merge_dataframes": merge_dataframes,
     "remove_columns": remove_columns,
     "rename_columns_normalized": rename_columns_normalized,

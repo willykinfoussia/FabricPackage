@@ -92,7 +92,7 @@ _PARSED_DATE_SAMPLE_LIMIT = 5
 _TIME_PARSER_POLICY_KEY = "spark.sql.legacy.timeParserPolicy"
 
 
-def detect_and_cast_columns(df: DataFrame, verbose: bool = True) -> DataFrame:
+def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
     Order of detection (first match wins): **date** (uniform non-null success of a
@@ -241,7 +241,7 @@ def add_silver_metadata(
     month_col: str = "_month",
     day_col: str = "_day",
     spark: Optional[SparkSession] = None,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> DataFrame:
     """Add Silver-layer metadata columns (ingestion time, source path, date parts).
 
