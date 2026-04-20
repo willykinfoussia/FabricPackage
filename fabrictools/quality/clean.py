@@ -212,6 +212,13 @@ def detect_and_cast_columns(df: DataFrame) -> DataFrame:
                     ),
                 )
             else:
+                mismatch_row = float_mismatch.collect()
+                if mismatch_row:
+                    bad_value = mismatch_row[0][col_name]
+                    log(
+                        f"Column '{col_name}' could not be cast to a number. Mismatch value: {bad_value!r}",
+                        level="warning",
+                    )
                 continue
         return transformed_df
     finally:
