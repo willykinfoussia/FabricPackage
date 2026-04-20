@@ -231,6 +231,7 @@ def write_lakehouse(
     spark: Optional[SparkSession] = None,
     *,
     normalize_column_names: bool = True,
+    auto_partition: bool = True,
 ) -> None:
     """Write a ``DataFrame`` to a Fabric Lakehouse (default format: Delta).
 
@@ -251,6 +252,8 @@ def write_lakehouse(
         :py:func:`fabrictools.rename_columns_normalized` before
         resolving ``partition_by`` and writing. If ``False``, keep physical column
         names unchanged.
+    :param auto_partition: If ``True`` (default), automatically partition the data
+        by detected date columns if they exist.
     :type df: ~pyspark.sql.DataFrame
     :type lakehouse_name: str
     :type relative_path: str
@@ -301,7 +304,7 @@ def write_lakehouse(
         )
         if p is not None
     ]
-    auto_detected_partitions = _detect_partition_columns(df)
+    auto_detected_partitions = _detect_partition_columns(df) if auto_partition else []
     effective_partition_by = _dedupe_preserve_order(
         user_partitions + auto_detected_partitions
     )

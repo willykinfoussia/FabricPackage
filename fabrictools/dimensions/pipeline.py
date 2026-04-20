@@ -11,6 +11,7 @@ from fabrictools.dimensions._targets import _write_dimension_targets
 from fabrictools.dimensions.date import build_dimension_date
 from fabrictools.dimensions.geo import build_dimension_country, build_dimension_city
 
+
 def generate_dimensions(
     lakehouse_name: Optional[str] = None,
     warehouse_name: Optional[str] = None,
@@ -28,12 +29,12 @@ def generate_dimensions(
     city_countries: Optional[list[str]] = None,
     mode: str = "overwrite",
     batch_size: int = 10_000,
-    date_relative_path: str = "dimension_date",
-    country_relative_path: str = "dimension_country",
-    city_relative_path: str = "dimension_city",
-    date_warehouse_table: str = "dbo.dimension_date",
-    country_warehouse_table: str = "dbo.dimension_country",
-    city_warehouse_table: str = "dbo.dimension_city",
+    date_relative_path: str = "Dimension_date",
+    country_relative_path: str = "Dimension_country",
+    city_relative_path: str = "Dimension_city",
+    date_warehouse_table: str = "dbo.Dimension_date",
+    country_warehouse_table: str = "dbo.Dimension_country",
+    city_warehouse_table: str = "dbo.Dimension_city",
     spark: Optional[SparkSession] = None,
 ) -> dict[str, DataFrame]:
     """Build enabled dimensions and persist each to the configured Lakehouse and/or Warehouse.
@@ -160,5 +161,5 @@ def generate_dimensions(
     log("Dimension generation completed")
     return generated
 
-__all__ = ["generate_dimensions", "_write_dimension_targets"]
 
+__all__ = ["generate_dimensions", "_write_dimension_targets"]

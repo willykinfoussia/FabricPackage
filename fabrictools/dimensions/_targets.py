@@ -29,6 +29,7 @@ def _write_dimension_targets(
             relative_path=lakehouse_relative_path or default_relative_path,
             mode=mode,
             spark=_spark,
+            auto_partition=False,
         )
     if warehouse_name:
         write_warehouse(
