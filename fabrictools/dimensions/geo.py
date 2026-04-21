@@ -32,6 +32,7 @@ def _country_schema() -> StructType:
         ]
     )
 
+
 def _city_schema() -> StructType:
     return StructType(
         [
@@ -49,6 +50,7 @@ def _city_schema() -> StructType:
         ]
     )
 
+
 def _import_csc_package() -> tuple[Any, Any, Any]:
     try:
         from countrystatecity_countries import (  # type: ignore[import-not-found]
@@ -64,6 +66,7 @@ def _import_csc_package() -> tuple[Any, Any, Any]:
             "Install it with: pip install countrystatecity-countries"
         ) from exc
 
+
 def _to_row_dict(item: Any) -> dict[str, Any]:
     if item is None:
         return {}
@@ -73,11 +76,13 @@ def _to_row_dict(item: Any) -> dict[str, Any]:
         return item.dict()
     return dict(item)
 
+
 def _normalize_code(code: Any) -> Optional[str]:
     if code is None:
         return None
     normalized = str(code).strip().upper()
     return normalized or None
+
 
 def _normalize_coordinate(value: Any) -> Optional[float]:
     if value is None:
@@ -91,10 +96,12 @@ def _normalize_coordinate(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
 
+
 def _normalize_filter_set(values: Optional[list[str]]) -> Optional[set[str]]:
     if values is None:
         return None
     return {v.strip().upper() for v in values if v and v.strip()}
+
 
 def build_dimension_country(
     countries_limit: Optional[int] = None,
@@ -103,7 +110,7 @@ def build_dimension_country(
     lakehouse_relative_path: Optional[str] = None,
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
-    default_relative_path: str = "dimension_country",
+    default_relative_path: str = "Dimension_Country",
     mode: str = "overwrite",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
@@ -217,6 +224,7 @@ def build_dimension_country(
         )
         return empty_df
 
+
 def _country_matches_filter(
     payload: dict[str, Any],
     country_code_2: Optional[str],
@@ -242,6 +250,7 @@ def _country_matches_filter(
             return False
     return True
 
+
 def build_dimension_city(
     countries_limit: Optional[int] = None,
     include_states_metadata: bool = True,
@@ -253,7 +262,7 @@ def build_dimension_city(
     lakehouse_relative_path: Optional[str] = None,
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
-    default_relative_path: str = "dimension_city",
+    default_relative_path: str = "Dimension_City",
     mode: str = "overwrite",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
@@ -310,7 +319,9 @@ def build_dimension_city(
     countries_filter = _normalize_filter_set(countries)
 
     try:
-        get_countries, get_cities_of_country, get_states_of_country = _import_csc_package()
+        get_countries, get_cities_of_country, get_states_of_country = (
+            _import_csc_package()
+        )
         all_countries = list(get_countries())
         if countries_limit is not None:
             all_countries = all_countries[:countries_limit]
@@ -329,8 +340,11 @@ def build_dimension_city(
                 continue
 
             if not _country_matches_filter(
-                country_payload, country_code_2,
-                countries_filter, regions_filter, subregions_filter,
+                country_payload,
+                country_code_2,
+                countries_filter,
+                regions_filter,
+                subregions_filter,
             ):
                 continue
 
@@ -366,7 +380,9 @@ def build_dimension_city(
                         "region": region,
                         "subregion": subregion,
                         "latitude": _normalize_coordinate(city_payload.get("latitude")),
-                        "longitude": _normalize_coordinate(city_payload.get("longitude")),
+                        "longitude": _normalize_coordinate(
+                            city_payload.get("longitude")
+                        ),
                     }
                 )
 
@@ -421,5 +437,6 @@ def build_dimension_city(
             spark=_spark,
         )
         return empty_df
+
 
 __all__ = ["build_dimension_country", "build_dimension_city", "_import_csc_package"]

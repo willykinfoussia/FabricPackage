@@ -29,12 +29,12 @@ def generate_dimensions(
     city_countries: Optional[list[str]] = None,
     mode: str = "overwrite",
     batch_size: int = 10_000,
-    date_relative_path: str = "Dimension_date",
-    country_relative_path: str = "Dimension_country",
-    city_relative_path: str = "Dimension_city",
-    date_warehouse_table: str = "dbo.Dimension_date",
-    country_warehouse_table: str = "dbo.Dimension_country",
-    city_warehouse_table: str = "dbo.Dimension_city",
+    date_relative_path: str = "Dimension_Date",
+    country_relative_path: str = "Dimension_Country",
+    city_relative_path: str = "Dimension_City",
+    date_warehouse_table: str = "dbo.Dimension_Date",
+    country_warehouse_table: str = "dbo.Dimension_Country",
+    city_warehouse_table: str = "dbo.Dimension_City",
     spark: Optional[SparkSession] = None,
 ) -> dict[str, DataFrame]:
     """Build enabled dimensions and persist each to the configured Lakehouse and/or Warehouse.

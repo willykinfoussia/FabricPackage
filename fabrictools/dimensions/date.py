@@ -28,7 +28,7 @@ def build_dimension_date(
     lakehouse_relative_path: Optional[str] = None,
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
-    default_relative_path: str = "dimension_date",
+    default_relative_path: str = "Dimension_Date",
     mode: str = "overwrite",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
@@ -103,7 +103,7 @@ def build_dimension_date(
     date_df = df.select(
         F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
         F.col("date").cast(DateType()).alias("date"),
-        F.year("date").alias("year"),
+        F.year("date").alias("Année"),
         F.concat(F.lit("Q"), F.quarter("date").cast("string")).alias("quarter"),
         F.element_at(
             F.array(
@@ -121,9 +121,9 @@ def build_dimension_date(
                 F.lit("décembre"),
             ),
             F.month("date"),
-        ).alias("month"),
+        ).alias("Mois"),
         F.concat(F.lit("S"), F.weekofyear("date").cast("string")).alias("week"),
-        F.dayofmonth("date").alias("day"),
+        F.dayofmonth("date").alias("Jour"),
         F.dayofweek("date").alias("day_of_week"),
         F.date_format(F.col("date"), "MMM").alias("short_month"),
         F.year("date").alias("calendar_year"),
