@@ -1,71 +1,50 @@
-import pandas as pd
-import numpy as np
-import datetime as dt
-from calendar import monthrange
-from sklearn.isotonic import IsotonicRegression
-import re
-import pyspark.sql.types as T
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 
-_NCOM_RE = re.compile(r"^\*(\d+)$")
+# 1. Extraction de la partie numérique de n_commande pour le tri
+df = defaults.withColumn("_n_ord", F.regexp_extract(F.col("n_commande"), r"^\*?(\d+)$", 1).cast("int"))
 
-def _correct_group(pdf: pd.DataFrame) -> pd.DataFrame:
-    # Extraction de n_ord
-    def _to_ord(x):
-        if x is None: return None
-        m = _NCOM_RE.match(str(x))
-        return int(m.group(1)) if m else None
-    
-    pdf["_n_ord"] = pdf["n_commande"].map(_to_ord)
-    mask = pdf["_n_ord"].notna() & pdf["cree"].notna()
-    pdf["cree_corrige"] = pdf["cree"]
-    
-    if mask.sum() >= 2:
-        sub = pdf.loc[mask].copy()
-        sub["cree"] = pd.to_datetime(sub["cree"])
-        
-        # Calcul du mois absolu (Année * 12 + Mois)
-        sub["mk"] = sub["cree"].dt.year * 12 + sub["cree"].dt.month
-        
-        # 1. Agrégation par numéro de commande
-        # On prend la médiane du mois pour cette commande afin d'ignorer les anomalies
-        agg_sub = sub.groupby("_n_ord")["mk"].median().reset_index()
-        agg_sub = agg_sub.sort_values("_n_ord")
-        
-        # 2. Application de la régression isotone (PAVA) sur les commandes uniques
-        fit = IsotonicRegression(increasing=True).fit_transform(agg_sub["_n_ord"], agg_sub["mk"])
-        
-        # 3. Préparation d'un dictionnaire/mapping pour retrouver le mois corrigé
-        agg_sub["mk_corr"] = np.round(fit).astype(int)
-        mk_corr_map = agg_sub.set_index("_n_ord")["mk_corr"]
+# 2. DataFrame agrégé : 1 ligne par site et par numéro de commande unique
+# On prend la date la PLUS RÉCENTE (max) pour chaque commande
+orders = df.filter(F.col("_n_ord").isNotNull()) \
+           .groupBy("site", "_n_ord") \
+           .agg(
+               F.max("cree").alias("ord_cree")
+           )
 
-        # 4. Redescente de la correction sur toutes les lignes originales
-        for idx in sub.index:
-            n_ord = sub.at[idx, "_n_ord"]
-            orig_mk = sub.at[idx, "mk"]
-            corr_mk = mk_corr_map.loc[n_ord] # Récupère le mois lissé de cette commande
-            
-            # Si le mois corrigé est différent du mois d'origine pour cette ligne
-            if orig_mk != corr_mk:
-                k = int(corr_mk)
-                y, m = divmod(k - 1, 12)
-                y, m = int(y), int(m) + 1
-                d = pdf.at[idx, "cree"]
-                
-                # Sécurité : On s'assure que le jour existe dans le nouveau mois 
-                # (ex: 31 oct corrigé vers novembre -> devient 30 nov)
-                day = min(d.day, monthrange(y, m)[1])
-                
-                if isinstance(d, pd.Timestamp):
-                    pdf.at[idx, "cree_corrige"] = pd.Timestamp(
-                        year=y, month=m, day=day, 
-                        hour=d.hour, minute=d.minute, 
-                        second=d.second, microsecond=d.microsecond
-                    )
-                else:
-                    pdf.at[idx, "cree_corrige"] = dt.date(y, m, day)
+# 3. Récupération de la date de la commande PRÉCÉDENTE et SUIVANTE (au niveau de la commande, pas de la ligne)
+w_orders = Window.partitionBy("site").orderBy("_n_ord")
+orders = orders.withColumn("prev_ord_cree", F.lag("ord_cree").over(w_orders)) \
+               .withColumn("next_ord_cree", F.lead("ord_cree").over(w_orders))
 
-    return pdf.drop(columns=["_n_ord"])
+# 4. Jointure des infos sur les commandes avant/après vers notre dataframe détaillé (lignes)
+df = df.join(orders.select("site", "_n_ord", "prev_ord_cree", "next_ord_cree"), on=["site", "_n_ord"], how="left")
 
-schema = T.StructType(list(defaults.schema.fields) + [T.StructField("cree_corrige", T.DateType(), True)])
-result = defaults.groupBy("site").applyInPandas(_correct_group, schema=schema)
+# 5. Conditions pour la correction
+# Est-ce que la COMMANDE précédente et la COMMANDE suivante ont le même mois/année ?
+same_surrounding = (F.year("prev_ord_cree") == F.year("next_ord_cree")) & (F.month("prev_ord_cree") == F.month("next_ord_cree"))
+
+# Est-ce que la LIGNE actuelle a un mois différent de ces commandes environnantes ?
+is_different = (F.year("cree") != F.year("prev_ord_cree")) | (F.month("cree") != F.month("prev_ord_cree"))
+
+# L'anomalie est confirmée
+is_anomaly = same_surrounding & is_different
+
+# 6. Construction de la date corrigée
+# On prend le mois de l'environnement, et on plafonne le jour au dernier jour valide
+corrected_date = F.make_date(
+    F.year("prev_ord_cree"), 
+    F.month("prev_ord_cree"), 
+    F.least(F.dayofmonth("cree"), F.dayofmonth(F.last_day("prev_ord_cree")))
+)
+
+# 7. Application de la correction
+result = df.withColumn(
+    "cree_corrige",
+    F.when(is_anomaly, corrected_date).otherwise(F.col("cree"))
+)
+
+# 8. Nettoyage des colonnes temporaires
+result = result.drop("_n_ord", "prev_ord_cree", "next_ord_cree")
+
 display(result)

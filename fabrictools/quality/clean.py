@@ -58,20 +58,25 @@ def _normalized_name_collisions(columns: List[str]) -> dict[str, List[str]]:
 
 
 def _replace_empty_strings_with_nulls(df: DataFrame) -> DataFrame:
-    string_columns = [
+    string_columns = {
         field.name
         for field in df.schema.fields
         if isinstance(field.dataType, StringType)
-    ]
-    transformed_df = df
-    for col_name in string_columns:
-        transformed_df = transformed_df.withColumn(
-            col_name,
-            F.when(F.trim(F.col(col_name)) == "", F.lit(None)).otherwise(
-                F.trim(F.col(col_name))
-            ),
-        )
-    return transformed_df
+    }
+    if not string_columns:
+        return df
+
+    select_exprs = []
+    for col_name in df.columns:
+        if col_name in string_columns:
+            select_exprs.append(
+                F.when(F.trim(F.col(col_name)) == "", F.lit(None))
+                .otherwise(F.trim(F.col(col_name)))
+                .alias(col_name)
+            )
+        else:
+            select_exprs.append(F.col(col_name))
+    return df.select(*select_exprs)
 
 
 # Date-only shape (no time suffix). Used for diagnostics in mismatch logs, not for casting rules.
@@ -122,20 +127,17 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     # and to fix parsing errors where LEGACY fails on some formats like 4/14/2026.
     spark.conf.set(_TIME_PARSER_POLICY_KEY, "CORRECTED")
     try:
-        transformed_df = df
         string_columns = [
             field.name
             for field in df.schema.fields
             if isinstance(field.dataType, StringType)
         ]
-        for col_name in string_columns:
-            if df.filter(F.col(col_name).isNotNull()).limit(1).count() == 0:
-                continue
-            trimmed = F.trim(F.col(col_name))
-            safe_trimmed = F.when(
-                trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed
-            ).otherwise(F.lit(None))
-            parsed_date = F.coalesce(
+        
+        if not string_columns:
+            return df
+            
+        def _get_parsed_date_expr(safe_trimmed):
+            return F.coalesce(
                 F.to_date(safe_trimmed, "yyyy-MM-dd"),
                 F.to_date(safe_trimmed, "yyyy/M/d"),
                 F.to_date(safe_trimmed, "dd-MM-yyyy"),
@@ -155,18 +157,9 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
                 F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm a").cast(DateType()),
                 F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a").cast(DateType()),
             )
-            date_mismatch = df.filter(
-                F.col(col_name).isNotNull() & parsed_date.isNull()
-            ).limit(1)
-            date_mismatch_count = date_mismatch.count()
-            if date_mismatch_count == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(parsed_date),
-                )
-                continue
 
-            parsed_ts = F.coalesce(
+        def _get_parsed_ts_expr(safe_trimmed):
+            return F.coalesce(
                 F.to_timestamp(safe_trimmed, "yyyy-MM-dd HH:mm:ss"),
                 F.to_timestamp(safe_trimmed, "dd-MM-yyyy HH:mm:ss"),
                 F.to_timestamp(safe_trimmed, "d-M-yyyy HH:mm:ss"),
@@ -182,52 +175,59 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
                 F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a"),
                 F.to_timestamp(safe_trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
             )
-            ts_mismatch = df.filter(
-                F.col(col_name).isNotNull() & parsed_ts.isNull()
-            ).limit(1)
-            ts_mismatch_count = ts_mismatch.count()
-            if ts_mismatch_count == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(parsed_ts),
-                )
-                continue
 
-            int_mismatch = df.filter(
-                F.col(col_name).isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN)
-            ).limit(1)
-            int_mismatch_count = int_mismatch.count()
-            if int_mismatch_count == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(
-                        F.col(col_name).cast(IntegerType())
-                    ),
-                )
-                continue
+        agg_exprs = []
+        for col_name in string_columns:
+            col_expr = F.col(col_name)
+            trimmed = F.trim(col_expr)
+            
+            agg_exprs.append(F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn"))
+            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__int_fail"))
+            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__float_fail"))
+            
+            safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
+            parsed_date = _get_parsed_date_expr(safe_trimmed)
+            parsed_ts = _get_parsed_ts_expr(safe_trimmed)
+            
+            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)).alias(f"{col_name}__date_fail"))
+            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)).alias(f"{col_name}__ts_fail"))
 
-            float_mismatch = df.filter(
-                F.col(col_name).isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN)
-            ).limit(1)
-            float_mismatch_count = float_mismatch.count()
-            if float_mismatch_count == 0:
-                transformed_df = transformed_df.withColumn(
-                    col_name,
-                    F.when(F.col(col_name).isNull(), None).otherwise(
-                        F.col(col_name).cast(DoubleType())
-                    ),
-                )
+        stats = df.agg(*agg_exprs).collect()[0].asDict() if agg_exprs else {}
+
+        select_exprs = []
+        for col_name in df.columns:
+            if col_name not in string_columns:
+                select_exprs.append(F.col(col_name))
+                continue
+                
+            nn = stats.get(f"{col_name}__nn", 0)
+            if nn == 0:
+                select_exprs.append(F.col(col_name))
+                continue
+                
+            date_fail = stats.get(f"{col_name}__date_fail", 0)
+            ts_fail = stats.get(f"{col_name}__ts_fail", 0)
+            int_fail = stats.get(f"{col_name}__int_fail", 0)
+            float_fail = stats.get(f"{col_name}__float_fail", 0)
+            
+            col_expr = F.col(col_name)
+            trimmed = F.trim(col_expr)
+            safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
+            
+            if date_fail == 0:
+                parsed_date = _get_parsed_date_expr(safe_trimmed)
+                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_date).alias(col_name))
+            elif ts_fail == 0:
+                parsed_ts = _get_parsed_ts_expr(safe_trimmed)
+                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_ts).alias(col_name))
+            elif int_fail == 0:
+                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(IntegerType())).alias(col_name))
+            elif float_fail == 0:
+                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(DoubleType())).alias(col_name))
             else:
-                if verbose:
-                    mismatch_row = float_mismatch.collect()
-                    if mismatch_row:
-                        bad_value = mismatch_row[0][col_name]
-                        log(
-                            f"Column '{col_name}' could not be cast to a number. Mismatch value: {bad_value!r}",
-                            level="warning",
-                        )
-                continue
-        return transformed_df
+                select_exprs.append(col_expr)
+                
+        return df.select(*select_exprs)
     finally:
         if previous_time_parser_policy is None:
             spark.conf.unset(_TIME_PARSER_POLICY_KEY)
@@ -355,7 +355,6 @@ def clean_data(
 
     >>> cleaned = clean_data(raw_df, drop_duplicates=True, drop_all_null_rows=True)  # doctest: +SKIP
     """
-    before_rows = df.count()
     before_cols = len(df.columns)
 
     normalized_columns = _build_unique_column_names(df.columns)
@@ -368,12 +367,10 @@ def clean_data(
     if drop_all_null_rows:
         cleaned_df = cleaned_df.dropna(how="all")
 
-    after_rows = cleaned_df.count()
     after_cols = len(cleaned_df.columns)
     if verbose:
         log(
-            f"Data cleaned: rows {before_rows:,} -> {after_rows:,} | "
-            f"columns {before_cols} -> {after_cols}"
+            f"Data cleaned: columns {before_cols} -> {after_cols}"
         )
     return cleaned_df
 
