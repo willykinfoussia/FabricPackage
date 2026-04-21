@@ -122,22 +122,23 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     :rtype: ~pyspark.sql.DataFrame
     """
     spark = df.sparkSession
-    previous_time_parser_policy = spark.conf.get(_TIME_PARSER_POLICY_KEY, None)
     # Use CORRECTED to let Spark handle ancient dates (before 1582/1900) without throwing an error
     # and to fix parsing errors where LEGACY fails on some formats like 4/14/2026.
+    # Note: We do not restore the policy because the returned DataFrame is lazy
+    # and requires CORRECTED policy during evaluation (e.g. write/count).
     spark.conf.set(_TIME_PARSER_POLICY_KEY, "CORRECTED")
-    try:
-        string_columns = [
-            field.name
-            for field in df.schema.fields
-            if isinstance(field.dataType, StringType)
-        ]
+    
+    string_columns = [
+        field.name
+        for field in df.schema.fields
+        if isinstance(field.dataType, StringType)
+    ]
+    
+    if not string_columns:
+        return df
         
-        if not string_columns:
-            return df
-            
-        def _get_parsed_date_expr(safe_trimmed):
-            return F.coalesce(
+    def _get_parsed_date_expr(safe_trimmed):
+        return F.coalesce(
                 F.to_date(safe_trimmed, "yyyy-MM-dd"),
                 F.to_date(safe_trimmed, "yyyy/M/d"),
                 F.to_date(safe_trimmed, "dd-MM-yyyy"),
@@ -158,81 +159,76 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
                 F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a").cast(DateType()),
             )
 
-        def _get_parsed_ts_expr(safe_trimmed):
-            return F.coalesce(
-                F.to_timestamp(safe_trimmed, "yyyy-MM-dd HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "dd-MM-yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "d-M-yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "MM-dd-yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "M-d-yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "dd/MM/yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "d/M/yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "MM/dd/yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "M/d/yyyy HH:mm:ss"),
-                F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm:ss a"),
-                F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm:ss a"),
-                F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm a"),
-                F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a"),
-                F.to_timestamp(safe_trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
-            )
+    def _get_parsed_ts_expr(safe_trimmed):
+        return F.coalesce(
+            F.to_timestamp(safe_trimmed, "yyyy-MM-dd HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "dd-MM-yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "d-M-yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "MM-dd-yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "M-d-yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "dd/MM/yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "d/M/yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "MM/dd/yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "M/d/yyyy HH:mm:ss"),
+            F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm:ss a"),
+            F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm:ss a"),
+            F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm a"),
+            F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a"),
+            F.to_timestamp(safe_trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
+        )
 
-        agg_exprs = []
-        for col_name in string_columns:
-            col_expr = F.col(col_name)
-            trimmed = F.trim(col_expr)
+    agg_exprs = []
+    for col_name in string_columns:
+        col_expr = F.col(col_name)
+        trimmed = F.trim(col_expr)
+        
+        agg_exprs.append(F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn"))
+        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__int_fail"))
+        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__float_fail"))
+        
+        safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
+        parsed_date = _get_parsed_date_expr(safe_trimmed)
+        parsed_ts = _get_parsed_ts_expr(safe_trimmed)
+        
+        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)).alias(f"{col_name}__date_fail"))
+        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)).alias(f"{col_name}__ts_fail"))
+
+    stats = df.agg(*agg_exprs).collect()[0].asDict() if agg_exprs else {}
+
+    select_exprs = []
+    for col_name in df.columns:
+        if col_name not in string_columns:
+            select_exprs.append(F.col(col_name))
+            continue
             
-            agg_exprs.append(F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn"))
-            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__int_fail"))
-            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__float_fail"))
+        nn = stats.get(f"{col_name}__nn", 0)
+        if nn == 0:
+            select_exprs.append(F.col(col_name))
+            continue
             
-            safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
+        date_fail = stats.get(f"{col_name}__date_fail", 0)
+        ts_fail = stats.get(f"{col_name}__ts_fail", 0)
+        int_fail = stats.get(f"{col_name}__int_fail", 0)
+        float_fail = stats.get(f"{col_name}__float_fail", 0)
+        
+        col_expr = F.col(col_name)
+        trimmed = F.trim(col_expr)
+        safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
+        
+        if date_fail == 0:
             parsed_date = _get_parsed_date_expr(safe_trimmed)
+            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_date).alias(col_name))
+        elif ts_fail == 0:
             parsed_ts = _get_parsed_ts_expr(safe_trimmed)
-            
-            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)).alias(f"{col_name}__date_fail"))
-            agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)).alias(f"{col_name}__ts_fail"))
-
-        stats = df.agg(*agg_exprs).collect()[0].asDict() if agg_exprs else {}
-
-        select_exprs = []
-        for col_name in df.columns:
-            if col_name not in string_columns:
-                select_exprs.append(F.col(col_name))
-                continue
-                
-            nn = stats.get(f"{col_name}__nn", 0)
-            if nn == 0:
-                select_exprs.append(F.col(col_name))
-                continue
-                
-            date_fail = stats.get(f"{col_name}__date_fail", 0)
-            ts_fail = stats.get(f"{col_name}__ts_fail", 0)
-            int_fail = stats.get(f"{col_name}__int_fail", 0)
-            float_fail = stats.get(f"{col_name}__float_fail", 0)
-            
-            col_expr = F.col(col_name)
-            trimmed = F.trim(col_expr)
-            safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
-            
-            if date_fail == 0:
-                parsed_date = _get_parsed_date_expr(safe_trimmed)
-                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_date).alias(col_name))
-            elif ts_fail == 0:
-                parsed_ts = _get_parsed_ts_expr(safe_trimmed)
-                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_ts).alias(col_name))
-            elif int_fail == 0:
-                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(IntegerType())).alias(col_name))
-            elif float_fail == 0:
-                select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(DoubleType())).alias(col_name))
-            else:
-                select_exprs.append(col_expr)
-                
-        return df.select(*select_exprs)
-    finally:
-        if previous_time_parser_policy is None:
-            spark.conf.unset(_TIME_PARSER_POLICY_KEY)
+            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_ts).alias(col_name))
+        elif int_fail == 0:
+            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(IntegerType())).alias(col_name))
+        elif float_fail == 0:
+            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(DoubleType())).alias(col_name))
         else:
-            spark.conf.set(_TIME_PARSER_POLICY_KEY, previous_time_parser_policy)
+            select_exprs.append(col_expr)
+            
+    return df.select(*select_exprs)
 
 
 def add_silver_metadata(
