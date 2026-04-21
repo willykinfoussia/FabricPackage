@@ -145,7 +145,11 @@ def _try_read_formats(spark: SparkSession, full_path: str) -> DataFrame:
 
     # Parquet
     try:
-        df = spark.read.format("parquet").load(full_path)
+        df = (
+            spark.read.option("datetimeRebaseMode", "CORRECTED")
+            .format("parquet")
+            .load(full_path)
+        )
         log("  Format detected: Parquet")
         return df
     except Exception:
@@ -361,6 +365,9 @@ def write_lakehouse(
     )
 
     writer = df.write.format(format).option("overwriteSchema", "true").mode(mode)
+    if format.lower() == "parquet":
+        writer = writer.option("datetimeRebaseMode", "CORRECTED")
+        
     if effective_partition_by:
         writer = writer.partitionBy(*effective_partition_by)
         if auto_detected_partitions:

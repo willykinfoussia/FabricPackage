@@ -86,7 +86,7 @@ _DATE_ONLY_PATTERN = (
     r"\d{4}\.\d{1,2}\.\d{1,2}"
     r")$"
 )
-_DATE_CANDIDATE_PATTERN = r"^\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}(?!\d)"
+_DATE_CANDIDATE_PATTERN = r"^\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}"
 _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 _PARSED_DATE_SAMPLE_LIMIT = 5
@@ -118,7 +118,9 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     """
     spark = df.sparkSession
     previous_time_parser_policy = spark.conf.get(_TIME_PARSER_POLICY_KEY, None)
-    spark.conf.set(_TIME_PARSER_POLICY_KEY, "LEGACY")
+    # Use CORRECTED to let Spark handle ancient dates (before 1582/1900) without throwing an error
+    # and to fix parsing errors where LEGACY fails on some formats like 4/14/2026.
+    spark.conf.set(_TIME_PARSER_POLICY_KEY, "CORRECTED")
     try:
         transformed_df = df
         string_columns = [
