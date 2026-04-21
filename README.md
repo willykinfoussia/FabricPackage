@@ -427,6 +427,19 @@ all_tables = ft.prepare_and_write_all_tables(
 )
 ```
 
+#### `make_business_ready`
+
+Transforme les tables pour le métier : renommage des colonnes (`snake_case` -> `Normal Case`), nettoyage du nom des tables (retrait de Cleaned/Processed et conversion en PascalCase) et mise à jour des métadonnées d'ingestion.
+
+```python
+business_result = ft.make_business_ready(
+    source_lakehouse_name="SilverLakehouse",
+    target_lakehouse_name="GoldLakehouse",
+    tables=["Tables/dbo/Cleaned_orders", "Tables/dbo/Processed_clients"],
+    custom_table_names={"Tables/dbo/Cleaned_orders": "CommandesBusiness"},
+)
+```
+
 ### Transform (DataFrame)
 
 Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees suit l’ordre : nom de variable `join_df` a l’appel si l’introspection reussit, sinon **alias** logique Spark du DataFrame de droite (ex. `join_df.alias("projets")`), sinon la valeur par defaut `join` ; vous pouvez forcer avec `join_prefix=...`. Les suffixes sont **normalises** (snake_case, comme `clean_data`).

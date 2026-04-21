@@ -29,6 +29,7 @@ from fabrictools.io.lakehouse import (
 from fabrictools.io.warehouse import read_warehouse, write_warehouse
 from fabrictools.prepare import (
     generate_prepared_aggregations,
+    make_business_ready,
     prepare_and_write_all_tables,
     prepare_and_write_data,
     publish_semantic_model,
@@ -89,6 +90,7 @@ _EXPORT_REGISTRY = {
     "publish_semantic_model": publish_semantic_model,
     "prepare_and_write_data": prepare_and_write_data,
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
+    "make_business_ready": make_business_ready,
     "filter_by_value_list": filter_by_value_list,
     "drop_rows_over_empty_percent": drop_rows_over_empty_percent,
     "cast_columns": cast_columns,
