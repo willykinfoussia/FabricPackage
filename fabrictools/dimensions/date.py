@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Optional
+from typing import Optional
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
-from pyspark.sql.types import (
-    BooleanType,
-    DateType
-)
+from pyspark.sql.types import BooleanType, DateType
 
 from fabrictools.core import log
 from fabrictools.core import get_spark
 from fabrictools.dimensions._targets import _write_dimension_targets
+
 
 def _default_date_bounds() -> tuple[str, str]:
     today = dt.date.today()
     start_date = dt.date(today.year - (today.year % 100), 1, 1).isoformat()
     end_date = dt.date(today.year + 4, 12, 31).isoformat()
     return start_date, end_date
+
 
 def build_dimension_date(
     start_date: Optional[str] = None,
@@ -101,54 +100,60 @@ def build_dimension_date(
         F.year("date"),
     ).otherwise(F.year("date") - F.lit(1))
 
-    date_df = (
-        df.select(
-            F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
-            F.col("date").cast(DateType()).alias("date"),
-            F.year("date").alias("year"),
-            F.concat(F.lit("Q"), F.quarter("date").cast("string")).alias("quarter"),
-            F.element_at(
-                F.array(
-                    F.lit("janvier"), F.lit("février"), F.lit("mars"), F.lit("avril"),
-                    F.lit("mai"), F.lit("juin"), F.lit("juillet"), F.lit("août"),
-                    F.lit("septembre"), F.lit("octobre"), F.lit("novembre"), F.lit("décembre")
-                ),
-                F.month("date")
-            ).alias("month"),
-            F.concat(F.lit("S"), F.weekofyear("date").cast("string")).alias("week"),
-            F.dayofmonth("date").alias("day"),
-            F.dayofweek("date").alias("day_of_week"),
-            F.date_format(F.col("date"), "MMM").alias("short_month"),
-            F.year("date").alias("calendar_year"),
-            F.month("date").alias("calendar_month"),
-            fiscal_year_expr.alias("fiscal_year"),
-            fiscal_month_expr.alias("fiscal_month"),
-            F.concat(F.lit("CY"), F.year("date").cast("string")).alias(
-                "calendar_year_label"
+    date_df = df.select(
+        F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
+        F.col("date").cast(DateType()).alias("date"),
+        F.year("date").alias("year"),
+        F.concat(F.lit("Q"), F.quarter("date").cast("string")).alias("quarter"),
+        F.element_at(
+            F.array(
+                F.lit("janvier"),
+                F.lit("février"),
+                F.lit("mars"),
+                F.lit("avril"),
+                F.lit("mai"),
+                F.lit("juin"),
+                F.lit("juillet"),
+                F.lit("août"),
+                F.lit("septembre"),
+                F.lit("octobre"),
+                F.lit("novembre"),
+                F.lit("décembre"),
             ),
-            F.concat(
-                F.lit("CY"),
-                F.year("date").cast("string"),
-                F.lit("-"),
-                F.date_format(F.col("date"), "MMM"),
-            ).alias("calendar_month_label"),
-            F.concat(F.lit("FY"), fiscal_year_expr.cast("string")).alias(
-                "fiscal_year_label"
-            ),
-            F.concat(
-                F.lit("FY"),
-                fiscal_year_expr.cast("string"),
-                F.lit("-"),
-                F.date_format(F.col("date"), "MMM"),
-            ).alias("fiscal_month_label"),
-            F.weekofyear("date").alias("iso_week_number"),
-            F.when(F.dayofweek("date").isin(1, 7), F.lit(True))
-            .otherwise(F.lit(False))
-            .cast(BooleanType())
-            .alias("is_weekend"),
-        )
-        .orderBy("date_key")
-    )
+            F.month("date"),
+        ).alias("month"),
+        F.concat(F.lit("S"), F.weekofyear("date").cast("string")).alias("week"),
+        F.dayofmonth("date").alias("day"),
+        F.dayofweek("date").alias("day_of_week"),
+        F.date_format(F.col("date"), "MMM").alias("short_month"),
+        F.year("date").alias("calendar_year"),
+        F.month("date").alias("calendar_month"),
+        fiscal_year_expr.alias("fiscal_year"),
+        fiscal_month_expr.alias("fiscal_month"),
+        F.concat(F.lit("CY"), F.year("date").cast("string")).alias(
+            "calendar_year_label"
+        ),
+        F.concat(
+            F.lit("CY"),
+            F.year("date").cast("string"),
+            F.lit("-"),
+            F.date_format(F.col("date"), "MMM"),
+        ).alias("calendar_month_label"),
+        F.concat(F.lit("FY"), fiscal_year_expr.cast("string")).alias(
+            "fiscal_year_label"
+        ),
+        F.concat(
+            F.lit("FY"),
+            fiscal_year_expr.cast("string"),
+            F.lit("-"),
+            F.date_format(F.col("date"), "MMM"),
+        ).alias("fiscal_month_label"),
+        F.weekofyear("date").alias("iso_week_number"),
+        F.when(F.dayofweek("date").isin(1, 7), F.lit(True))
+        .otherwise(F.lit(False))
+        .cast(BooleanType())
+        .alias("is_weekend"),
+    ).orderBy("date_key")
     _write_dimension_targets(
         df=date_df,
         lakehouse_name=lakehouse_name,
@@ -161,5 +166,6 @@ def build_dimension_date(
         spark=_spark,
     )
     return date_df
+
 
 __all__ = ["build_dimension_date", "_default_date_bounds"]

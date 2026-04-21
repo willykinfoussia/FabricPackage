@@ -29,6 +29,8 @@ def clean_and_write_data(
     target_relative_path: str,
     mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
+    auto_partition: bool = True,
+    auto_partition_threshold_bytes: int = 1_073_741_824,
     spark: Optional[SparkSession] = None,
     verbose: bool = False,
 ) -> DataFrame:
@@ -40,6 +42,9 @@ def clean_and_write_data(
     :param target_relative_path: Destination path for the write.
     :param mode: Spark write mode (e.g. ``overwrite``, ``append``).
     :param partition_by: Optional partition columns for :py:func:`fabrictools.write_lakehouse`.
+    :param auto_partition: If ``True`` (default), automatically partition the data
+        by detected date columns if they exist.
+    :param auto_partition_threshold_bytes: Threshold in bytes to trigger auto-partitioning.
     :param spark: Optional ``SparkSession``.
     :type source_lakehouse_name: str
     :type source_relative_path: str
@@ -81,6 +86,8 @@ def clean_and_write_data(
         relative_path=target_relative_path,
         mode=mode,
         partition_by=partition_by,
+        auto_partition=auto_partition,
+        auto_partition_threshold_bytes=auto_partition_threshold_bytes,
         spark=_spark,
     )
     return silver_df
@@ -133,6 +140,8 @@ def clean_and_write_all_tables(
     target_lakehouse_name: str,
     mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
+    auto_partition: bool = True,
+    auto_partition_threshold_bytes: int = 1_073_741_824,
     tables_config: Optional[list[dict[str, Any]]] = None,
     include_schemas: Optional[list[str]] = None,
     exclude_tables: Optional[list[str]] = None,
@@ -151,6 +160,9 @@ def clean_and_write_all_tables(
     :param target_lakehouse_name: Lakehouse to write or merge into.
     :param mode: Default mode when not overridden per table (``overwrite``, ``append``, ``merge``).
     :param partition_by: Default partition columns for writes.
+    :param auto_partition: If ``True`` (default), automatically partition the data
+        by detected date columns if they exist.
+    :param auto_partition_threshold_bytes: Threshold in bytes to trigger auto-partitioning.
     :param tables_config: Optional list of per-table job dicts (see ``pipelines.config``).
     :param include_schemas: Discovery filter: schema allow-list.
     :param exclude_tables: Discovery filter: table deny-list.
@@ -236,6 +248,8 @@ def clean_and_write_all_tables(
                     target_relative_path=tgt,
                     mode=table_mode,
                     partition_by=table_partition_by,
+                    auto_partition=auto_partition,
+                    auto_partition_threshold_bytes=auto_partition_threshold_bytes,
                     spark=_spark,
                     verbose=verbose,
                 )

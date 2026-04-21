@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, List, Optional
 
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
@@ -58,13 +57,17 @@ def read_lakehouse(
         try:
             df = _try_read_formats(_spark, full_path)
             if candidate_relative_path != relative_path:
-                log(f"  Resolved relative_path '{relative_path}' -> '{candidate_relative_path}'")
+                log(
+                    f"  Resolved relative_path '{relative_path}' -> '{candidate_relative_path}'"
+                )
             log(f"  {df.count():,} rows · {len(df.columns)} columns")
             return df
         except RuntimeError as exc:
             failures.append(f"{full_path} ({exc})")
 
-    attempted_paths = ", ".join(f"'{base}/{candidate}'" for candidate in candidate_relative_paths)
+    attempted_paths = ", ".join(
+        f"'{base}/{candidate}'" for candidate in candidate_relative_paths
+    )
     raise RuntimeError(
         f"Could not read from any candidate path for relative_path='{relative_path}'. "
         f"Tried: {attempted_paths}. Details: {' | '.join(failures)}"
@@ -121,7 +124,9 @@ def resolve_lakehouse_read_candidate(
         except RuntimeError as exc:
             failures.append(f"{full_path} ({exc})")
 
-    attempted_paths = ", ".join(f"'{base}/{candidate}'" for candidate in candidate_relative_paths)
+    attempted_paths = ", ".join(
+        f"'{base}/{candidate}'" for candidate in candidate_relative_paths
+    )
     raise RuntimeError(
         f"Could not resolve a readable candidate for relative_path='{relative_path}'. "
         f"Tried: {attempted_paths}. Details: {' | '.join(failures)}"
@@ -177,48 +182,89 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return deduped
 
 
-def _detect_partition_columns(df: DataFrame) -> list[str]:
+def _detect_partition_columns(
+    df: DataFrame, threshold_bytes: int = 1_073_741_824
+) -> list[str]:
     """
-    Auto-detect year/month/day partition columns.
-
-    Detection order:
-    1) standard names with underscore: _year/_month/_day
-    2) standard names without underscore: year/month/day
-    3) fallback on integer-like columns whose names match
-       year|annee, month|mois, day|jour
+    Auto-detect best partition columns (like year/month or categorical columns)
+    only if the dataset is large enough and the column has low cardinality.
     """
-    standard_with_underscore = ["_year", "_month", "_day"]
-    standard_without_underscore = ["year", "month", "day"]
+    import pyspark.sql.functions as F
 
-    if all(col_name in df.columns for col_name in standard_with_underscore):
-        return standard_with_underscore
-    if all(col_name in df.columns for col_name in standard_without_underscore):
-        return standard_without_underscore
+    # 1. Vérification de la volumétrie (Fast Fail)
+    if threshold_bytes > 0:
+        try:
+            size_in_bytes = int(
+                df._jdf.queryExecution().optimizedPlan().stats().sizeInBytes()
+            )
+            if size_in_bytes < threshold_bytes:
+                return []
+        except Exception:
+            pass  # Si l'estimation échoue, on continue
 
-    schema_fields = getattr(getattr(df, "schema", None), "fields", [])
-    year_regex = re.compile(r"(?:^|_)(year|annee)(?:$|_)")
-    month_regex = re.compile(r"(?:^|_)(month|mois)(?:$|_)")
-    day_regex = re.compile(r"(?:^|_)(day|jour)(?:$|_)")
+    # 2. Identification des candidats par heuristique (noms)
+    # On regarde les types de base
+    from pyspark.sql.types import DateType, StringType
 
-    detected: dict[str, str] = {}
-    for field in schema_fields:
-        if not isinstance(field.dataType, IntegralType):
+    candidates = []
+    # On garde les préférences temporelles en priorité
+    time_keywords = {"year", "annee", "month", "mois"}
+    categorical_keywords = {"country", "region", "status", "type", "category"}
+
+    for f in df.schema.fields:
+        if not isinstance(f.dataType, (DateType, IntegralType, StringType)):
             continue
 
-        normalized_name = field.name.lower()
-        if "year" not in detected and year_regex.search(normalized_name):
-            detected["year"] = field.name
-            continue
-        if "month" not in detected and month_regex.search(normalized_name):
-            detected["month"] = field.name
-            continue
-        if "day" not in detected and day_regex.search(normalized_name):
-            detected["day"] = field.name
+        name_lower = f.name.lower()
 
-    ordered_detected = [detected[key] for key in ["year", "month", "day"] if key in detected]
-    if len(ordered_detected) == 3:
-        return ordered_detected
-    return []
+        # Temporel ?
+        if any(kw in name_lower for kw in time_keywords) and not name_lower.endswith(
+            "_id"
+        ):
+            candidates.append(f.name)
+            continue
+
+        # Catégoriel ?
+        if any(
+            kw in name_lower for kw in categorical_keywords
+        ) and not name_lower.endswith("_id"):
+            candidates.append(f.name)
+
+    if not candidates:
+        return []
+
+    # 3. Évaluation de la Cardinalité (Le test décisif)
+    # On limite à 5 candidats pour ne pas trop pénaliser les performances
+    candidates_to_test = candidates[:5]
+
+    try:
+        exprs = [F.approx_count_distinct(c).alias(c) for c in candidates_to_test]
+        cardinalities = df.agg(*exprs).collect()[0].asDict()
+    except Exception:
+        return []  # En cas d'erreur de calcul, on préfère ne pas partitionner
+
+    # 4. Sélection Finale
+    valid_columns = []
+    for col, count in cardinalities.items():
+        if 1 < count < 1000:
+            valid_columns.append(col)
+
+    if not valid_columns:
+        return []
+
+    # Trier pour prioriser l'année, puis le mois, puis les autres
+    def sort_key(col_name: str) -> int:
+        name_lower = col_name.lower()
+        if "year" in name_lower or "annee" in name_lower:
+            return 0
+        if "month" in name_lower or "mois" in name_lower:
+            return 1
+        return 2
+
+    valid_columns.sort(key=sort_key)
+
+    # On ne retourne pas plus de 2 colonnes pour éviter de trop scinder
+    return valid_columns[:2]
 
 
 def write_lakehouse(
@@ -232,6 +278,7 @@ def write_lakehouse(
     *,
     normalize_column_names: bool = True,
     auto_partition: bool = True,
+    auto_partition_threshold_bytes: int = 1_073_741_824,
 ) -> None:
     """Write a ``DataFrame`` to a Fabric Lakehouse (default format: Delta).
 
@@ -304,7 +351,11 @@ def write_lakehouse(
         )
         if p is not None
     ]
-    auto_detected_partitions = _detect_partition_columns(df) if auto_partition else []
+    auto_detected_partitions = (
+        _detect_partition_columns(df, threshold_bytes=auto_partition_threshold_bytes)
+        if auto_partition
+        else []
+    )
     effective_partition_by = _dedupe_preserve_order(
         user_partitions + auto_detected_partitions
     )
@@ -379,10 +430,7 @@ def merge_lakehouse(
     log(f"  Condition: {merge_condition}")
 
     target = DeltaTable.forPath(_spark, full_path)
-    merge_builder = (
-        target.alias("tgt")
-        .merge(source_df.alias("src"), merge_condition)
-    )
+    merge_builder = target.alias("tgt").merge(source_df.alias("src"), merge_condition)
 
     if update_set is not None:
         merge_builder = merge_builder.whenMatchedUpdate(set=update_set)
@@ -498,6 +546,7 @@ def delete_all_lakehouse_tables(
         "failures": failure_entries,
     }
 
+
 __all__ = [
     "read_lakehouse",
     "resolve_lakehouse_read_candidate",
@@ -505,4 +554,3 @@ __all__ = [
     "merge_lakehouse",
     "delete_all_lakehouse_tables",
 ]
-
