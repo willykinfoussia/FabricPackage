@@ -65,7 +65,7 @@ def clean_and_write_data(
     ...     "SilverLakehouse",
     ...     "Tables/dbo/Cleaned_Orders",
     ...     mode="overwrite",
-    ...     partition_by=["_year", "_month"],
+    ...     partition_by=["ingestion_year", "ingestion_month"],
     ... )
     """
     _spark = spark or get_spark()
