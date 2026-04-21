@@ -106,8 +106,16 @@ def build_dimension_date(
             F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
             F.col("date").cast(DateType()).alias("date"),
             F.year("date").alias("year"),
-            F.quarter("date").alias("quarter"),
-            F.month("date").alias("month"),
+            F.concat(F.lit("Q"), F.quarter("date").cast("string")).alias("quarter"),
+            F.element_at(
+                F.array(
+                    F.lit("janvier"), F.lit("février"), F.lit("mars"), F.lit("avril"),
+                    F.lit("mai"), F.lit("juin"), F.lit("juillet"), F.lit("août"),
+                    F.lit("septembre"), F.lit("octobre"), F.lit("novembre"), F.lit("décembre")
+                ),
+                F.month("date")
+            ).alias("month"),
+            F.concat(F.lit("S"), F.weekofyear("date").cast("string")).alias("week"),
             F.dayofmonth("date").alias("day"),
             F.dayofweek("date").alias("day_of_week"),
             F.date_format(F.col("date"), "MMM").alias("short_month"),
