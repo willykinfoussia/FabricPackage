@@ -30,7 +30,7 @@ def clean_and_write_data(
     mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
     spark: Optional[SparkSession] = None,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> DataFrame:
     """Read one Lakehouse path, clean, add Silver metadata, and write the target path.
 
@@ -64,7 +64,9 @@ def clean_and_write_data(
     ... )
     """
     _spark = spark or get_spark()
-    source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
+    source_df = read_lakehouse(
+        source_lakehouse_name, source_relative_path, spark=_spark
+    )
     cleaned_df = clean_data(source_df, verbose=verbose)
     silver_df = add_silver_metadata(
         cleaned_df,
@@ -99,8 +101,18 @@ def _build_jobs(
             default_mode=mode,
             default_partition_by=partition_by,
             supported_modes={"overwrite", "append", "merge"},
-            source_keys=("source_relative_path", "source_path", "source_table", "bronze_path"),
-            target_keys=("target_relative_path", "target_path", "target_table", "silver_table"),
+            source_keys=(
+                "source_relative_path",
+                "source_path",
+                "source_table",
+                "bronze_path",
+            ),
+            target_keys=(
+                "target_relative_path",
+                "target_path",
+                "target_table",
+                "silver_table",
+            ),
             require_target=True,
             require_mode=True,
             allow_merge_condition=True,
@@ -126,7 +138,7 @@ def clean_and_write_all_tables(
     exclude_tables: Optional[list[str]] = None,
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> dict[str, Any]:
     """Bulk clean/write (or merge) using discovery or an explicit ``tables_config``.
 
@@ -212,7 +224,9 @@ def clean_and_write_all_tables(
         merge_condition = table_job.get("merge_condition")
 
         if verbose:
-            log(f"[{index}/{total_tables}] Processing '{src}' -> '{tgt}' [mode={table_mode}]...")
+            log(
+                f"[{index}/{total_tables}] Processing '{src}' -> '{tgt}' [mode={table_mode}]..."
+            )
         try:
             if table_mode in {"overwrite", "append"}:
                 clean_and_write_data(
@@ -260,7 +274,10 @@ def clean_and_write_all_tables(
                 }
             )
             if verbose:
-                log(f"[{index}/{total_tables}] Failed for '{src}': {exc}", level="warning")
+                log(
+                    f"[{index}/{total_tables}] Failed for '{src}': {exc}",
+                    level="warning",
+                )
             if not continue_on_error:
                 raise
 
@@ -274,4 +291,3 @@ def clean_and_write_all_tables(
 
 
 __all__ = ["clean_and_write_data", "clean_and_write_all_tables"]
-

@@ -327,7 +327,7 @@ def clean_data(
     df: DataFrame,
     drop_duplicates: bool = True,
     drop_all_null_rows: bool = True,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> DataFrame:
     """Normalize names, trim empty strings to null, infer types, optionally dedupe.
 
