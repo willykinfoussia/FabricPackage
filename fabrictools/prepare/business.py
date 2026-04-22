@@ -42,6 +42,14 @@ def _resolve_target_path(source_path: str, custom_name: Optional[str]) -> str:
     return "/".join(parts)
 
 
+def _infer_layer_name(lakehouse_name: str) -> str:
+    """Infer a layer label from a lakehouse name."""
+    normalized = lakehouse_name.strip().lower()
+    if normalized.endswith("lakehouse"):
+        normalized = normalized[: -len("lakehouse")]
+    return normalized or lakehouse_name
+
+
 def make_business_ready(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
@@ -50,6 +58,11 @@ def make_business_ready(
     mode: str = "overwrite",
     ingestion_timestamp_col: str = "ingestion_timestamp",
     source_layer_col: str = "ingestion_source_layer",
+    source_path_col: str = "ingestion_source_path",
+    year_col: str = "ingestion_year",
+    month_col: str = "ingestion_month",
+    day_col: str = "ingestion_day",
+    source_layer: Optional[str] = None,
     target_layer: str = "gold",
     spark: Optional[SparkSession] = None,
     verbose: bool = False,
@@ -68,6 +81,11 @@ def make_business_ready(
     :param mode: Write mode (default: 'overwrite').
     :param ingestion_timestamp_col: Column name for the ingestion timestamp.
     :param source_layer_col: Column name for the ingestion layer.
+    :param source_path_col: Column name for the source table path.
+    :param year_col: Column name for ingestion year.
+    :param month_col: Column name for ingestion month.
+    :param day_col: Column name for ingestion day.
+    :param source_layer: Optional source layer label override.
     :param target_layer: Name of the target layer (default: 'gold').
     :param spark: Optional SparkSession.
     :param verbose: Print processing details.
@@ -86,6 +104,7 @@ def make_business_ready(
     """
     _spark = spark or get_spark()
     custom_mapping = custom_table_names or {}
+    source_layer_value = source_layer or _infer_layer_name(source_lakehouse_name)
 
     processed_tables: list[dict[str, str]] = []
     failures: list[dict[str, str]] = []
@@ -101,21 +120,22 @@ def make_business_ready(
 
             if verbose:
                 log(
-                    f"[{index}/{total_tables}] Processing '{src_table}' -> '{tgt_table}'..."
+                    f"[{index}/{total_tables}] Processing '{src_table}' -> '{tgt_table}' "
+                    f"(target layer: {target_layer})..."
                 )
 
             df = read_lakehouse(source_lakehouse_name, src_table, spark=_spark)
 
-            # Update ingestion values
-            if ingestion_timestamp_col in df.columns:
-                df = df.withColumn(ingestion_timestamp_col, F.current_timestamp())
-            else:
-                df = df.withColumn(ingestion_timestamp_col, F.current_timestamp())
-
-            if source_layer_col in df.columns:
-                df = df.withColumn(source_layer_col, F.lit(target_layer))
-            else:
-                df = df.withColumn(source_layer_col, F.lit(target_layer))
+            # Refresh ingestion metadata from the current run context.
+            current_date_expr = F.current_date()
+            df = (
+                df.withColumn(ingestion_timestamp_col, F.current_timestamp())
+                .withColumn(source_layer_col, F.lit(source_layer_value))
+                .withColumn(source_path_col, F.lit(src_table))
+                .withColumn(year_col, F.year(current_date_expr))
+                .withColumn(month_col, F.month(current_date_expr))
+                .withColumn(day_col, F.dayofmonth(current_date_expr))
+            )
 
             # Rename all columns to Normal Case in one shot.
             # Using toDF avoids case-only rename issues with Spark.

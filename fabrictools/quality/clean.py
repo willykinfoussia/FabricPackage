@@ -250,8 +250,7 @@ def add_silver_metadata(
     Resolves ``source_relative_path`` with
     :py:func:`fabrictools.io.lakehouse.resolve_lakehouse_read_candidate`. Date
     partition columns (``year_col`` / ``month_col`` / ``day_col``) are derived from
-    the first date/timestamp column on ``df`` (excluding ``ingestion_timestamp_col``),
-    or from ``ingestion_timestamp_col`` if none.
+    the current ingestion date.
 
     :param df: Bronze or intermediate dataframe.
     :param source_lakehouse_name: Source Lakehouse display name.
@@ -287,40 +286,27 @@ def add_silver_metadata(
     ...     source_relative_path="dbo.RawOrders",
     ... )
     """
-    partition_source_col = next(
-        (
-            field.name
-            for field in df.schema.fields
-            if field.dataType.typeName()
-            in {"date", "timestamp", "timestamp_ntz", "timestamp_ltz"}
-            and field.name != ingestion_timestamp_col
-        ),
-        None,
-    )
-
     resolved_source_path = resolve_lakehouse_read_candidate(
         lakehouse_name=source_lakehouse_name,
         relative_path=source_relative_path,
         spark=spark,
     )
-
-    partition_expression = F.col(partition_source_col or ingestion_timestamp_col)
+    current_date_expr = F.current_date()
 
     metadata_df = (
         df.withColumn(ingestion_timestamp_col, F.current_timestamp())
         .withColumn(source_layer_col, F.lit(source_layer))
         .withColumn(source_path_col, F.lit(resolved_source_path))
-        .withColumn(year_col, F.year(partition_expression))
-        .withColumn(month_col, F.month(partition_expression))
-        .withColumn(day_col, F.dayofmonth(partition_expression))
+        .withColumn(year_col, F.year(current_date_expr))
+        .withColumn(month_col, F.month(current_date_expr))
+        .withColumn(day_col, F.dayofmonth(current_date_expr))
     )
-    partition_source_label = partition_source_col or ingestion_timestamp_col
     if verbose:
         log(
             "Silver metadata added: "
             f"{ingestion_timestamp_col}, {source_layer_col}, {source_path_col}, "
             f"{year_col}, {month_col}, {day_col} "
-            f"(partition source: {partition_source_label})"
+            "(partition source: current_date())"
         )
     return metadata_df
 
