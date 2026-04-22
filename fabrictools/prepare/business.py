@@ -130,6 +130,7 @@ def make_business_ready(
                 mode=mode,
                 spark=_spark,
                 normalize_column_names=False,
+                enable_column_mapping=True,
             )
 
             processed_tables.append(

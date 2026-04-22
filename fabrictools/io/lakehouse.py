@@ -281,6 +281,7 @@ def write_lakehouse(
     spark: Optional[SparkSession] = None,
     *,
     normalize_column_names: bool = True,
+    enable_column_mapping: bool = False,
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
 ) -> None:
@@ -303,6 +304,9 @@ def write_lakehouse(
         :py:func:`fabrictools.rename_columns_normalized` before
         resolving ``partition_by`` and writing. If ``False``, keep physical column
         names unchanged.
+    :param enable_column_mapping: If ``True`` and ``format="delta"``, writes table
+        properties required for Delta column mapping (mode ``name``), allowing
+        column names with spaces or special characters.
     :param auto_partition: If ``True`` (default), automatically partition the data
         by detected date columns if they exist.
     :type df: ~pyspark.sql.DataFrame
@@ -313,6 +317,7 @@ def write_lakehouse(
     :type format: str
     :type spark: ~pyspark.sql.SparkSession | None
     :type normalize_column_names: bool
+    :type enable_column_mapping: bool
 
     .. rubric:: Example
 
@@ -367,6 +372,12 @@ def write_lakehouse(
     writer = df.write.format(format).option("overwriteSchema", "true").mode(mode)
     if format.lower() == "parquet":
         writer = writer.option("datetimeRebaseMode", "CORRECTED")
+    elif format.lower() == "delta" and enable_column_mapping:
+        writer = (
+            writer.option("delta.columnMapping.mode", "name")
+            .option("delta.minReaderVersion", "2")
+            .option("delta.minWriterVersion", "5")
+        )
         
     if effective_partition_by:
         writer = writer.partitionBy(*effective_partition_by)
