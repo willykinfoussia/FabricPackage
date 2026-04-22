@@ -186,6 +186,21 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return deduped
 
 
+def _enable_delta_column_mapping_on_path(spark: SparkSession, full_path: str) -> None:
+    """Upgrade an existing Delta table path to column mapping mode ``name``."""
+    escaped_path = full_path.replace("`", "``")
+    spark.sql(
+        f"""
+        ALTER TABLE delta.`{escaped_path}`
+        SET TBLPROPERTIES (
+            'delta.columnMapping.mode' = 'name',
+            'delta.minReaderVersion' = '2',
+            'delta.minWriterVersion' = '5'
+        )
+        """
+    )
+
+
 def _detect_partition_columns(
     df: DataFrame, threshold_bytes: int = 1_073_741_824
 ) -> list[str]:
@@ -373,6 +388,16 @@ def write_lakehouse(
     if format.lower() == "parquet":
         writer = writer.option("datetimeRebaseMode", "CORRECTED")
     elif format.lower() == "delta" and enable_column_mapping:
+        # If target already exists as a Delta table, upgrade protocol first so
+        # overwrite with business-friendly names (spaces, capitals, etc.) works.
+        try:
+            from delta.tables import DeltaTable  # type: ignore[import-untyped]  # noqa: PLC0415
+
+            if DeltaTable.isDeltaTable(_, full_path):
+                _enable_delta_column_mapping_on_path(_, full_path)
+        except Exception:
+            # Non-blocking: the write options below still apply for new tables.
+            pass
         writer = (
             writer.option("delta.columnMapping.mode", "name")
             .option("delta.minReaderVersion", "2")
