@@ -129,6 +129,7 @@ def make_business_ready(
                 relative_path=tgt_table,
                 mode=mode,
                 spark=_spark,
+                normalize_column_names=False,
             )
 
             processed_tables.append(
