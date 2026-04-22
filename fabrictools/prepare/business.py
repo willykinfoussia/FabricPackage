@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
 from fabrictools.core.logging import log
@@ -20,7 +20,7 @@ def _to_pascal_case(name: str) -> str:
     """
     name = re.sub(r"^(Cleaned|Processed)_?", "", name, flags=re.IGNORECASE)
     parts = re.split(r"[^a-zA-Z0-9]+", name)
-    return "".join(p.capitalize() for p in parts if p)
+    return "".join(p[0].upper() + p[1:] for p in parts if p)
 
 
 def _to_normal_case(name: str) -> str:
@@ -117,17 +117,10 @@ def make_business_ready(
             else:
                 df = df.withColumn(source_layer_col, F.lit(target_layer))
 
-            # Rename columns to Normal Case
-            # (skip ingestion columns so they stay identifiable, or rename them too?
-            # Usually we rename everything to Normal Case if requested, but let's rename all)
-            for col_name in df.columns:
-                # We skip renaming the internal metadata columns or rename them too?
-                # User asked: "réaliser le changement des colonnes passer de snakeCase à normal"
-                # Let's just rename all columns except maybe we shouldn't skip any to be strictly compliant,
-                # but metadata columns as "Ingestion Timestamp" might be fine.
-                new_col_name = _to_normal_case(col_name)
-                if new_col_name != col_name:
-                    df = df.withColumnRenamed(col_name, new_col_name)
+            # Rename all columns to Normal Case in one shot.
+            # Using toDF avoids case-only rename issues with Spark.
+            new_columns = [_to_normal_case(col_name) for col_name in df.columns]
+            df = df.toDF(*new_columns)
 
             # Write to Gold
             write_lakehouse(
