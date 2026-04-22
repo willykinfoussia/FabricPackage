@@ -11,6 +11,17 @@ from pyspark.sql import functions as F
 from fabrictools.core.logging import log
 from fabrictools.core.spark import get_spark
 from fabrictools.io.lakehouse import read_lakehouse, write_lakehouse
+from fabrictools.prepare.french_column_tokens import FRENCH_COLUMN_TOKEN_MAP
+
+
+def _format_column_token(token: str) -> str:
+    """Format one token with French mapping and safe special cases."""
+    normalized = token.strip().lower()
+    if not normalized:
+        return ""
+    if normalized == "n":
+        return "N°"
+    return FRENCH_COLUMN_TOKEN_MAP.get(normalized, normalized.capitalize())
 
 
 def _to_pascal_case(name: str) -> str:
@@ -26,10 +37,16 @@ def _to_pascal_case(name: str) -> str:
 def _to_normal_case(name: str) -> str:
     """Convert snake_case column name to Normal Case.
 
-    Example: 'client_description' -> 'Client Description'
+    Uses token-level mapping to restore common French accents/abbreviations.
+
+    Examples:
+    - 'client_description' -> 'Client Description'
+    - 'annee_cree' -> 'Année Créée'
+    - 'n_element' -> 'N° Élément'
+    - 'qte_entree' -> 'Qté Entrée'
     """
     parts = re.split(r"_", name)
-    return " ".join(p.capitalize() for p in parts if p)
+    return " ".join(_format_column_token(part) for part in parts if part)
 
 
 def _resolve_target_path(source_path: str, custom_name: Optional[str]) -> str:
