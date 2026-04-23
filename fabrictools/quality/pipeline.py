@@ -7,7 +7,7 @@ from typing import Any, Optional
 from pyspark.sql import DataFrame, SparkSession
 
 from fabrictools.core.logging import log
-from fabrictools.core.spark import get_spark
+from fabrictools.core.spark import configure_parquet_datetime_rebase, get_spark
 from fabrictools.io import (
     list_lakehouse_tables_for_pipeline,
     merge_lakehouse,
@@ -68,7 +68,7 @@ def clean_and_write_data(
     ...     partition_by=["ingestion_year", "ingestion_month"],
     ... )
     """
-    _spark = spark or get_spark()
+    _spark = configure_parquet_datetime_rebase(spark or get_spark())
     source_df = read_lakehouse(
         source_lakehouse_name, source_relative_path, spark=_spark
     )
@@ -194,7 +194,7 @@ def clean_and_write_all_tables(
     >>> summary["successful_tables"]  # doctest: +SKIP
     8
     """
-    _spark = spark or get_spark()
+    _spark = configure_parquet_datetime_rebase(spark or get_spark())
     table_jobs = _build_jobs(
         source_lakehouse_name=source_lakehouse_name,
         mode=mode,
