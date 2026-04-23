@@ -10,6 +10,9 @@ def configure_parquet_datetime_rebase(spark: SparkSession) -> SparkSession:
     # Spark 3.x may fail on ancient datetimes unless rebase behavior is explicit.
     spark.conf.set("spark.sql.parquet.datetimeRebaseModeInRead", "CORRECTED")
     spark.conf.set("spark.sql.parquet.int96RebaseModeInRead", "CORRECTED")
+    # Delta writes use Parquet under the hood, so write-side rebase must be explicit too.
+    spark.conf.set("spark.sql.parquet.datetimeRebaseModeInWrite", "LEGACY")
+    spark.conf.set("spark.sql.parquet.int96RebaseModeInWrite", "LEGACY")
     return spark
 
 
