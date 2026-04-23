@@ -11,5 +11,9 @@ def get_spark() -> SparkSession:
     :returns: Current or newly built session.
     :rtype: ~pyspark.sql.SparkSession
     """
-    return SparkSession.builder.getOrCreate()
+    spark = SparkSession.builder.getOrCreate()
+    # Avoid Spark 3.x failures on legacy Parquet/Delta ancient datetime values.
+    spark.conf.set("spark.sql.parquet.datetimeRebaseModeInRead", "CORRECTED")
+    spark.conf.set("spark.sql.parquet.int96RebaseModeInRead", "CORRECTED")
+    return spark
 
