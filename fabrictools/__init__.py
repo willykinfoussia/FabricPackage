@@ -45,6 +45,7 @@ from fabrictools.quality.pipeline import (
 )
 from fabrictools.quality.scan import scan_data_errors
 from fabrictools.transform import (
+    build_tcd,
     cast_columns,
     coalesce_dim,
     dataframe_last_nonnull_wide_month_from_long,
@@ -110,6 +111,7 @@ _EXPORT_REGISTRY = {
     "norm_text": norm_text,
     "empty_or_null": empty_or_null,
     "coalesce_dim": coalesce_dim,
+    "build_tcd": build_tcd,
 }
 
 __all__ = list(_EXPORT_REGISTRY.keys())

@@ -444,6 +444,19 @@ business_result = ft.make_business_ready(
 
 Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees suit l’ordre : nom de variable `join_df` a l’appel si l’introspection reussit, sinon **alias** logique Spark du DataFrame de droite (ex. `join_df.alias("projets")`), sinon la valeur par defaut `join` ; vous pouvez forcer avec `join_prefix=...`. Les suffixes sont **normalises** (snake_case, comme `clean_data`).
 
+#### `build_tcd`
+
+Simule la création d'un Tableau Croisé Dynamique (TCD) à la manière d'Excel, en spécifiant les lignes, colonnes et valeurs à agréger.
+
+```python
+tcd_df = ft.build_tcd(
+    df,
+    rows="Region",
+    columns="Year",
+    values="Sales"
+)
+```
+
 #### `filter_by_value_list`
 
 Filtre sur une colonne et une liste de valeurs : **pas de cast** ; **trim** uniquement si la colonne est de type chaine ; les `str` dans la liste sont `strip()`’es. Avec `exclude=True` (defaut), les lignes dont la valeur est dans la liste sont exclues.

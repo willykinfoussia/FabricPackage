@@ -1,8 +1,9 @@
 """DataFrame transforms: column tools, filters, merges, and wide-month reshaping.
 
 See submodules :mod:`fabrictools.transform.columns`, :mod:`fabrictools.transform.filter`,
-:mod:`fabrictools.transform.merge`, :mod:`fabrictools.transform.rows`,
-:mod:`fabrictools.transform.text`, :mod:`fabrictools.transform.wide_month_suffix`.
+:mod:`fabrictools.transform.merge`, :mod:`fabrictools.transform.pivot`,
+:mod:`fabrictools.transform.rows`, :mod:`fabrictools.transform.text`,
+:mod:`fabrictools.transform.wide_month_suffix`.
 """
 
 from fabrictools.transform.columns import (
@@ -17,6 +18,7 @@ from fabrictools.transform.columns import (
 )
 from fabrictools.transform.filter import filter_by_value_list
 from fabrictools.transform.merge import merge_dataframes
+from fabrictools.transform.pivot import build_tcd
 from fabrictools.transform.rows import drop_rows_over_empty_percent
 from fabrictools.transform.text import coalesce_dim, empty_or_null, norm_text
 from fabrictools.transform.wide_month_suffix import (
@@ -28,6 +30,7 @@ from fabrictools.transform.wide_month_suffix import (
 )
 
 __all__ = [
+    "build_tcd",
     "cast_columns",
     "coalesce_dim",
     "dataframe_last_nonnull_wide_month_from_long",
