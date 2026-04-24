@@ -446,15 +446,16 @@ Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold
 
 #### `build_tcd`
 
-Simule la création d'un Tableau Croisé Dynamique (TCD) à la manière d'Excel, en spécifiant les lignes, colonnes, valeurs à agréger et filtres optionnels.
+Simule la création d'un Tableau Croisé Dynamique (TCD) à la manière d'Excel, en spécifiant les lignes, colonnes, valeurs à agréger (via un nom ou un dictionnaire), filtres optionnels, et renommage des colonnes.
 
 ```python
 tcd_df = ft.build_tcd(
     df,
     rows="Region",
     columns="Year",
-    values="Sales",
-    filters="Product IN ('A', 'C') AND Year > 2022"
+    values={"Sales": "sum"},
+    filters="Product IN ('A', 'C') AND Year > 2022",
+    custom_names={"2023": "Year 2023", "2024": "Year 2024"}
 )
 ```
 

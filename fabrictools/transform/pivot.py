@@ -16,6 +16,7 @@ def build_tcd(
     columns: Union[str, Sequence[str], None] = None,
     values: Union[str, Sequence[str], Dict[str, str], None] = None,
     filters: Optional[str] = None,
+    custom_columns_names: Optional[Dict[str, str]] = None,
 ) -> DataFrame:
     """Build a Pivot Table (TCD) from a DataFrame, similar to Excel.
 
@@ -24,11 +25,13 @@ def build_tcd(
     :param columns: Column(s) to pivot (columns of the pivot table).
     :param values: Column(s) to aggregate, or a dict mapping column names to aggregation functions (e.g., ``{"amount": "sum", "id": "count"}``). Defaults to sum for numeric columns, count for others.
     :param filters: Optional SQL filter expression to apply before pivoting.
+    :param custom_columns_names: Optional mapping to rename output columns (e.g., ``{"North": "Region Nord"}``).
     :type df: ~pyspark.sql.DataFrame
     :type rows: str | collections.abc.Sequence[str] | None
     :type columns: str | collections.abc.Sequence[str] | None
     :type values: str | collections.abc.Sequence[str] | dict[str, str] | None
     :type filters: str | None
+    :type custom_columns_names: dict[str, str] | None
 
     :returns: Pivoted dataframe.
     :rtype: ~pyspark.sql.DataFrame
@@ -52,16 +55,17 @@ def build_tcd(
     ...     df,
     ...     rows="Region",
     ...     columns="Year",
-    ...     values="Sales",
-    ...     filters="Product IN ('A', 'C') AND Year > 2022"
+    ...     values={"Sales": "sum"},
+    ...     filters="Product IN ('A', 'C') AND Year > 2022",
+    ...     custom_columns_names={"2023": "Year 2023", "2024": "Year 2024"}
     ... )
     >>> tcd_df.show()
-    +------+----+----+
-    |Region|2023|2024|
-    +------+----+----+
-    | North| 150| 120|
-    | South| 200|null|
-    +------+----+----+
+    +------+---------+---------+
+    |Region|Year 2023|Year 2024|
+    +------+---------+---------+
+    | North|      150|      120|
+    | South|      200|     null|
+    +------+---------+---------+
     """
     if filters:
         df = df.filter(filters)
@@ -126,13 +130,15 @@ def build_tcd(
             concat_col = "__pivot_key__"
             # Use a separator that is unlikely to appear in the data
             sep = "_|_"
-            concat_expr = F.concat_ws(sep, *[F.col(c).cast("string") for c in pivot_cols])
+            concat_expr = F.concat_ws(
+                sep, *[F.col(c).cast("string") for c in pivot_cols]
+            )
             df_concat = df.withColumn(concat_col, concat_expr)
-            
+
             # Re-group with the new dataframe
             grouped = df_concat.groupBy(*group_cols)
             pivoted = grouped.pivot(concat_col)
-            
+
         result = pivoted.agg(*agg_exprs)
     else:
         result = grouped.agg(*agg_exprs)
@@ -140,5 +146,11 @@ def build_tcd(
     # Remove dummy column if it was added
     if dummy_col in result.columns:
         result = result.drop(dummy_col)
+
+    # Rename columns if custom_columns_names is provided
+    if custom_columns_names:
+        for old_name, new_name in custom_columns_names.items():
+            if old_name in result.columns:
+                result = result.withColumnRenamed(old_name, new_name)
 
     return result
