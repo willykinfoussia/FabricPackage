@@ -40,22 +40,25 @@ def build_tcd(
     >>> data = [
     ...     {"Year": 2023, "Region": "North", "Product": "A", "Sales": 100},
     ...     {"Year": 2023, "Region": "North", "Product": "B", "Sales": 150},
+    ...     {"Year": 2023, "Region": "North", "Product": "C", "Sales": 50},
     ...     {"Year": 2023, "Region": "South", "Product": "A", "Sales": 200},
     ...     {"Year": 2024, "Region": "North", "Product": "A", "Sales": 120},
+    ...     {"Year": 2022, "Region": "South", "Product": "C", "Sales": 80},
     ... ]
     >>> df = spark.createDataFrame(pd.DataFrame(data))
-    >>> # TCD: Rows = Region, Columns = Year, Values = Sum of Sales
+    >>> # TCD: Rows = Region, Columns = Year, Values = Sum of Sales, Filter = Product A or C and Year > 2022
     >>> tcd_df = build_tcd(
     ...     df,
     ...     rows="Region",
     ...     columns="Year",
-    ...     values="Sales"
+    ...     values="Sales",
+    ...     filters="Product IN ('A', 'C') AND Year > 2022"
     ... )
     >>> tcd_df.show()
     +------+----+----+
     |Region|2023|2024|
     +------+----+----+
-    | North| 250| 120|
+    | North| 150| 120|
     | South| 200|null|
     +------+----+----+
     """
