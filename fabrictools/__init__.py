@@ -22,6 +22,7 @@ from fabrictools.dimensions import (
 )
 from fabrictools.io.lakehouse import (
     delete_all_lakehouse_tables,
+    lakehouse_table_exists,
     merge_lakehouse,
     read_lakehouse,
     write_lakehouse,
@@ -68,6 +69,7 @@ from fabrictools.transform import (
 )
 
 _EXPORT_REGISTRY = {
+    "lakehouse_table_exists": lakehouse_table_exists,
     "read_lakehouse": read_lakehouse,
     "write_lakehouse": write_lakehouse,
     "merge_lakehouse": merge_lakehouse,

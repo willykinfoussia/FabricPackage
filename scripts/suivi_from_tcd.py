@@ -1,52 +1,16 @@
-"""Notebook-like script to rebuild daily `Suivi` from Silver tables using fabrictools."""
-
-# COMMAND ----------
-# Imports
-
-from __future__ import annotations
-
-from dataclasses import dataclass
-from datetime import date
-from typing import Any
-
-import fabrictools as ft
-from pyspark.sql import DataFrame, SparkSession, functions as F
-
-# COMMAND ----------
-# Notebook parameters (hardcoded, adjust for your workspace)
-
-SILVER_LAKEHOUSE_NAME = "SilverLakehouse"
-
-CONFIG_TABLE_PATH = "Configuration"
-ACCEPTATION_CSR_PATH = "Acceptation_CSR"
-RESOURCES_NOT_CREATED_PATH = "resources_not_created"
-RESOURCES_REQUESTED_PATH = "Resources_requested"
-RM_WPRC_PATH = "RM WPRC"
-RM_WPR_PATH = "RM WPR"
-TREATED_BY_COMMERCIAL_PATH = "Treated_by_commercial"
-WAITING_COMMERCIAL_TREATMENT_PATH = "Waiting_commercial_treatment"
-SUIVI_PATH = "Suivi"
-
-CFG_KEY_CANDIDATES = ["Libelle", "Label", "Key", "A"]
-CFG_VALUE_CANDIDATES = ["Valeur", "Value", "B"]
-CFG_VOLUME_KEY_1 = "Volume_CSR_B2"
-CFG_VOLUME_KEY_2 = "Volume_CSR_B3"
-
-
 @dataclass(frozen=True)
 class TcdRelativePaths:
-    configuration: str = CONFIG_TABLE_PATH
-    acceptation_csr: str = ACCEPTATION_CSR_PATH
-    resources_not_created: str = RESOURCES_NOT_CREATED_PATH
-    resources_requested: str = RESOURCES_REQUESTED_PATH
-    rm_wprc: str = RM_WPRC_PATH
-    rm_wpr: str = RM_WPR_PATH
-    treated_by_commercial: str = TREATED_BY_COMMERCIAL_PATH
-    waiting_commercial_treatment: str = WAITING_COMMERCIAL_TREATMENT_PATH
-    suivi: str = SUIVI_PATH
+    configuration: str = PATH_TABLE_CONFIG
+    acceptation_csr: str = PATH_ACCEPTATION_CSR
+    resources_not_created: str = PATH_RESOURCES_NOT_CREATED
+    resources_requested: str = PATH_RESOURCES_REQUESTED
+    rm_wprc: str = PATH_TABLE_RM_WPRC
+    rm_wpr: str = PATH_TABLE_RM_WPR
+    treated_by_commercial: str = PATH_TREATED_BY_COMMERCIAL
+    waiting_commercial_treatment: str = PATH_WAITING_COMMERCIAL_TREATMENT
+    suivi: str = PATH_SUIVI
 
 
-# COMMAND ----------
 # Helpers
 
 
@@ -77,7 +41,9 @@ def _load_configuration(
     value_column_candidates = value_column_candidates or CFG_VALUE_CANDIDATES
 
     key_col = _resolve_column_from_candidates(configuration_df, key_column_candidates)
-    value_col = _resolve_column_from_candidates(configuration_df, value_column_candidates)
+    value_col = _resolve_column_from_candidates(
+        configuration_df, value_column_candidates
+    )
 
     if key_col is None or value_col is None:
         if len(configuration_df.columns) < 2:
@@ -175,50 +141,141 @@ def _build_suivi_ordered_values(
     values: list[Any] = [current_day]
     values.extend(
         [
-            _metric_count(tcd["acceptation_csr"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_acc_lt),
-            _metric_count(tcd["acceptation_csr"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_acc_gt),
-            _metric_not_created(tcd["resources_not_created"], class_value="Not created"),
-            _metric_count(tcd["resources_requested"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de CSR reference"], class_value=label_rr_lt),
-            _metric_count(tcd["resources_requested"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de CSR reference"], class_value=label_rr_mid),
-            _metric_count(tcd["resources_requested"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de CSR reference"], class_value=label_rr_gt),
-            _metric_count(tcd["rm_wprc"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de Reference"], class_value=label_wprc_lt),
-            _metric_count(tcd["rm_wprc"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de Reference"], class_value=label_wprc_mid),
-            _metric_count(tcd["rm_wprc"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de Reference"], class_value=label_wprc_gt),
-            _metric_count(tcd["rm_wpr"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de Reference"], class_value=label_wpr_lt),
-            _metric_count(tcd["rm_wpr"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de Reference"], class_value=label_wpr_gt),
-            _metric_count(tcd["treated_by_commercial"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_wct_lt),
-            _metric_count(tcd["treated_by_commercial"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_wct_mid),
-            _metric_count(tcd["treated_by_commercial"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_wct_gt),
-            _metric_count(tcd["waiting_commercial_treatment"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_wct_lt),
-            _metric_count(tcd["waiting_commercial_treatment"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_wct_mid),
-            _metric_count(tcd["waiting_commercial_treatment"], class_col_candidates=acceptation_class_cols, metric_col_candidates=["Nombre de Reference FD"], class_value=label_wct_gt),
+            _metric_count(
+                tcd["acceptation_csr"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_acc_lt,
+            ),
+            _metric_count(
+                tcd["acceptation_csr"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_acc_gt,
+            ),
+            _metric_not_created(
+                tcd["resources_not_created"], class_value="Not created"
+            ),
+            _metric_count(
+                tcd["resources_requested"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de CSR reference"],
+                class_value=label_rr_lt,
+            ),
+            _metric_count(
+                tcd["resources_requested"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de CSR reference"],
+                class_value=label_rr_mid,
+            ),
+            _metric_count(
+                tcd["resources_requested"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de CSR reference"],
+                class_value=label_rr_gt,
+            ),
+            _metric_count(
+                tcd["rm_wprc"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de Reference"],
+                class_value=label_wprc_lt,
+            ),
+            _metric_count(
+                tcd["rm_wprc"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de Reference"],
+                class_value=label_wprc_mid,
+            ),
+            _metric_count(
+                tcd["rm_wprc"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de Reference"],
+                class_value=label_wprc_gt,
+            ),
+            _metric_count(
+                tcd["rm_wpr"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de Reference"],
+                class_value=label_wpr_lt,
+            ),
+            _metric_count(
+                tcd["rm_wpr"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de Reference"],
+                class_value=label_wpr_gt,
+            ),
+            _metric_count(
+                tcd["treated_by_commercial"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_wct_lt,
+            ),
+            _metric_count(
+                tcd["treated_by_commercial"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_wct_mid,
+            ),
+            _metric_count(
+                tcd["treated_by_commercial"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_wct_gt,
+            ),
+            _metric_count(
+                tcd["waiting_commercial_treatment"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_wct_lt,
+            ),
+            _metric_count(
+                tcd["waiting_commercial_treatment"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_wct_mid,
+            ),
+            _metric_count(
+                tcd["waiting_commercial_treatment"],
+                class_col_candidates=acceptation_class_cols,
+                metric_col_candidates=["Nombre de Reference FD"],
+                class_value=label_wct_gt,
+            ),
             volume_1,
             volume_2,
-            _metric_count(tcd["resources_requested"], class_col_candidates=nb_jours_class_cols, metric_col_candidates=["Nombre de CSR reference"], class_value="metro still in time"),
+            _metric_count(
+                tcd["resources_requested"],
+                class_col_candidates=nb_jours_class_cols,
+                metric_col_candidates=["Nombre de CSR reference"],
+                class_value="metro still in time",
+            ),
         ]
     )
 
     if len(values) != 21:
-        raise RuntimeError(f"La ligne Suivi doit contenir 21 valeurs, obtenu={len(values)}.")
+        raise RuntimeError(
+            f"La ligne Suivi doit contenir 21 valeurs, obtenu={len(values)}."
+        )
     return values
 
 
-# COMMAND ----------
 # Main function
 
 
 def update_suivi_from_tcd(
     *,
     spark: SparkSession,
-    lakehouse_name: str = SILVER_LAKEHOUSE_NAME,
+    lakehouse_name: str = SILVER_LAKEHOUSE,
     paths: TcdRelativePaths = TcdRelativePaths(),
     config_key_column_candidates: list[str] | None = None,
     config_value_column_candidates: list[str] | None = None,
     today: date | None = None,
 ) -> dict[str, Any]:
+    print("Update process started")
     current_day = today or date.today()
 
-    configuration_df = ft.read_lakehouse(lakehouse_name, paths.configuration, spark=spark)
+    configuration_df = ft.read_lakehouse(
+        lakehouse_name, paths.configuration, spark=spark
+    )
     cfg = _load_configuration(
         configuration_df,
         key_column_candidates=config_key_column_candidates,
@@ -237,30 +294,53 @@ def update_suivi_from_tcd(
     ]
     missing = [key for key in required_config if key not in cfg]
     if missing:
-        raise ValueError("Clés manquantes dans la table Configuration: " + ", ".join(missing))
+        raise ValueError(
+            "Clés manquantes dans la table Configuration: " + ", ".join(missing)
+        )
 
     tcd_frames = {
-        "acceptation_csr": ft.read_lakehouse(lakehouse_name, paths.acceptation_csr, spark=spark),
-        "resources_not_created": ft.read_lakehouse(lakehouse_name, paths.resources_not_created, spark=spark),
-        "resources_requested": ft.read_lakehouse(lakehouse_name, paths.resources_requested, spark=spark),
+        "acceptation_csr": ft.read_lakehouse(
+            lakehouse_name, paths.acceptation_csr, spark=spark
+        ),
+        "resources_not_created": ft.read_lakehouse(
+            lakehouse_name, paths.resources_not_created, spark=spark
+        ),
+        "resources_requested": ft.read_lakehouse(
+            lakehouse_name, paths.resources_requested, spark=spark
+        ),
         "rm_wprc": ft.read_lakehouse(lakehouse_name, paths.rm_wprc, spark=spark),
         "rm_wpr": ft.read_lakehouse(lakehouse_name, paths.rm_wpr, spark=spark),
-        "treated_by_commercial": ft.read_lakehouse(lakehouse_name, paths.treated_by_commercial, spark=spark),
-        "waiting_commercial_treatment": ft.read_lakehouse(lakehouse_name, paths.waiting_commercial_treatment, spark=spark),
+        "treated_by_commercial": ft.read_lakehouse(
+            lakehouse_name, paths.treated_by_commercial, spark=spark
+        ),
+        "waiting_commercial_treatment": ft.read_lakehouse(
+            lakehouse_name, paths.waiting_commercial_treatment, spark=spark
+        ),
     }
 
     suivi_df = ft.read_lakehouse(lakehouse_name, paths.suivi, spark=spark)
     if len(suivi_df.columns) < 21:
-        raise ValueError("La table Suivi doit avoir au moins 21 colonnes (comme le VBA).")
+        raise ValueError(
+            "La table Suivi doit avoir au moins 21 colonnes (comme le VBA)."
+        )
 
     first_col = suivi_df.columns[0]
     already_exists = (
-        suivi_df.where(F.to_date(F.col(first_col)) == F.lit(current_day)).limit(1).count() > 0
+        suivi_df.where(F.to_date(F.col(first_col)) == F.lit(current_day))
+        .limit(1)
+        .count()
+        > 0
     )
     if already_exists:
-        return {"written": False, "reason": "date_already_exists", "date": str(current_day)}
+        return {
+            "written": False,
+            "reason": "date_already_exists",
+            "date": str(current_day),
+        }
 
-    ordered_values = _build_suivi_ordered_values(cfg=cfg, tcd=tcd_frames, current_day=current_day)
+    ordered_values = _build_suivi_ordered_values(
+        cfg=cfg, tcd=tcd_frames, current_day=current_day
+    )
 
     output_columns = list(suivi_df.columns)
     row_payload = {column: None for column in output_columns}
@@ -268,6 +348,7 @@ def update_suivi_from_tcd(
         row_payload[output_columns[index]] = value
 
     append_df = spark.createDataFrame([row_payload], schema=suivi_df.schema)
+    print("Appending new row to suivi table")
     ft.write_lakehouse(
         append_df,
         lakehouse_name=lakehouse_name,
@@ -280,10 +361,3 @@ def update_suivi_from_tcd(
     )
 
     return {"written": True, "date": str(current_day), "table": paths.suivi}
-
-
-# COMMAND ----------
-# Execution cell (Notebook style)
-
-# result = update_suivi_from_tcd(spark=spark)
-# display(result)

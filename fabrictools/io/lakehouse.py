@@ -489,6 +489,52 @@ def merge_lakehouse(
     log("  Merge complete")
 
 
+def lakehouse_table_exists(
+    lakehouse_name: str,
+    relative_path: str,
+) -> bool:
+    """Check if a table or path exists in a Fabric Lakehouse.
+
+    Uses ``notebookutils.fs.exists`` to check candidate paths without reading data.
+
+    :param lakehouse_name: Display name of the Lakehouse.
+    :param relative_path: Logical path under the Lakehouse root (slash path or
+        SQL-style ``schema.table``, e.g. ``dbo.PdC Extraction``).
+    :type lakehouse_name: str
+    :type relative_path: str
+
+    :returns: ``True`` if at least one candidate path exists, ``False`` otherwise.
+    :rtype: bool
+
+    :raises ValueError: When ``notebookutils`` is unavailable (not in Fabric).
+
+    .. rubric:: Example
+
+    >>> if lakehouse_table_exists("BronzeLakehouse", "dbo.SalesOrders"):  # doctest: +SKIP
+    ...     print("Table exists!")
+    """
+    try:
+        import notebookutils  # type: ignore[import-untyped]  # noqa: PLC0415
+    except ImportError as exc:
+        raise ValueError(
+            "notebookutils is not available — are you running inside "
+            f"Microsoft Fabric? ({exc})"
+        ) from exc
+
+    base = get_lakehouse_abfs_path(lakehouse_name)
+    candidate_relative_paths = build_lakehouse_read_path_candidates(relative_path)
+
+    for candidate_relative_path in candidate_relative_paths:
+        full_path = f"{base}/{candidate_relative_path}"
+        try:
+            if notebookutils.fs.exists(full_path):
+                return True
+        except Exception:
+            pass
+
+    return False
+
+
 def delete_all_lakehouse_tables(
     lakehouse_name: str,
     include_schemas: Optional[List[str]] = None,
@@ -595,5 +641,6 @@ __all__ = [
     "resolve_lakehouse_read_candidate",
     "write_lakehouse",
     "merge_lakehouse",
+    "lakehouse_table_exists",
     "delete_all_lakehouse_tables",
 ]

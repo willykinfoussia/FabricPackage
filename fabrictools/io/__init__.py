@@ -7,6 +7,7 @@ from fabrictools.io.discovery import (
 )
 from fabrictools.io.lakehouse import (
     delete_all_lakehouse_tables,
+    lakehouse_table_exists,
     merge_lakehouse,
     read_lakehouse,
     resolve_lakehouse_read_candidate,
@@ -19,6 +20,7 @@ __all__ = [
     "resolve_lakehouse_read_candidate",
     "write_lakehouse",
     "merge_lakehouse",
+    "lakehouse_table_exists",
     "delete_all_lakehouse_tables",
     "read_warehouse",
     "write_warehouse",
