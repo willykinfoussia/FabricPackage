@@ -7,6 +7,7 @@ from typing import Dict, Optional, Union
 
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
+from pyspark.sql.types import NumericType
 
 
 def build_tcd(
@@ -21,7 +22,7 @@ def build_tcd(
     :param df: Source dataframe.
     :param rows: Column(s) to group by (rows of the pivot table).
     :param columns: Column(s) to pivot (columns of the pivot table).
-    :param values: Column(s) to aggregate, or a dict mapping column names to aggregation functions (e.g., ``{"amount": "sum", "id": "count"}``). Defaults to sum.
+    :param values: Column(s) to aggregate, or a dict mapping column names to aggregation functions (e.g., ``{"amount": "sum", "id": "count"}``). Defaults to sum for numeric columns, count for others.
     :param filters: Optional SQL filter expression to apply before pivoting.
     :type df: ~pyspark.sql.DataFrame
     :type rows: str | collections.abc.Sequence[str] | None
@@ -81,13 +82,20 @@ def build_tcd(
     else:
         pivot_cols = list(columns)
 
+    # Helper to determine default aggregation based on column type
+    def _default_agg_for_col(col_name: str):
+        schema_field = next((f for f in df.schema.fields if f.name == col_name), None)
+        if schema_field and isinstance(schema_field.dataType, NumericType):
+            return F.sum(col_name).alias(col_name)
+        return F.count(col_name).alias(col_name)
+
     # Normalize values and aggregations
     agg_exprs = []
     if values is None:
         # If no values specified, just count rows
         agg_exprs = [F.count("*").alias("count")]
     elif isinstance(values, str):
-        agg_exprs = [F.sum(values).alias(values)]
+        agg_exprs = [_default_agg_for_col(values)]
     elif isinstance(values, dict):
         for col_name, func_name in values.items():
             func = getattr(F, func_name.lower(), None)
@@ -97,7 +105,7 @@ def build_tcd(
     else:
         # Sequence of strings
         for col_name in values:
-            agg_exprs.append(F.sum(col_name).alias(col_name))
+            agg_exprs.append(_default_agg_for_col(col_name))
 
     # If no rows are specified, we need a dummy column to group by
     dummy_col = "__dummy_group__"
