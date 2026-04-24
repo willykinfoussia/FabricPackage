@@ -16,7 +16,7 @@ def build_tcd(
     columns: Union[str, Sequence[str], None] = None,
     values: Union[str, Sequence[str], Dict[str, str], None] = None,
     filters: Optional[str] = None,
-    custom_columns_names: Optional[Dict[str, str]] = None,
+    custom_columns_names: Optional[Sequence[str]] = None,
 ) -> DataFrame:
     """Build a Pivot Table (TCD) from a DataFrame, similar to Excel.
 
@@ -25,13 +25,13 @@ def build_tcd(
     :param columns: Column(s) to pivot (columns of the pivot table).
     :param values: Column(s) to aggregate, or a dict mapping column names to aggregation functions (e.g., ``{"amount": "sum", "id": "count"}``). Defaults to sum for numeric columns, count for others.
     :param filters: Optional SQL filter expression to apply before pivoting.
-    :param custom_columns_names: Optional mapping to rename output columns (e.g., ``{"North": "Region Nord"}``).
+    :param custom_columns_names: Optional list of names to rename all output columns in order. Must match the exact number of resulting columns.
     :type df: ~pyspark.sql.DataFrame
     :type rows: str | collections.abc.Sequence[str] | None
     :type columns: str | collections.abc.Sequence[str] | None
     :type values: str | collections.abc.Sequence[str] | dict[str, str] | None
     :type filters: str | None
-    :type custom_columns_names: dict[str, str] | None
+    :type custom_columns_names: collections.abc.Sequence[str] | None
 
     :returns: Pivoted dataframe.
     :rtype: ~pyspark.sql.DataFrame
@@ -57,7 +57,7 @@ def build_tcd(
     ...     columns="Year",
     ...     values={"Sales": "sum"},
     ...     filters="Product IN ('A', 'C') AND Year > 2022",
-    ...     custom_columns_names={"2023": "Year 2023", "2024": "Year 2024"}
+    ...     custom_columns_names=["Region", "Year 2023", "Year 2024"]
     ... )
     >>> tcd_df.show()
     +------+---------+---------+
@@ -149,8 +149,11 @@ def build_tcd(
 
     # Rename columns if custom_columns_names is provided
     if custom_columns_names:
-        for old_name, new_name in custom_columns_names.items():
-            if old_name in result.columns:
-                result = result.withColumnRenamed(old_name, new_name)
+        if len(custom_columns_names) != len(result.columns):
+            raise ValueError(
+                f"custom_columns_names length ({len(custom_columns_names)}) "
+                f"does not match the number of output columns ({len(result.columns)})."
+            )
+        result = result.toDF(*custom_columns_names)
 
     return result

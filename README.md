@@ -455,7 +455,7 @@ tcd_df = ft.build_tcd(
     columns="Year",
     values={"Sales": "sum"},
     filters="Product IN ('A', 'C') AND Year > 2022",
-    custom_names={"2023": "Year 2023", "2024": "Year 2024"}
+    custom_columns_names=["Region", "Year 2023", "Year 2024"]
 )
 ```
 
