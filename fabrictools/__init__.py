@@ -46,6 +46,7 @@ from fabrictools.quality.pipeline import (
 )
 from fabrictools.quality.scan import scan_data_errors
 from fabrictools.transform import (
+    ParamResolver,
     build_tcd,
     cast_columns,
     coalesce_dim,
@@ -54,7 +55,7 @@ from fabrictools.transform import (
     dataframe_unpivot_wide_month_suffix,
     drop_rows_over_empty_percent,
     empty_or_null,
-    filter_by_value_list,
+    filter_column_by_values,
     merge_dataframes,
     month_start_from_ca_monthly_col,
     norm_text,
@@ -69,6 +70,7 @@ from fabrictools.transform import (
 )
 
 _EXPORT_REGISTRY = {
+    "ParamResolver": ParamResolver,
     "lakehouse_table_exists": lakehouse_table_exists,
     "read_lakehouse": read_lakehouse,
     "write_lakehouse": write_lakehouse,
@@ -94,7 +96,7 @@ _EXPORT_REGISTRY = {
     "prepare_and_write_data": prepare_and_write_data,
     "prepare_and_write_all_tables": prepare_and_write_all_tables,
     "make_business_ready": make_business_ready,
-    "filter_by_value_list": filter_by_value_list,
+    "filter_column_by_values": filter_column_by_values,
     "drop_rows_over_empty_percent": drop_rows_over_empty_percent,
     "cast_columns": cast_columns,
     "merge_dataframes": merge_dataframes,

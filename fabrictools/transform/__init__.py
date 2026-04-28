@@ -16,8 +16,9 @@ from fabrictools.transform.columns import (
     rename_columns_pq_serial_to_mois_annee,
     resolve_dataframe_column,
 )
-from fabrictools.transform.filter import filter_by_value_list
+from fabrictools.transform.filter import filter_column_by_values
 from fabrictools.transform.merge import merge_dataframes
+from fabrictools.transform.params import ParamResolver
 from fabrictools.transform.pivot import build_tcd
 from fabrictools.transform.rows import drop_rows_over_empty_percent
 from fabrictools.transform.text import coalesce_dim, empty_or_null, norm_text
@@ -30,6 +31,7 @@ from fabrictools.transform.wide_month_suffix import (
 )
 
 __all__ = [
+    "ParamResolver",
     "build_tcd",
     "cast_columns",
     "coalesce_dim",
@@ -38,7 +40,7 @@ __all__ = [
     "dataframe_unpivot_wide_month_suffix",
     "drop_rows_over_empty_percent",
     "empty_or_null",
-    "filter_by_value_list",
+    "filter_column_by_values",
     "merge_dataframes",
     "month_start_from_ca_monthly_col",
     "norm_text",

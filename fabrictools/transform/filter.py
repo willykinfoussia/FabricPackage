@@ -41,7 +41,7 @@ def _prepare_values(values: Sequence[Any]) -> list[Any]:
     return out
 
 
-def filter_by_value_list(
+def filter_column_by_values(
     df: DataFrame,
     column: str,
     values: Sequence[Any],
@@ -67,7 +67,7 @@ def filter_by_value_list(
 
     .. rubric:: Example
 
-    >>> filtered = filter_by_value_list(  # doctest: +SKIP
+    >>> filtered = filter_column_by_values(  # doctest: +SKIP
     ...     df, "status", ["VOID", "CANCELLED"], exclude=True
     ... )
     """

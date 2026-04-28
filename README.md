@@ -459,12 +459,12 @@ tcd_df = ft.build_tcd(
 )
 ```
 
-#### `filter_by_value_list`
+#### `filter_column_by_values`
 
 Filtre sur une colonne et une liste de valeurs : **pas de cast** ; **trim** uniquement si la colonne est de type chaine ; les `str` dans la liste sont `strip()`’es. Avec `exclude=True` (defaut), les lignes dont la valeur est dans la liste sont exclues.
 
 ```python
-df2 = ft.filter_by_value_list(df, "Compte", ("70830000", "70840000"), exclude=True)
+df2 = ft.filter_column_by_values(df, "Compte", ("70830000", "70840000"), exclude=True)
 ```
 
 #### `merge_dataframes`

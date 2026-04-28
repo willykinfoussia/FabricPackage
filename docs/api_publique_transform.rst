@@ -5,7 +5,7 @@ Filtres, renommages, jointures et helpers pour colonnes « wide month » et text
 
 .. currentmodule:: fabrictools
 
-.. autofunction:: filter_by_value_list
+.. autofunction:: filter_column_by_values
 
 .. autofunction:: drop_rows_over_empty_percent
 

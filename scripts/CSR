@@ -1,0 +1,82 @@
+let
+    DateDuJour = Date.From(DateTime.LocalNow()),
+    Url =
+        let
+            Filtre =
+                Table.SelectRows(
+                    Config,
+                    each [Name] = "lien_extract_CSR"
+                ),
+
+            PremiereLigne = Filtre{0},
+            Valeur = PremiereLigne[Value]
+        in
+            Valeur,
+    duree =
+        let
+            Filtre =
+                Table.SelectRows(
+                    Config,
+                    each [Name] = "Seuil_horaire_acceptation_CSR"
+                ),
+
+            PremiereLigne = Filtre{0},
+            Valeur = Number.From(PremiereLigne[Value])
+        in
+            Valeur,
+    NbJoursGlissants =
+        let
+            Filtre =
+                Table.SelectRows(
+                    Config,
+                    each [Name] = "Nb_jours_suivi glissant_CSR"
+                ),
+
+            PremiereLigne = Filtre{0},
+            Valeur = Number.From(PremiereLigne[Value])
+        in
+            Valeur,
+    dureetexte = Text.From(duree),
+    CSRData = Csv.Document(Web.Contents(Url),[Delimiter=";"]),
+    #"En-têtes promus" = Table.PromoteHeaders(CSRData, [PromoteAllScalars=true]),
+    #"Type modifié" = Table.TransformColumnTypes(#"En-têtes promus",{{"id", Int64.Type}, {"Reference FD", type text}, {"compagnie", type text}, {"Creator FD", type text}, {"Customer FD", type text}, {"Bench", type text}, {"Bench client", type text}, {"Object", type text}, {"TUA", type text}, {"Failure consequence", type text}, {"Service requested define", type text}, {"Service requested define client", type text}, {"When was the failure identified", type text}, {"Description", type text}, {"FD Validate", type any}, {"Status", type text}, {"Reject Description", type text}, {"Technical TS", type text}, {"Commercial Request", type text}, {"Commercial Acceptance", type text}, {"Commercial Reject Comment", type text}, {"Comments", type any}, {"Created by TS", type text}, {"Date creation", type datetime}, {"Date acceptance", type datetime}, {"Date last modified", type datetime}, {"date_last_modified_client", type datetime}, {"Deleted", Int64.Type}, {"FD Type", type text}, {"FD Subtype", type text}, {"Faulty resource", type text}, {"FD Source", type text}, {"Unavailable time", Int64.Type}, {"Acknowledgment time", type any}, {"Operations delayed time", Int64.Type}, {"Back Into Service Date", type any}, {"Intervention Starting Date", type any}, {"Intervention Starting End", type any}, {"Standard Exchange on-site reception date", type datetime}, {"FTU", Int64.Type}, {"close_date", type datetime}, {"date_creation_solution_definitive", type datetime}, {"date_response_solution_definitive", type any}, {"date_creation_solution_temp", type datetime}, {"date_response_solution_temp", type any}, {"bench_type", type text}}),
+    #"Lignes filtrées" = Table.SelectRows(#"Type modifié", each ([Status] = "Request treated by Commercial Department" or [Status] = "Request treated by Support" or [Status] = "Request validated by Support" or [Status] = "Request waiting for Commercial Treatment" or [Status] = "Waiting for Support Treatment" or [Status] = "Definitive solution waiting for customer validation" or [Status] = "Request closed by a definitive solution") and ([compagnie] <> "AID" and [compagnie] <> "EADS_TS" and [compagnie] <> "EADS_TS_UK")),
+    AdjustAcceptanceTime = Table.AddColumn(#"Lignes filtrées", "AdjustedAcceptanceDateTime", each 
+        if Time.From([Date acceptance]) < #time(8, 0, 0) 
+            then DateTime.From(Date.From([Date acceptance]- #duration(1,0,0,0)) & #time(18, 0, 0)) 
+        else 
+            if Time.From([Date acceptance]) > #time(18, 0, 0)
+            then  DateTime.From(Date.From([Date acceptance]) & #time(18, 0, 0))
+            else [Date acceptance], type datetime),
+    AdjustCreationTime = Table.AddColumn(AdjustAcceptanceTime, "AdjustedCreationDateTime", each 
+        if Time.From([Date creation]) < #time(8, 0, 0) 
+            then DateTime.From(Date.From([Date creation]) & #time(8, 0, 0)) 
+        else 
+            if Time.From([Date creation]) > #time(18, 0, 0)
+            then  DateTime.From(Date.From([Date creation]+ #duration(1,0,0,0)) & #time(8, 0, 0))
+            else [Date creation], type datetime),
+    #"Personnalisée ajoutée" = Table.AddColumn(AdjustCreationTime, "Temps Acceptation", each Duration.TotalHours([AdjustedAcceptanceDateTime]-[AdjustedCreationDateTime])),
+    // Ajouter une colonne pour détecter le week-end
+    AddWeekendColumn = Table.AddColumn(#"Personnalisée ajoutée", "WeekendHours", each 
+        let
+            StartDate = Date.From([AdjustedCreationDateTime]),
+            EndDate = Date.From([AdjustedAcceptanceDateTime]),
+            DaysBetween = List.Dates(StartDate, Duration.Days(EndDate - StartDate) + 1, #duration(1, 0, 0, 0)),
+            Weekends = List.Select(DaysBetween, each Date.DayOfWeek(_, Day.Sunday) = 0 or Date.DayOfWeek(_, Day.Sunday) = 6),
+            WeekendIncluded = if List.Count(Weekends) > 0 then 62 else 0
+        in
+            WeekendIncluded
+    ),
+    #"Personnalisée ajoutée1" = Table.AddColumn(AddWeekendColumn, "Personnalisé", each [Temps Acceptation]-[WeekendHours]),
+    #"Colonnes supprimées1" = Table.RemoveColumns(#"Personnalisée ajoutée1",{"WeekendHours", "Temps Acceptation"}),
+    #"Colonnes renommées" = Table.RenameColumns(#"Colonnes supprimées1",{{"Personnalisé", "Temps Acceptation"}}),
+    //#"Type modifié2" = Table.TransformColumnTypes(#"Personnalisée ajoutée",{{"Temps Acceptation", type duration}}),
+    //#"Colonne conditionnelle ajoutée" = Table.AddColumn(#"Type modifié2", "classement durée acceptation", each if [Temps Acceptation] > #duration(0, duree, 0, 0) then "> " & dureetexte & "h" else "< " & dureetexte & "h"),
+    #"Colonne conditionnelle ajoutée" = Table.AddColumn(#"Colonnes renommées", "classement durée acceptation", each if [Temps Acceptation] > duree then "> " & dureetexte & "h" else "< " & dureetexte & "h"),
+    #"Type modifié1" = Table.TransformColumnTypes(#"Colonne conditionnelle ajoutée",{{"Date creation", type date}}),
+    AddDiffColumn = Table.AddColumn(#"Type modifié1", "10j glissants", each if Duration.Days(DateDuJour - [#"Date creation"]) <= 100 then 1 else 0),
+    #"Lignes filtrées1" = Table.SelectRows(AddDiffColumn, each ([10j glissants] = 1)),
+    #"Colonnes supprimées" = Table.RemoveColumns(#"Lignes filtrées1",{"id", "Creator FD", "Customer FD", "Bench client", "TUA", "Service requested define", "Service requested define client", "When was the failure identified", "FD Validate", "Reject Description", "Commercial Reject Comment", "Comments", "Created by TS", "Date last modified", "date_last_modified_client", "Deleted", "FD Type", "FD Subtype", "Faulty resource", "FD Source", "Unavailable time", "Acknowledgment time", "Operations delayed time", "Back Into Service Date", "Intervention Starting Date", "Intervention Starting End", "Standard Exchange on-site reception date", "FTU", "close_date", "date_creation_solution_definitive", "date_response_solution_definitive", "date_creation_solution_temp", "date_response_solution_temp", "bench_type", "10j glissants"}),
+    #"ToText" = Table.TransformColumnTypes(#"Colonnes supprimées", List.Transform(Table.ColumnNames(#"Colonnes supprimées"), each {_, type text}))
+in
+    #"ToText"
