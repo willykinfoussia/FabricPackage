@@ -96,24 +96,61 @@ _INT_TEXT_PATTERN = r"^[+-]?\d+$"
 _FLOAT_TEXT_PATTERN = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 _PARSED_DATE_SAMPLE_LIMIT = 5
 _TIME_PARSER_POLICY_KEY = "spark.sql.legacy.timeParserPolicy"
+_DATE_FORMATS: tuple[tuple[str, str], ...] = (
+    ("date", "yyyy-MM-dd"),
+    ("date", "yyyy/M/d"),
+    ("date", "dd-MM-yyyy"),
+    ("date", "d-M-yyyy"),
+    ("date", "MM-dd-yyyy"),
+    ("date", "M-d-yyyy"),
+    ("date", "dd/MM/yyyy"),
+    ("date", "d/M/yyyy"),
+    ("date", "dd.MM.yyyy"),
+    ("date", "d.M.yyyy"),
+    ("date", "MM/dd/yyyy"),
+    ("date", "M/d/yyyy"),
+    ("date", "MM.dd.yyyy"),
+    ("date", "M.d.yyyy"),
+    ("timestamp", "M/d/yyyy h:mm:ss a"),
+    ("timestamp", "MM/dd/yyyy h:mm:ss a"),
+    ("timestamp", "M/d/yyyy h:mm a"),
+    ("timestamp", "MM/dd/yyyy h:mm a"),
+)
+_TIMESTAMP_FORMATS: tuple[str, ...] = (
+    "yyyy-MM-dd HH:mm:ss",
+    "dd-MM-yyyy HH:mm:ss",
+    "d-M-yyyy HH:mm:ss",
+    "MM-dd-yyyy HH:mm:ss",
+    "M-d-yyyy HH:mm:ss",
+    "dd/MM/yyyy HH:mm:ss",
+    "d/M/yyyy HH:mm:ss",
+    "MM/dd/yyyy HH:mm:ss",
+    "M/d/yyyy HH:mm:ss",
+    "M/d/yyyy h:mm:ss a",
+    "MM/dd/yyyy h:mm:ss a",
+    "M/d/yyyy h:mm a",
+    "MM/dd/yyyy h:mm a",
+    "yyyy-MM-dd'T'HH:mm:ss",
+)
 
 
 def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
-    Order of detection (first match wins): **date** (uniform non-null success of a
-    ``to_date`` / ``to_timestamp`` chain over several patterns—European forms before
-    US for ambiguous day/month; strings with a trailing time-of-day may still yield a
-    calendar day and are cast to ``date``, dropping the time part; US slash dates with
-    12-hour clock and AM/PM suffix are handled via ``h:mm[:ss] a`` patterns), **timestamp**
-    (``to_timestamp`` with several patterns including US 12h + AM/PM, 24h, plus ISO ``T``),
+    Order of detection (first match wins): **date** (the first ``to_date`` /
+    ``to_timestamp`` format that succeeds for every non-null value—European forms
+    before US for ambiguous day/month; strings with a trailing time-of-day may still
+    yield a calendar day and are cast to ``date``, dropping the time part; US slash
+    dates with 12-hour clock and AM/PM suffix are handled via ``h:mm[:ss] a``
+    patterns), **timestamp** (the first ``to_timestamp`` format that succeeds for
+    every non-null value, including US 12h + AM/PM, 24h, plus ISO ``T``),
     **integer** (full string matches
     ``^[+-]?\\d+$``), **double** (decimal/scientific), else the column remains
     ``string``. Columns that are all-null are skipped; null cells are kept through
     casts.
 
-    Sets ``spark.sql.legacy.timeParserPolicy`` to ``LEGACY`` for the duration of the
-    call and restores the previous session value afterward.
+    Sets ``spark.sql.legacy.timeParserPolicy`` to ``CORRECTED`` so Spark can
+    evaluate the returned lazy DataFrame with the same parser policy.
 
     :param df: Input dataframe.
     :type df: ~pyspark.sql.DataFrame
@@ -122,76 +159,85 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     :rtype: ~pyspark.sql.DataFrame
     """
     spark = df.sparkSession
-    # Use CORRECTED to let Spark handle ancient dates (before 1582/1900) without throwing an error
-    # and to fix parsing errors where LEGACY fails on some formats like 4/14/2026.
+    # Use CORRECTED to let Spark handle ancient dates (before 1582/1900)
+    # without throwing and to fix LEGACY failures like 4/14/2026.
     # Note: We do not restore the policy because the returned DataFrame is lazy
     # and requires CORRECTED policy during evaluation (e.g. write/count).
     spark.conf.set(_TIME_PARSER_POLICY_KEY, "CORRECTED")
-    
+
     string_columns = [
         field.name
         for field in df.schema.fields
         if isinstance(field.dataType, StringType)
     ]
-    
+
     if not string_columns:
         return df
-        
-    def _get_parsed_date_expr(safe_trimmed):
-        return F.coalesce(
-                F.to_date(safe_trimmed, "yyyy-MM-dd"),
-                F.to_date(safe_trimmed, "yyyy/M/d"),
-                F.to_date(safe_trimmed, "dd-MM-yyyy"),
-                F.to_date(safe_trimmed, "d-M-yyyy"),
-                F.to_date(safe_trimmed, "MM-dd-yyyy"),
-                F.to_date(safe_trimmed, "M-d-yyyy"),
-                F.to_date(safe_trimmed, "dd/MM/yyyy"),
-                F.to_date(safe_trimmed, "d/M/yyyy"),
-                F.to_date(safe_trimmed, "dd.MM.yyyy"),
-                F.to_date(safe_trimmed, "d.M.yyyy"),
-                F.to_date(safe_trimmed, "MM/dd/yyyy"),
-                F.to_date(safe_trimmed, "M/d/yyyy"),
-                F.to_date(safe_trimmed, "MM.dd.yyyy"),
-                F.to_date(safe_trimmed, "M.d.yyyy"),
-                F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm:ss a").cast(DateType()),
-                F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm:ss a").cast(DateType()),
-                F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm a").cast(DateType()),
-                F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a").cast(DateType()),
-            )
 
-    def _get_parsed_ts_expr(safe_trimmed):
-        return F.coalesce(
-            F.to_timestamp(safe_trimmed, "yyyy-MM-dd HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "dd-MM-yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "d-M-yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "MM-dd-yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "M-d-yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "dd/MM/yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "d/M/yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "MM/dd/yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "M/d/yyyy HH:mm:ss"),
-            F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm:ss a"),
-            F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm:ss a"),
-            F.to_timestamp(safe_trimmed, "M/d/yyyy h:mm a"),
-            F.to_timestamp(safe_trimmed, "MM/dd/yyyy h:mm a"),
-            F.to_timestamp(safe_trimmed, "yyyy-MM-dd'T'HH:mm:ss"),
-        )
+    def _get_parsed_date_expr(safe_trimmed, parser: tuple[str, str]):
+        parser_kind, parser_format = parser
+        if parser_kind == "timestamp":
+            return F.to_timestamp(safe_trimmed, parser_format).cast(DateType())
+        return F.to_date(safe_trimmed, parser_format)
+
+    def _get_parsed_ts_expr(safe_trimmed, parser_format: str):
+        return F.to_timestamp(safe_trimmed, parser_format)
+
+    def _date_fail_key(col_name: str, idx: int) -> str:
+        return f"{col_name}__date_fail_{idx}"
+
+    def _ts_fail_key(col_name: str, idx: int) -> str:
+        return f"{col_name}__ts_fail_{idx}"
 
     agg_exprs = []
     for col_name in string_columns:
         col_expr = F.col(col_name)
         trimmed = F.trim(col_expr)
-        
-        agg_exprs.append(F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn"))
-        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__int_fail"))
-        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN), 1).otherwise(0)).alias(f"{col_name}__float_fail"))
-        
-        safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
-        parsed_date = _get_parsed_date_expr(safe_trimmed)
-        parsed_ts = _get_parsed_ts_expr(safe_trimmed)
-        
-        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)).alias(f"{col_name}__date_fail"))
-        agg_exprs.append(F.sum(F.when(col_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)).alias(f"{col_name}__ts_fail"))
+
+        agg_exprs.append(
+            F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(
+                f"{col_name}__nn"
+            )
+        )
+        agg_exprs.append(
+            F.sum(
+                F.when(
+                    col_expr.isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN),
+                    1,
+                ).otherwise(0)
+            ).alias(f"{col_name}__int_fail")
+        )
+        agg_exprs.append(
+            F.sum(
+                F.when(
+                    col_expr.isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN),
+                    1,
+                ).otherwise(0)
+            ).alias(f"{col_name}__float_fail")
+        )
+
+        safe_trimmed = F.when(
+            trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed
+        ).otherwise(F.lit(None))
+
+        for idx, date_parser in enumerate(_DATE_FORMATS):
+            parsed_date = _get_parsed_date_expr(safe_trimmed, date_parser)
+            agg_exprs.append(
+                F.sum(
+                    F.when(
+                        col_expr.isNotNull() & parsed_date.isNull(), 1
+                    ).otherwise(0)
+                ).alias(_date_fail_key(col_name, idx))
+            )
+        for idx, ts_parser in enumerate(_TIMESTAMP_FORMATS):
+            parsed_ts = _get_parsed_ts_expr(safe_trimmed, ts_parser)
+            agg_exprs.append(
+                F.sum(
+                    F.when(
+                        col_expr.isNotNull() & parsed_ts.isNull(), 1
+                    ).otherwise(0)
+                ).alias(_ts_fail_key(col_name, idx))
+            )
 
     stats = df.agg(*agg_exprs).collect()[0].asDict() if agg_exprs else {}
 
@@ -200,34 +246,63 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
         if col_name not in string_columns:
             select_exprs.append(F.col(col_name))
             continue
-            
+
         nn = stats.get(f"{col_name}__nn", 0)
         if nn == 0:
             select_exprs.append(F.col(col_name))
             continue
-            
-        date_fail = stats.get(f"{col_name}__date_fail", 0)
-        ts_fail = stats.get(f"{col_name}__ts_fail", 0)
+
         int_fail = stats.get(f"{col_name}__int_fail", 0)
         float_fail = stats.get(f"{col_name}__float_fail", 0)
-        
+
         col_expr = F.col(col_name)
         trimmed = F.trim(col_expr)
-        safe_trimmed = F.when(trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed).otherwise(F.lit(None))
-        
-        if date_fail == 0:
-            parsed_date = _get_parsed_date_expr(safe_trimmed)
-            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_date).alias(col_name))
-        elif ts_fail == 0:
-            parsed_ts = _get_parsed_ts_expr(safe_trimmed)
-            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(parsed_ts).alias(col_name))
+        safe_trimmed = F.when(
+            trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed
+        ).otherwise(F.lit(None))
+
+        date_parser = next(
+            (
+                parser
+                for idx, parser in enumerate(_DATE_FORMATS)
+                if stats.get(_date_fail_key(col_name, idx), nn) == 0
+            ),
+            None,
+        )
+        ts_parser = next(
+            (
+                parser
+                for idx, parser in enumerate(_TIMESTAMP_FORMATS)
+                if stats.get(_ts_fail_key(col_name, idx), nn) == 0
+            ),
+            None,
+        )
+
+        if date_parser is not None:
+            parsed_date = _get_parsed_date_expr(safe_trimmed, date_parser)
+            select_exprs.append(
+                F.when(col_expr.isNull(), None).otherwise(parsed_date).alias(col_name)
+            )
+        elif ts_parser is not None:
+            parsed_ts = _get_parsed_ts_expr(safe_trimmed, ts_parser)
+            select_exprs.append(
+                F.when(col_expr.isNull(), None).otherwise(parsed_ts).alias(col_name)
+            )
         elif int_fail == 0:
-            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(IntegerType())).alias(col_name))
+            select_exprs.append(
+                F.when(col_expr.isNull(), None)
+                .otherwise(col_expr.cast(IntegerType()))
+                .alias(col_name)
+            )
         elif float_fail == 0:
-            select_exprs.append(F.when(col_expr.isNull(), None).otherwise(col_expr.cast(DoubleType())).alias(col_name))
+            select_exprs.append(
+                F.when(col_expr.isNull(), None)
+                .otherwise(col_expr.cast(DoubleType()))
+                .alias(col_name)
+            )
         else:
             select_exprs.append(col_expr)
-            
+
     return df.select(*select_exprs)
 
 
