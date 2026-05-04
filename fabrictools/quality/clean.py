@@ -319,13 +319,15 @@ def add_silver_metadata(
     day_col: str = "ingestion_day",
     spark: Optional[SparkSession] = None,
     verbose: bool = False,
+    *,
+    resolved_source_relative_path: Optional[str] = None,
 ) -> DataFrame:
     """Add Silver-layer metadata columns (ingestion time, source path, date parts).
 
     Resolves ``source_relative_path`` with
-    :py:func:`fabrictools.io.lakehouse.resolve_lakehouse_read_candidate`. Date
-    partition columns (``year_col`` / ``month_col`` / ``day_col``) are derived from
-    the current ingestion date.
+    :py:func:`fabrictools.io.lakehouse.resolve_lakehouse_read_candidate` unless a
+    resolved path is provided. Date partition columns (``year_col`` /
+    ``month_col`` / ``day_col``) are derived from the current ingestion date.
 
     :param df: Bronze or intermediate dataframe.
     :param source_lakehouse_name: Source Lakehouse display name.
@@ -338,6 +340,8 @@ def add_silver_metadata(
     :param month_col: Partition month column name.
     :param day_col: Partition day-of-month column name.
     :param spark: Optional ``SparkSession`` for path resolution.
+    :param resolved_source_relative_path: Optional already-resolved source path. When
+        provided, path resolution is skipped.
     :type df: ~pyspark.sql.DataFrame
     :type source_lakehouse_name: str
     :type source_relative_path: str
@@ -349,6 +353,7 @@ def add_silver_metadata(
     :type month_col: str
     :type day_col: str
     :type spark: ~pyspark.sql.SparkSession | None
+    :type resolved_source_relative_path: str | None
 
     :returns: ``df`` with metadata and partition columns appended/overwritten.
     :rtype: ~pyspark.sql.DataFrame
@@ -361,11 +366,13 @@ def add_silver_metadata(
     ...     source_relative_path="dbo.RawOrders",
     ... )
     """
-    resolved_source_path = resolve_lakehouse_read_candidate(
-        lakehouse_name=source_lakehouse_name,
-        relative_path=source_relative_path,
-        spark=spark,
-    )
+    resolved_source_path = resolved_source_relative_path
+    if resolved_source_path is None:
+        resolved_source_path = resolve_lakehouse_read_candidate(
+            lakehouse_name=source_lakehouse_name,
+            relative_path=source_relative_path,
+            spark=spark,
+        )
     current_date_expr = F.current_date()
 
     metadata_df = (

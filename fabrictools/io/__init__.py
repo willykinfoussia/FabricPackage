@@ -10,15 +10,19 @@ from fabrictools.io.lakehouse import (
     lakehouse_table_exists,
     merge_lakehouse,
     read_lakehouse,
+    read_lakehouses,
     resolve_lakehouse_read_candidate,
     write_lakehouse,
+    write_lakehouses,
 )
 from fabrictools.io.warehouse import read_warehouse, write_warehouse
 
 __all__ = [
     "read_lakehouse",
+    "read_lakehouses",
     "resolve_lakehouse_read_candidate",
     "write_lakehouse",
+    "write_lakehouses",
     "merge_lakehouse",
     "lakehouse_table_exists",
     "delete_all_lakehouse_tables",

@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from time import perf_counter
 from typing import Any, Optional
 
 from pyspark.sql import DataFrame, SparkSession
 
+from fabrictools.core import get_lakehouse_abfs_path
 from fabrictools.core.logging import log
 from fabrictools.core.spark import configure_parquet_datetime_rebase, get_spark
 from fabrictools.io import (
     list_lakehouse_tables_for_pipeline,
     merge_lakehouse,
-    read_lakehouse,
     write_lakehouse,
 )
+from fabrictools.io.lakehouse import _read_lakehouse_from_base
 from fabrictools.pipelines.config import (
     TableJobConfig,
     build_table_jobs_from_config,
@@ -69,8 +72,12 @@ def clean_and_write_data(
     ... )
     """
     _spark = configure_parquet_datetime_rebase(spark or get_spark())
-    source_df = read_lakehouse(
-        source_lakehouse_name, source_relative_path, spark=_spark
+    source_base_path = get_lakehouse_abfs_path(source_lakehouse_name)
+    source_df, resolved_source_relative_path, _ = _read_lakehouse_from_base(
+        lakehouse_name=source_lakehouse_name,
+        relative_path=source_relative_path,
+        base_path=source_base_path,
+        spark=_spark,
     )
     cleaned_df = clean_data(source_df, verbose=verbose)
     silver_df = add_silver_metadata(
@@ -79,6 +86,7 @@ def clean_and_write_data(
         source_relative_path=source_relative_path,
         spark=_spark,
         verbose=verbose,
+        resolved_source_relative_path=resolved_source_relative_path,
     )
     write_lakehouse(
         silver_df,
@@ -91,6 +99,11 @@ def clean_and_write_data(
         spark=_spark,
     )
     return silver_df
+
+
+def _validate_max_workers(max_workers: int) -> None:
+    if not isinstance(max_workers, int) or max_workers < 1:
+        raise ValueError("max_workers must be an integer greater than or equal to 1.")
 
 
 def _build_jobs(
@@ -135,6 +148,119 @@ def _build_jobs(
     )
 
 
+def _process_clean_table_job(
+    *,
+    table_job: TableJobConfig,
+    index: int,
+    total_tables: int,
+    source_lakehouse_name: str,
+    source_base_path: str,
+    target_lakehouse_name: str,
+    auto_partition: bool,
+    auto_partition_threshold_bytes: int,
+    auto_partition_when_partition_by_provided: bool,
+    persist_intermediate: bool,
+    spark: SparkSession,
+    verbose: bool,
+) -> dict[str, Any]:
+    src = str(table_job["source_relative_path"])
+    tgt = str(table_job["target_relative_path"])
+    table_mode = str(table_job["mode"])
+    table_partition_by = table_job.get("partition_by")
+    merge_condition = table_job.get("merge_condition")
+    started_at = perf_counter()
+    silver_df: Optional[DataFrame] = None
+    is_persisted = False
+
+    if verbose:
+        log(
+            f"[{index}/{total_tables}] Processing '{src}' -> '{tgt}' [mode={table_mode}]..."
+        )
+
+    try:
+        source_df, resolved_source_relative_path, _ = _read_lakehouse_from_base(
+            lakehouse_name=source_lakehouse_name,
+            relative_path=src,
+            base_path=source_base_path,
+            spark=spark,
+        )
+        cleaned_df = clean_data(source_df, verbose=verbose)
+        silver_df = add_silver_metadata(
+            cleaned_df,
+            source_lakehouse_name=source_lakehouse_name,
+            source_relative_path=src,
+            spark=spark,
+            verbose=verbose,
+            resolved_source_relative_path=resolved_source_relative_path,
+        )
+        if persist_intermediate:
+            silver_df = silver_df.persist()
+            is_persisted = True
+
+        if table_mode in {"overwrite", "append"}:
+            effective_auto_partition = auto_partition and (
+                auto_partition_when_partition_by_provided or not table_partition_by
+            )
+            write_lakehouse(
+                silver_df,
+                lakehouse_name=target_lakehouse_name,
+                relative_path=tgt,
+                mode=table_mode,
+                partition_by=table_partition_by,
+                auto_partition=effective_auto_partition,
+                auto_partition_threshold_bytes=auto_partition_threshold_bytes,
+                spark=spark,
+            )
+        else:
+            merge_lakehouse(
+                source_df=silver_df,
+                lakehouse_name=target_lakehouse_name,
+                relative_path=tgt,
+                merge_condition=str(merge_condition),
+                spark=spark,
+            )
+
+        duration_seconds = round(perf_counter() - started_at, 3)
+        if verbose:
+            log(
+                f"[{index}/{total_tables}] Completed '{src}' in "
+                f"{duration_seconds:.3f}s."
+            )
+        return {
+            "ok": True,
+            "index": index,
+            "entry": {
+                "source_relative_path": src,
+                "target_relative_path": tgt,
+                "mode": table_mode,
+                "duration_seconds": duration_seconds,
+            },
+        }
+    except Exception as exc:
+        duration_seconds = round(perf_counter() - started_at, 3)
+        if verbose:
+            log(
+                f"[{index}/{total_tables}] Failed for '{src}' "
+                f"after {duration_seconds:.3f}s: {exc}",
+                level="warning",
+            )
+        return {
+            "ok": False,
+            "index": index,
+            "exception": exc,
+            "entry": {
+                "source_relative_path": src,
+                "target_relative_path": tgt,
+                "mode": table_mode,
+                "error": str(exc),
+                "duration_seconds": duration_seconds,
+            },
+        }
+    finally:
+        if is_persisted and silver_df is not None:
+            silver_df.unpersist()
+
+
 def clean_and_write_all_tables(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
@@ -148,6 +274,10 @@ def clean_and_write_all_tables(
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
     verbose: bool = False,
+    *,
+    max_workers: int = 1,
+    auto_partition_when_partition_by_provided: bool = True,
+    persist_intermediate: bool = False,
 ) -> dict[str, Any]:
     """Bulk clean/write (or merge) using discovery or an explicit ``tables_config``.
 
@@ -167,6 +297,12 @@ def clean_and_write_all_tables(
     :param include_schemas: Discovery filter: schema allow-list.
     :param exclude_tables: Discovery filter: table deny-list.
     :param continue_on_error: If ``False``, stop on first failure.
+    :param max_workers: Maximum number of tables processed concurrently. ``1`` keeps
+        the historical sequential behavior.
+    :param auto_partition_when_partition_by_provided: If ``False``, skip automatic
+        partition detection when a table already has explicit ``partition_by``.
+    :param persist_intermediate: If ``True``, persist each cleaned Silver dataframe
+        for the duration of its write/merge, then unpersist it.
     :param spark: Optional ``SparkSession``.
     :type source_lakehouse_name: str
     :type target_lakehouse_name: str
@@ -176,6 +312,9 @@ def clean_and_write_all_tables(
     :type include_schemas: list[str] | None
     :type exclude_tables: list[str] | None
     :type continue_on_error: bool
+    :type max_workers: int
+    :type auto_partition_when_partition_by_provided: bool
+    :type persist_intermediate: bool
     :type spark: ~pyspark.sql.SparkSession | None
 
     :returns: Summary dict with ``total_tables``, ``successful_tables``, ``failed_tables``,
@@ -194,6 +333,7 @@ def clean_and_write_all_tables(
     >>> summary["successful_tables"]  # doctest: +SKIP
     8
     """
+    _validate_max_workers(max_workers)
     _spark = configure_parquet_datetime_rebase(spark or get_spark())
     table_jobs = _build_jobs(
         source_lakehouse_name=source_lakehouse_name,
@@ -218,8 +358,8 @@ def clean_and_write_all_tables(
             "failures": [],
         }
 
-    processed_tables: list[dict[str, str]] = []
-    failures: list[dict[str, str]] = []
+    processed_tables: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
     total_tables = len(table_jobs)
 
     if verbose:
@@ -228,72 +368,63 @@ def clean_and_write_all_tables(
             f"from '{source_lakehouse_name}' to '{target_lakehouse_name}'."
         )
 
-    for index, table_job in enumerate(table_jobs, start=1):
-        src = str(table_job["source_relative_path"])
-        tgt = str(table_job["target_relative_path"])
-        table_mode = str(table_job["mode"])
-        table_partition_by = table_job.get("partition_by")
-        merge_condition = table_job.get("merge_condition")
+    source_base_path = get_lakehouse_abfs_path(source_lakehouse_name)
 
-        if verbose:
-            log(
-                f"[{index}/{total_tables}] Processing '{src}' -> '{tgt}' [mode={table_mode}]..."
-            )
-        try:
-            if table_mode in {"overwrite", "append"}:
-                clean_and_write_data(
-                    source_lakehouse_name=source_lakehouse_name,
-                    source_relative_path=src,
-                    target_lakehouse_name=target_lakehouse_name,
-                    target_relative_path=tgt,
-                    mode=table_mode,
-                    partition_by=table_partition_by,
-                    auto_partition=auto_partition,
-                    auto_partition_threshold_bytes=auto_partition_threshold_bytes,
-                    spark=_spark,
-                    verbose=verbose,
-                )
-            else:
-                source_df = read_lakehouse(source_lakehouse_name, src, spark=_spark)
-                cleaned_df = clean_data(source_df, verbose=verbose)
-                silver_df = add_silver_metadata(
-                    cleaned_df,
-                    source_lakehouse_name=source_lakehouse_name,
-                    source_relative_path=src,
-                    spark=_spark,
-                    verbose=verbose,
-                )
-                merge_lakehouse(
-                    source_df=silver_df,
-                    lakehouse_name=target_lakehouse_name,
-                    relative_path=tgt,
-                    merge_condition=str(merge_condition),
-                    spark=_spark,
-                )
+    def process(index: int, table_job: TableJobConfig) -> dict[str, Any]:
+        auto_partition_with_explicit_partitions = (
+            auto_partition_when_partition_by_provided
+        )
+        return _process_clean_table_job(
+            table_job=table_job,
+            index=index,
+            total_tables=total_tables,
+            source_lakehouse_name=source_lakehouse_name,
+            source_base_path=source_base_path,
+            target_lakehouse_name=target_lakehouse_name,
+            auto_partition=auto_partition,
+            auto_partition_threshold_bytes=auto_partition_threshold_bytes,
+            auto_partition_when_partition_by_provided=(
+                auto_partition_with_explicit_partitions
+            ),
+            persist_intermediate=persist_intermediate,
+            spark=_spark,
+            verbose=verbose,
+        )
 
-            processed_tables.append(
-                {
-                    "source_relative_path": src,
-                    "target_relative_path": tgt,
-                    "mode": table_mode,
-                }
-            )
-        except Exception as exc:
-            failures.append(
-                {
-                    "source_relative_path": src,
-                    "target_relative_path": tgt,
-                    "mode": table_mode,
-                    "error": str(exc),
-                }
-            )
-            if verbose:
-                log(
-                    f"[{index}/{total_tables}] Failed for '{src}': {exc}",
-                    level="warning",
-                )
-            if not continue_on_error:
-                raise
+    results_by_index: dict[int, dict[str, Any]] = {}
+    if max_workers == 1:
+        for index, table_job in enumerate(table_jobs, start=1):
+            result = process(index, table_job)
+            results_by_index[index] = result
+            if not result["ok"] and not continue_on_error:
+                exc = result.get("exception")
+                if isinstance(exc, BaseException):
+                    raise exc
+                raise RuntimeError("Bulk clean/write failed without exception details.")
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(process, index, table_job): index
+                for index, table_job in enumerate(table_jobs, start=1)
+            }
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                result = future.result()
+                results_by_index[index] = result
+                if not result["ok"] and not continue_on_error:
+                    exc = result.get("exception")
+                    if isinstance(exc, BaseException):
+                        raise exc
+                    raise RuntimeError("Bulk clean/write failed without exception details.")
+
+    for index in range(1, total_tables + 1):
+        result = results_by_index.get(index)
+        if result is None:
+            continue
+        if result["ok"]:
+            processed_tables.append(result["entry"])
+        else:
+            failures.append(result["entry"])
 
     return {
         "total_tables": total_tables,

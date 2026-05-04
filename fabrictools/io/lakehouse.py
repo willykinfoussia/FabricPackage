@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 from typing import Any, List, Optional
 
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
@@ -23,20 +25,26 @@ def read_lakehouse(
     lakehouse_name: str,
     relative_path: str,
     spark: Optional[SparkSession] = None,
+    *,
+    format: str = "auto",
 ) -> DataFrame:
     """Read a dataset from a Fabric Lakehouse.
 
-    Tries formats in order: **Delta → Parquet → CSV**. The first format that
-    succeeds is used; the detected format is logged with the resulting shape.
+    By default, tries formats in order: **Delta → Parquet → CSV**. The first
+    format that succeeds is used; the detected format is logged with the
+    resulting shape. Pass ``format="delta"``, ``"parquet"``, or ``"csv"`` to
+    skip auto-detection and read that format directly.
 
     :param lakehouse_name: Display name of the Lakehouse (e.g. ``"BronzeLakehouse"``).
     :param relative_path: Path inside the Lakehouse root, relative to the ABFS base
         (e.g. ``"sales/2024"``, ``"Tables/customers"``, or SQL-style ``"dbo.MyTable"`` /
         ``"dbo.PdC Extraction"`` with spaces in the table name).
     :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :param format: ``"auto"`` (default), ``"delta"``, ``"parquet"``, or ``"csv"``.
     :type lakehouse_name: str
     :type relative_path: str
     :type spark: ~pyspark.sql.SparkSession | None
+    :type format: str
 
     :returns: Loaded dataframe.
     :rtype: ~pyspark.sql.DataFrame
@@ -49,27 +57,47 @@ def read_lakehouse(
     """
     _spark = spark or get_spark()
     base = get_lakehouse_abfs_path(lakehouse_name)
+    df, _, _ = _read_lakehouse_from_base(
+        lakehouse_name=lakehouse_name,
+        relative_path=relative_path,
+        base_path=base,
+        spark=_spark,
+        format=format,
+    )
+    return df
+
+
+def _read_lakehouse_from_base(
+    *,
+    lakehouse_name: str,
+    relative_path: str,
+    base_path: str,
+    spark: SparkSession,
+    format: str = "auto",
+) -> tuple[DataFrame, str, str]:
+    """Read a Lakehouse path using a pre-resolved Lakehouse base path."""
     candidate_relative_paths = build_lakehouse_read_path_candidates(relative_path)
 
     failures: list[str] = []
     for candidate_relative_path in candidate_relative_paths:
-        full_path = f"{base}/{candidate_relative_path}"
+        full_path = f"{base_path}/{candidate_relative_path}"
         try:
-            df = _try_read_formats(_spark, full_path)
+            df = _try_read_formats(spark, full_path, format=format)
             if candidate_relative_path != relative_path:
                 log(
                     f"  Resolved relative_path '{relative_path}' -> '{candidate_relative_path}'"
                 )
             log(f"  {len(df.columns)} columns")
-            return df
+            return df, candidate_relative_path, full_path
         except RuntimeError as exc:
             failures.append(f"{full_path} ({exc})")
 
     attempted_paths = ", ".join(
-        f"'{base}/{candidate}'" for candidate in candidate_relative_paths
+        f"'{base_path}/{candidate}'" for candidate in candidate_relative_paths
     )
     raise RuntimeError(
-        f"Could not read from any candidate path for relative_path='{relative_path}'. "
+        f"Could not read from Lakehouse '{lakehouse_name}' for "
+        f"relative_path='{relative_path}'. "
         f"Tried: {attempted_paths}. Details: {' | '.join(failures)}"
     )
 
@@ -133,39 +161,80 @@ def resolve_lakehouse_read_candidate(
     )
 
 
-def _try_read_formats(spark: SparkSession, full_path: str) -> DataFrame:
-    """Attempt Delta → Parquet → CSV, return the first successful DataFrame."""
+def _normalize_read_format(format: str) -> str:
+    """Validate and normalize Lakehouse read format names."""
+    read_format = str(format).strip().lower()
+    supported_formats = {"auto", "delta", "parquet", "csv"}
+    if read_format not in supported_formats:
+        raise ValueError(
+            f"Unsupported Lakehouse read format '{format}'. "
+            "Supported formats: auto, delta, parquet, csv."
+        )
+    return read_format
+
+
+def _read_delta(spark: SparkSession, full_path: str) -> DataFrame:
+    df = spark.read.format("delta").load(full_path)
+    log("  Format detected: Delta")
+    return df
+
+
+def _read_parquet(spark: SparkSession, full_path: str) -> DataFrame:
+    df = (
+        spark.read.option("datetimeRebaseMode", "CORRECTED")
+        .format("parquet")
+        .load(full_path)
+    )
+    log("  Format detected: Parquet")
+    return df
+
+
+def _read_csv(spark: SparkSession, full_path: str) -> DataFrame:
+    df = (
+        spark.read.option("header", "true")
+        .option("inferSchema", "true")
+        .option("multiLine", "true")
+        .option("escape", '"')
+        .csv(full_path)
+    )
+    log("  Format detected: CSV")
+    return df
+
+
+def _try_read_formats(
+    spark: SparkSession, full_path: str, *, format: str = "auto"
+) -> DataFrame:
+    """Read one path using either an explicit format or Delta → Parquet → CSV."""
+    read_format = _normalize_read_format(format)
+    readers = {
+        "delta": _read_delta,
+        "parquet": _read_parquet,
+        "csv": _read_csv,
+    }
+
+    if read_format != "auto":
+        try:
+            return readers[read_format](spark, full_path)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not read '{full_path}' as {read_format}: {exc}"
+            ) from exc
+
     # Delta (preferred in Fabric)
     try:
-        df = spark.read.format("delta").load(full_path)
-        log("  Format detected: Delta")
-        return df
+        return _read_delta(spark, full_path)
     except Exception:
         pass
 
     # Parquet
     try:
-        df = (
-            spark.read.option("datetimeRebaseMode", "CORRECTED")
-            .format("parquet")
-            .load(full_path)
-        )
-        log("  Format detected: Parquet")
-        return df
+        return _read_parquet(spark, full_path)
     except Exception:
         pass
 
     # CSV — last resort
     try:
-        df = (
-            spark.read.option("header", "true")
-            .option("inferSchema", "true")
-            .option("multiLine", "true")
-            .option("escape", '"')
-            .csv(full_path)
-        )
-        log("  Format detected: CSV")
-        return df
+        return _read_csv(spark, full_path)
     except Exception as exc:
         raise RuntimeError(
             f"Could not read '{full_path}' as Delta, Parquet, or CSV: {exc}"
@@ -340,10 +409,42 @@ def write_lakehouse(
     ...     df, "SilverLakehouse", "sales_clean", mode="overwrite", partition_by=["year"]
     ... )
     """
-    _ = spark or get_spark()  # validates spark availability early
+    _spark = spark or get_spark()  # validates spark availability early
     base = get_lakehouse_abfs_path(lakehouse_name)
+    _write_lakehouse_to_base(
+        df=df,
+        lakehouse_name=lakehouse_name,
+        relative_path=relative_path,
+        base_path=base,
+        mode=mode,
+        partition_by=partition_by,
+        format=format,
+        spark=_spark,
+        normalize_column_names=normalize_column_names,
+        enable_column_mapping=enable_column_mapping,
+        auto_partition=auto_partition,
+        auto_partition_threshold_bytes=auto_partition_threshold_bytes,
+    )
+
+
+def _write_lakehouse_to_base(
+    *,
+    df: DataFrame,
+    lakehouse_name: str,
+    relative_path: str,
+    base_path: str,
+    mode: str = "overwrite",
+    partition_by: Optional[List[str]] = None,
+    format: str = "delta",
+    spark: SparkSession,
+    normalize_column_names: bool = True,
+    enable_column_mapping: bool = False,
+    auto_partition: bool = True,
+    auto_partition_threshold_bytes: int = 1_073_741_824,
+) -> tuple[str, str]:
+    """Write a Lakehouse path using a pre-resolved Lakehouse base path."""
     resolved_relative_path = build_lakehouse_write_path(relative_path)
-    full_path = f"{base}/{resolved_relative_path}"
+    full_path = f"{base_path}/{resolved_relative_path}"
     if resolved_relative_path != relative_path:
         log(
             f"Auto-corrected write relative_path '{relative_path}' "
@@ -393,8 +494,8 @@ def write_lakehouse(
         try:
             from delta.tables import DeltaTable  # type: ignore[import-untyped]  # noqa: PLC0415
 
-            if DeltaTable.isDeltaTable(_, full_path):
-                _enable_delta_column_mapping_on_path(_, full_path)
+            if DeltaTable.isDeltaTable(spark, full_path):
+                _enable_delta_column_mapping_on_path(spark, full_path)
         except Exception:
             # Non-blocking: the write options below still apply for new tables.
             pass
@@ -403,7 +504,7 @@ def write_lakehouse(
             .option("delta.minReaderVersion", "2")
             .option("delta.minWriterVersion", "5")
         )
-        
+
     if effective_partition_by:
         writer = writer.partitionBy(*effective_partition_by)
         if auto_detected_partitions:
@@ -411,6 +512,358 @@ def write_lakehouse(
         log("  Partition columns: " + ", ".join(effective_partition_by))
     writer.save(full_path)
     log(f"  Write complete → {full_path}")
+    return resolved_relative_path, full_path
+
+
+# ── Parallel bulk I/O ─────────────────────────────────────────────────────────
+
+
+def _validate_max_workers(max_workers: int) -> None:
+    if not isinstance(max_workers, int) or max_workers < 1:
+        raise ValueError("max_workers must be an integer greater than or equal to 1.")
+
+
+def _validate_request_list(requests: list[dict[str, Any]], *, operation: str) -> None:
+    if not isinstance(requests, list):
+        raise TypeError(f"{operation} requests must be provided as a list of dicts.")
+    for index, request in enumerate(requests, start=1):
+        if not isinstance(request, dict):
+            raise TypeError(
+                f"{operation} requests[{index}] must be a dict, "
+                f"got {type(request).__name__}."
+            )
+
+
+def _required_text_request_value(
+    request: dict[str, Any], key: str, *, index: int, operation: str
+) -> str:
+    value = str(request.get(key, "")).strip()
+    if not value:
+        raise ValueError(f"{operation} requests[{index}] is missing required key '{key}'.")
+    return value
+
+
+def _get_cached_lakehouse_base(
+    lakehouse_name: str, cache: dict[str, str], cache_lock: Lock
+) -> str:
+    with cache_lock:
+        cached_base = cache.get(lakehouse_name)
+        if cached_base is None:
+            cached_base = get_lakehouse_abfs_path(lakehouse_name)
+            cache[lakehouse_name] = cached_base
+        return cached_base
+
+
+def read_lakehouses(
+    requests: list[dict[str, Any]],
+    *,
+    max_workers: int = 4,
+    continue_on_error: bool = False,
+    spark: Optional[SparkSession] = None,
+) -> dict[str, Any]:
+    """Read multiple Lakehouse datasets in parallel.
+
+    Each request must contain ``lakehouse_name`` and ``relative_path``. Optional
+    keys are ``format`` (``"auto"``, ``"delta"``, ``"parquet"``, ``"csv"``)
+    and ``name`` to identify the result entry.
+
+    :param requests: Per-read parameter dictionaries.
+    :param max_workers: Maximum number of concurrent read tasks.
+    :param continue_on_error: If ``False`` (default), raise on the first failed read.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type requests: list[dict]
+    :type max_workers: int
+    :type continue_on_error: bool
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Summary dict with ``DataFrame`` objects in successful ``tables`` entries.
+    :rtype: dict
+
+    .. rubric:: Example
+
+    >>> result = read_lakehouses(  # doctest: +SKIP
+    ...     [
+    ...         {"name": "orders", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo.orders"},
+    ...         {"name": "customers", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo.customers", "format": "delta"},
+    ...     ],
+    ...     max_workers=2,
+    ... )
+    >>> orders_df = result["tables"][0]["df"]  # doctest: +SKIP
+    """
+    _validate_max_workers(max_workers)
+    _validate_request_list(requests, operation="read_lakehouses")
+    _spark = spark or get_spark()
+    total_tables = len(requests)
+    if not requests:
+        return {
+            "total_tables": 0,
+            "successful_tables": 0,
+            "failed_tables": 0,
+            "tables": [],
+            "failures": [],
+        }
+
+    normalized_requests: list[dict[str, Any]] = []
+    for index, request in enumerate(requests, start=1):
+        normalized_requests.append(
+            {
+                "index": index,
+                "name": request.get("name"),
+                "lakehouse_name": _required_text_request_value(
+                    request, "lakehouse_name", index=index, operation="read_lakehouses"
+                ),
+                "relative_path": _required_text_request_value(
+                    request, "relative_path", index=index, operation="read_lakehouses"
+                ),
+                "format": str(request.get("format", "auto")).strip() or "auto",
+            }
+        )
+
+    base_cache: dict[str, str] = {}
+    cache_lock = Lock()
+
+    def read_one(request: dict[str, Any]) -> dict[str, Any]:
+        index = int(request["index"])
+        lakehouse_name = str(request["lakehouse_name"])
+        relative_path = str(request["relative_path"])
+        read_format = str(request["format"])
+        log(
+            f"[{index}/{total_tables}] Reading Lakehouse '{lakehouse_name}' "
+            f"path '{relative_path}' [format={read_format}]..."
+        )
+        base_path = _get_cached_lakehouse_base(lakehouse_name, base_cache, cache_lock)
+        df, resolved_relative_path, full_path = _read_lakehouse_from_base(
+            lakehouse_name=lakehouse_name,
+            relative_path=relative_path,
+            base_path=base_path,
+            spark=_spark,
+            format=read_format,
+        )
+        entry = {
+            "lakehouse_name": lakehouse_name,
+            "relative_path": relative_path,
+            "resolved_relative_path": resolved_relative_path,
+            "path": full_path,
+            "format": read_format,
+            "df": df,
+        }
+        if request.get("name") is not None:
+            entry["name"] = request["name"]
+        return entry
+
+    processed_tables_by_index: dict[int, dict[str, Any]] = {}
+    failures_by_index: dict[int, dict[str, str]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_request = {
+            executor.submit(read_one, request): request for request in normalized_requests
+        }
+        for future in as_completed(future_to_request):
+            request = future_to_request[future]
+            index = int(request["index"])
+            try:
+                processed_tables_by_index[index] = future.result()
+            except Exception as exc:
+                failure = {
+                    "lakehouse_name": str(request["lakehouse_name"]),
+                    "relative_path": str(request["relative_path"]),
+                    "format": str(request["format"]),
+                    "error": str(exc),
+                }
+                if request.get("name") is not None:
+                    failure["name"] = str(request["name"])
+                failures_by_index[index] = failure
+                log(
+                    f"[{index}/{total_tables}] Failed to read "
+                    f"'{request['relative_path']}': {exc}",
+                    level="warning",
+                )
+                if not continue_on_error:
+                    raise
+
+    processed_tables = [
+        processed_tables_by_index[index]
+        for index in range(1, total_tables + 1)
+        if index in processed_tables_by_index
+    ]
+    failures = [
+        failures_by_index[index]
+        for index in range(1, total_tables + 1)
+        if index in failures_by_index
+    ]
+    return {
+        "total_tables": total_tables,
+        "successful_tables": len(processed_tables),
+        "failed_tables": len(failures),
+        "tables": processed_tables,
+        "failures": failures,
+    }
+
+
+def write_lakehouses(
+    requests: list[dict[str, Any]],
+    *,
+    max_workers: int = 4,
+    continue_on_error: bool = False,
+    spark: Optional[SparkSession] = None,
+) -> dict[str, Any]:
+    """Write multiple ``DataFrame`` objects to Lakehouses in parallel.
+
+    Each request must contain ``df``, ``lakehouse_name`` and ``relative_path``.
+    Optional keys mirror :py:func:`write_lakehouse`: ``mode``, ``partition_by``,
+    ``format``, ``normalize_column_names``, ``enable_column_mapping``,
+    ``auto_partition`` and ``auto_partition_threshold_bytes``.
+
+    :param requests: Per-write parameter dictionaries.
+    :param max_workers: Maximum number of concurrent write tasks.
+    :param continue_on_error: If ``False`` (default), raise on the first failed write.
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type requests: list[dict]
+    :type max_workers: int
+    :type continue_on_error: bool
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    :returns: Summary dict with counts and per-target success/failure entries.
+    :rtype: dict
+
+    .. rubric:: Example
+
+    >>> summary = write_lakehouses(  # doctest: +SKIP
+    ...     [
+    ...         {"df": orders_df, "lakehouse_name": "SilverLakehouse", "relative_path": "dbo.orders"},
+    ...         {"df": customers_df, "lakehouse_name": "SilverLakehouse", "relative_path": "dbo.customers", "partition_by": ["country"]},
+    ...     ],
+    ...     max_workers=2,
+    ... )
+    """
+    _validate_max_workers(max_workers)
+    _validate_request_list(requests, operation="write_lakehouses")
+    _spark = spark or get_spark()
+    total_tables = len(requests)
+    if not requests:
+        return {
+            "total_tables": 0,
+            "successful_tables": 0,
+            "failed_tables": 0,
+            "tables": [],
+            "failures": [],
+        }
+
+    normalized_requests: list[dict[str, Any]] = []
+    for index, request in enumerate(requests, start=1):
+        if "df" not in request:
+            raise ValueError(
+                f"write_lakehouses requests[{index}] is missing required key 'df'."
+            )
+        normalized_requests.append(
+            {
+                "index": index,
+                "name": request.get("name"),
+                "df": request["df"],
+                "lakehouse_name": _required_text_request_value(
+                    request, "lakehouse_name", index=index, operation="write_lakehouses"
+                ),
+                "relative_path": _required_text_request_value(
+                    request, "relative_path", index=index, operation="write_lakehouses"
+                ),
+                "mode": str(request.get("mode", "overwrite")).strip() or "overwrite",
+                "partition_by": request.get("partition_by"),
+                "format": str(request.get("format", "delta")).strip() or "delta",
+                "normalize_column_names": request.get("normalize_column_names", True),
+                "enable_column_mapping": request.get("enable_column_mapping", False),
+                "auto_partition": request.get("auto_partition", True),
+                "auto_partition_threshold_bytes": request.get(
+                    "auto_partition_threshold_bytes", 1_073_741_824
+                ),
+            }
+        )
+
+    base_cache: dict[str, str] = {}
+    cache_lock = Lock()
+
+    def write_one(request: dict[str, Any]) -> dict[str, Any]:
+        index = int(request["index"])
+        lakehouse_name = str(request["lakehouse_name"])
+        relative_path = str(request["relative_path"])
+        write_format = str(request["format"])
+        mode = str(request["mode"])
+        log(
+            f"[{index}/{total_tables}] Writing Lakehouse '{lakehouse_name}' "
+            f"path '{relative_path}' [format={write_format}, mode={mode}]..."
+        )
+        base_path = _get_cached_lakehouse_base(lakehouse_name, base_cache, cache_lock)
+        resolved_relative_path, full_path = _write_lakehouse_to_base(
+            df=request["df"],
+            lakehouse_name=lakehouse_name,
+            relative_path=relative_path,
+            base_path=base_path,
+            mode=mode,
+            partition_by=request.get("partition_by"),
+            format=write_format,
+            spark=_spark,
+            normalize_column_names=bool(request.get("normalize_column_names")),
+            enable_column_mapping=bool(request.get("enable_column_mapping")),
+            auto_partition=bool(request.get("auto_partition")),
+            auto_partition_threshold_bytes=int(request["auto_partition_threshold_bytes"]),
+        )
+        entry = {
+            "lakehouse_name": lakehouse_name,
+            "relative_path": relative_path,
+            "resolved_relative_path": resolved_relative_path,
+            "path": full_path,
+            "format": write_format,
+            "mode": mode,
+        }
+        if request.get("name") is not None:
+            entry["name"] = request["name"]
+        return entry
+
+    processed_tables_by_index: dict[int, dict[str, Any]] = {}
+    failures_by_index: dict[int, dict[str, str]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_request = {
+            executor.submit(write_one, request): request for request in normalized_requests
+        }
+        for future in as_completed(future_to_request):
+            request = future_to_request[future]
+            index = int(request["index"])
+            try:
+                processed_tables_by_index[index] = future.result()
+            except Exception as exc:
+                failure = {
+                    "lakehouse_name": str(request["lakehouse_name"]),
+                    "relative_path": str(request["relative_path"]),
+                    "format": str(request["format"]),
+                    "mode": str(request["mode"]),
+                    "error": str(exc),
+                }
+                if request.get("name") is not None:
+                    failure["name"] = str(request["name"])
+                failures_by_index[index] = failure
+                log(
+                    f"[{index}/{total_tables}] Failed to write "
+                    f"'{request['relative_path']}': {exc}",
+                    level="warning",
+                )
+                if not continue_on_error:
+                    raise
+
+    processed_tables = [
+        processed_tables_by_index[index]
+        for index in range(1, total_tables + 1)
+        if index in processed_tables_by_index
+    ]
+    failures = [
+        failures_by_index[index]
+        for index in range(1, total_tables + 1)
+        if index in failures_by_index
+    ]
+    return {
+        "total_tables": total_tables,
+        "successful_tables": len(processed_tables),
+        "failed_tables": len(failures),
+        "tables": processed_tables,
+        "failures": failures,
+    }
 
 
 # ── Merge (upsert) ────────────────────────────────────────────────────────────
@@ -638,8 +1091,10 @@ def delete_all_lakehouse_tables(
 
 __all__ = [
     "read_lakehouse",
+    "read_lakehouses",
     "resolve_lakehouse_read_candidate",
     "write_lakehouse",
+    "write_lakehouses",
     "merge_lakehouse",
     "lakehouse_table_exists",
     "delete_all_lakehouse_tables",

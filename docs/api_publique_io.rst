@@ -7,7 +7,11 @@ Fonctions réexportées par ``fabrictools`` pour lire, écrire et fusionner dans
 
 .. autofunction:: read_lakehouse
 
+.. autofunction:: read_lakehouses
+
 .. autofunction:: write_lakehouse
+
+.. autofunction:: write_lakehouses
 
 .. autofunction:: merge_lakehouse
 

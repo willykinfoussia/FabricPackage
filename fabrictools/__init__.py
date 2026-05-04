@@ -25,7 +25,9 @@ from fabrictools.io.lakehouse import (
     lakehouse_table_exists,
     merge_lakehouse,
     read_lakehouse,
+    read_lakehouses,
     write_lakehouse,
+    write_lakehouses,
 )
 from fabrictools.io.warehouse import read_warehouse, write_warehouse
 from fabrictools.prepare import (
@@ -73,7 +75,9 @@ _EXPORT_REGISTRY = {
     "ParamResolver": ParamResolver,
     "lakehouse_table_exists": lakehouse_table_exists,
     "read_lakehouse": read_lakehouse,
+    "read_lakehouses": read_lakehouses,
     "write_lakehouse": write_lakehouse,
+    "write_lakehouses": write_lakehouses,
     "merge_lakehouse": merge_lakehouse,
     "delete_all_lakehouse_tables": delete_all_lakehouse_tables,
     "clean_data": clean_data,
