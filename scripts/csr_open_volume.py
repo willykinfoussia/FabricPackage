@@ -32,6 +32,10 @@ SUPPORT_CSR_STATUSES = (
     "Waiting for Support Treatment",
 )
 
+COMMERCIAL_CSR_STATUSES = (
+    "Request waiting for Commercial Treatment",
+)
+
 
 @dataclass(frozen=True)
 class CsrOpenVolumePaths:
@@ -62,7 +66,8 @@ def build_csr_open_volume(csr_df: DataFrame) -> DataFrame:
     with_business_state = counts_by_status.withColumn(
         "Etat CSR",
         F.when(F.col(status_col).isin(*SUPPORT_CSR_STATUSES), F.lit("Open Support"))
-        .otherwise(F.lit("Open Commercial")),
+        .when(F.col(status_col).isin(*COMMERCIAL_CSR_STATUSES), F.lit("Open Commercial"))
+        .otherwise(F.lit(None)),
     )
 
     return with_business_state.groupBy("Etat CSR").agg(

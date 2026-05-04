@@ -450,10 +450,6 @@ def _write_lakehouse_to_base(
             f"Auto-corrected write relative_path '{relative_path}' "
             f"-> '{resolved_relative_path}'"
         )
-    log(
-        f"Writing to Lakehouse '{lakehouse_name}' → {full_path} "
-        f"[format={format}, mode={mode}]"
-    )
 
     # Lazy import: fabrictools.transform.columns → quality.clean → fabrictools.io
     # would otherwise create an import cycle while io.__init__ loads lakehouse.
@@ -511,7 +507,6 @@ def _write_lakehouse_to_base(
             log("  Auto-detected partitions: " + ", ".join(auto_detected_partitions))
         log("  Partition columns: " + ", ".join(effective_partition_by))
     writer.save(full_path)
-    log(f"  Write complete → {full_path}")
     return resolved_relative_path, full_path
 
 
@@ -627,6 +622,9 @@ def read_lakehouses(
             }
         }
     effective_max_workers = _resolve_max_workers(max_workers, total_tables)
+    log(
+        f"Reading {total_tables} Lakehouse tables with up to {effective_max_workers} concurrent tasks..."
+    )
 
     normalized_requests: list[dict[str, Any]] = []
     result_keys: set[str] = set()
@@ -797,6 +795,9 @@ def write_lakehouses(
             "failures": [],
         }
     effective_max_workers = _resolve_max_workers(max_workers, total_tables)
+    log(
+        f"Writing {total_tables} Lakehouse tables with up to {effective_max_workers} concurrent tasks..."
+    )
 
     normalized_requests: list[dict[str, Any]] = []
     for index, request in enumerate(requests, start=1):
