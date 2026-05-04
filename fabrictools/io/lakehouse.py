@@ -518,9 +518,12 @@ def _write_lakehouse_to_base(
 # ── Parallel bulk I/O ─────────────────────────────────────────────────────────
 
 
-def _validate_max_workers(max_workers: int) -> None:
+def _resolve_max_workers(max_workers: Optional[int], request_count: int) -> int:
+    if max_workers is None:
+        return max(1, min(request_count, 4))
     if not isinstance(max_workers, int) or max_workers < 1:
         raise ValueError("max_workers must be an integer greater than or equal to 1.")
+    return max_workers
 
 
 def _validate_request_list(requests: list[dict[str, Any]], *, operation: str) -> None:
@@ -539,7 +542,9 @@ def _required_text_request_value(
 ) -> str:
     value = str(request.get(key, "")).strip()
     if not value:
-        raise ValueError(f"{operation} requests[{index}] is missing required key '{key}'.")
+        raise ValueError(
+            f"{operation} requests[{index}] is missing required key '{key}'."
+        )
     return value
 
 
@@ -557,8 +562,8 @@ def _get_cached_lakehouse_base(
 def read_lakehouses(
     requests: list[dict[str, Any]],
     *,
-    max_workers: int = 4,
-    continue_on_error: bool = False,
+    max_workers: Optional[int] = None,
+    continue_on_error: Optional[bool] = False,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
     """Read multiple Lakehouse datasets in parallel.
@@ -568,11 +573,13 @@ def read_lakehouses(
     and ``name`` to identify the result entry.
 
     :param requests: Per-read parameter dictionaries.
-    :param max_workers: Maximum number of concurrent read tasks.
+    :param max_workers: Maximum number of concurrent read tasks. When omitted,
+        uses ``min(len(requests), 4)``. Pass a value greater than ``4`` to opt in
+        to higher parallelism.
     :param continue_on_error: If ``False`` (default), raise on the first failed read.
     :param spark: Optional ``SparkSession``; when omitted the active session is used.
     :type requests: list[dict]
-    :type max_workers: int
+    :type max_workers: int | None
     :type continue_on_error: bool
     :type spark: ~pyspark.sql.SparkSession | None
 
@@ -590,7 +597,6 @@ def read_lakehouses(
     ... )
     >>> orders_df = result["tables"][0]["df"]  # doctest: +SKIP
     """
-    _validate_max_workers(max_workers)
     _validate_request_list(requests, operation="read_lakehouses")
     _spark = spark or get_spark()
     total_tables = len(requests)
@@ -602,6 +608,7 @@ def read_lakehouses(
             "tables": [],
             "failures": [],
         }
+    effective_max_workers = _resolve_max_workers(max_workers, total_tables)
 
     normalized_requests: list[dict[str, Any]] = []
     for index, request in enumerate(requests, start=1):
@@ -653,9 +660,10 @@ def read_lakehouses(
 
     processed_tables_by_index: dict[int, dict[str, Any]] = {}
     failures_by_index: dict[int, dict[str, str]] = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=effective_max_workers) as executor:
         future_to_request = {
-            executor.submit(read_one, request): request for request in normalized_requests
+            executor.submit(read_one, request): request
+            for request in normalized_requests
         }
         for future in as_completed(future_to_request):
             request = future_to_request[future]
@@ -702,8 +710,8 @@ def read_lakehouses(
 def write_lakehouses(
     requests: list[dict[str, Any]],
     *,
-    max_workers: int = 4,
-    continue_on_error: bool = False,
+    max_workers: Optional[int] = None,
+    continue_on_error: Optional[bool] = False,
     spark: Optional[SparkSession] = None,
 ) -> dict[str, Any]:
     """Write multiple ``DataFrame`` objects to Lakehouses in parallel.
@@ -714,11 +722,13 @@ def write_lakehouses(
     ``auto_partition`` and ``auto_partition_threshold_bytes``.
 
     :param requests: Per-write parameter dictionaries.
-    :param max_workers: Maximum number of concurrent write tasks.
+    :param max_workers: Maximum number of concurrent write tasks. When omitted,
+        uses ``min(len(requests), 4)``. Pass a value greater than ``4`` to opt in
+        to higher parallelism.
     :param continue_on_error: If ``False`` (default), raise on the first failed write.
     :param spark: Optional ``SparkSession``; when omitted the active session is used.
     :type requests: list[dict]
-    :type max_workers: int
+    :type max_workers: int | None
     :type continue_on_error: bool
     :type spark: ~pyspark.sql.SparkSession | None
 
@@ -735,7 +745,6 @@ def write_lakehouses(
     ...     max_workers=2,
     ... )
     """
-    _validate_max_workers(max_workers)
     _validate_request_list(requests, operation="write_lakehouses")
     _spark = spark or get_spark()
     total_tables = len(requests)
@@ -747,6 +756,7 @@ def write_lakehouses(
             "tables": [],
             "failures": [],
         }
+    effective_max_workers = _resolve_max_workers(max_workers, total_tables)
 
     normalized_requests: list[dict[str, Any]] = []
     for index, request in enumerate(requests, start=1):
@@ -803,7 +813,9 @@ def write_lakehouses(
             normalize_column_names=bool(request.get("normalize_column_names")),
             enable_column_mapping=bool(request.get("enable_column_mapping")),
             auto_partition=bool(request.get("auto_partition")),
-            auto_partition_threshold_bytes=int(request["auto_partition_threshold_bytes"]),
+            auto_partition_threshold_bytes=int(
+                request["auto_partition_threshold_bytes"]
+            ),
         )
         entry = {
             "lakehouse_name": lakehouse_name,
@@ -819,9 +831,10 @@ def write_lakehouses(
 
     processed_tables_by_index: dict[int, dict[str, Any]] = {}
     failures_by_index: dict[int, dict[str, str]] = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=effective_max_workers) as executor:
         future_to_request = {
-            executor.submit(write_one, request): request for request in normalized_requests
+            executor.submit(write_one, request): request
+            for request in normalized_requests
         }
         for future in as_completed(future_to_request):
             request = future_to_request[future]
