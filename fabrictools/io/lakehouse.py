@@ -548,6 +548,21 @@ def _required_text_request_value(
     return value
 
 
+def _read_result_key(request: dict[str, Any], *, index: int) -> str:
+    raw_key = request.get("name", request.get("relative_path"))
+    result_key = str(raw_key or "").strip()
+    if not result_key:
+        raise ValueError(
+            f"read_lakehouses requests[{index}] must define a non-empty 'name' "
+            "or 'relative_path' to build the result key."
+        )
+    if result_key == "summary":
+        raise ValueError(
+            f"read_lakehouses requests[{index}] uses reserved result key 'summary'."
+        )
+    return result_key
+
+
 def _get_cached_lakehouse_base(
     lakehouse_name: str, cache: dict[str, str], cache_lock: Lock
 ) -> str:
@@ -583,7 +598,7 @@ def read_lakehouses(
     :type continue_on_error: bool
     :type spark: ~pyspark.sql.SparkSession | None
 
-    :returns: Summary dict with ``DataFrame`` objects in successful ``tables`` entries.
+    :returns: Dict containing one ``DataFrame`` per request key plus a ``summary`` entry.
     :rtype: dict
 
     .. rubric:: Example
@@ -595,27 +610,39 @@ def read_lakehouses(
     ...     ],
     ...     max_workers=2,
     ... )
-    >>> orders_df = result["tables"][0]["df"]  # doctest: +SKIP
+    >>> orders_df = result["orders"]  # doctest: +SKIP
+    >>> details = result["summary"]  # doctest: +SKIP
     """
     _validate_request_list(requests, operation="read_lakehouses")
     _spark = spark or get_spark()
     total_tables = len(requests)
     if not requests:
         return {
-            "total_tables": 0,
-            "successful_tables": 0,
-            "failed_tables": 0,
-            "tables": [],
-            "failures": [],
+            "summary": {
+                "total_tables": 0,
+                "successful_tables": 0,
+                "failed_tables": 0,
+                "tables": [],
+                "failures": [],
+            }
         }
     effective_max_workers = _resolve_max_workers(max_workers, total_tables)
 
     normalized_requests: list[dict[str, Any]] = []
+    result_keys: set[str] = set()
     for index, request in enumerate(requests, start=1):
+        result_key = _read_result_key(request, index=index)
+        if result_key in result_keys:
+            raise ValueError(
+                f"read_lakehouses requests[{index}] uses duplicate result key "
+                f"'{result_key}'."
+            )
+        result_keys.add(result_key)
         normalized_requests.append(
             {
                 "index": index,
                 "name": request.get("name"),
+                "result_key": result_key,
                 "lakehouse_name": _required_text_request_value(
                     request, "lakehouse_name", index=index, operation="read_lakehouses"
                 ),
@@ -653,6 +680,7 @@ def read_lakehouses(
             "path": full_path,
             "format": read_format,
             "df": df,
+            "result_key": str(request["result_key"]),
         }
         if request.get("name") is not None:
             entry["name"] = request["name"]
@@ -672,6 +700,7 @@ def read_lakehouses(
                 processed_tables_by_index[index] = future.result()
             except Exception as exc:
                 failure = {
+                    "result_key": str(request["result_key"]),
                     "lakehouse_name": str(request["lakehouse_name"]),
                     "relative_path": str(request["relative_path"]),
                     "format": str(request["format"]),
@@ -688,23 +717,34 @@ def read_lakehouses(
                 if not continue_on_error:
                     raise
 
-    processed_tables = [
-        processed_tables_by_index[index]
-        for index in range(1, total_tables + 1)
-        if index in processed_tables_by_index
-    ]
+    processed_tables: list[dict[str, Any]] = []
+    results: dict[str, Any] = {}
+    for index in range(1, total_tables + 1):
+        if index not in processed_tables_by_index:
+            continue
+        entry = processed_tables_by_index[index]
+        result_key = str(entry["result_key"])
+        results[result_key] = entry["df"]
+        processed_tables.append(
+            {
+                key: value
+                for key, value in entry.items()
+                if key not in {"df", "result_key"}
+            }
+        )
     failures = [
         failures_by_index[index]
         for index in range(1, total_tables + 1)
         if index in failures_by_index
     ]
-    return {
+    results["summary"] = {
         "total_tables": total_tables,
         "successful_tables": len(processed_tables),
         "failed_tables": len(failures),
         "tables": processed_tables,
         "failures": failures,
     }
+    return results
 
 
 def write_lakehouses(
