@@ -163,7 +163,7 @@ def make_business_ready(
     auto_partition_threshold_bytes: int = 1_073_741_824,
     max_workers: Optional[int] = None,
     spark: Optional[SparkSession] = None,
-    verbose: bool = False,
+    verbose: bool = True,
 ) -> dict[str, Any]:
     """Transform Silver tables to Business Ready (Gold) tables.
 
@@ -220,9 +220,7 @@ def make_business_ready(
 
     if verbose:
         log(f"Starting make_business_ready for {total_tables} tables.")
-        log(
-            f"Processing with up to {effective_max_workers} concurrent tasks."
-        )
+        log(f"Processing with up to {effective_max_workers} concurrent tasks.")
 
     source_base_path = get_lakehouse_abfs_path(source_lakehouse_name)
     target_base_path = get_lakehouse_abfs_path(target_lakehouse_name)

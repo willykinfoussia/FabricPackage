@@ -87,7 +87,6 @@ def _read_lakehouse_from_base(
                 log(
                     f"  Resolved relative_path '{relative_path}' -> '{candidate_relative_path}'"
                 )
-            log(f"  {len(df.columns)} columns")
             return df, candidate_relative_path, full_path
         except RuntimeError as exc:
             failures.append(f"{full_path} ({exc})")

@@ -22,7 +22,8 @@ Non. C’est utile pour les graphiques de :py:func:`fabrictools.scan_data_errors
 ---------------------------------------------------------------
 
 - :py:func:`fabrictools.clean_and_write_data` : une table cible.
-- :py:func:`fabrictools.clean_and_write_all_tables` : plusieurs tables en lot.
+- :py:func:`fabrictools.clean_and_write_all_tables` : plusieurs tables en lot
+  (avec ``max_workers=None`` par défaut, soit ``min(nombre_de_tables, 4)``).
 
 5) ``delete_all_lakehouse_tables`` est-il dangereux ?
 -----------------------------------------------------

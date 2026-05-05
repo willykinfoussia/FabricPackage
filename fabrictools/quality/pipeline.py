@@ -16,7 +16,7 @@ from fabrictools.io import (
     merge_lakehouse,
     write_lakehouse,
 )
-from fabrictools.io.lakehouse import _read_lakehouse_from_base
+from fabrictools.io.lakehouse import _read_lakehouse_from_base, _resolve_max_workers
 from fabrictools.pipelines.config import (
     TableJobConfig,
     build_table_jobs_from_config,
@@ -99,11 +99,6 @@ def clean_and_write_data(
         spark=_spark,
     )
     return silver_df
-
-
-def _validate_max_workers(max_workers: int) -> None:
-    if not isinstance(max_workers, int) or max_workers < 1:
-        raise ValueError("max_workers must be an integer greater than or equal to 1.")
 
 
 def _build_jobs(
@@ -275,7 +270,7 @@ def clean_and_write_all_tables(
     spark: Optional[SparkSession] = None,
     verbose: bool = False,
     *,
-    max_workers: int = 1,
+    max_workers: Optional[int] = None,
     auto_partition_when_partition_by_provided: bool = True,
     persist_intermediate: bool = False,
 ) -> dict[str, Any]:
@@ -297,8 +292,8 @@ def clean_and_write_all_tables(
     :param include_schemas: Discovery filter: schema allow-list.
     :param exclude_tables: Discovery filter: table deny-list.
     :param continue_on_error: If ``False``, stop on first failure.
-    :param max_workers: Maximum number of tables processed concurrently. ``1`` keeps
-        the historical sequential behavior.
+    :param max_workers: Maximum number of tables processed concurrently. When omitted,
+        uses ``min(total_tables, 4)``. Pass ``1`` to force sequential behavior.
     :param auto_partition_when_partition_by_provided: If ``False``, skip automatic
         partition detection when a table already has explicit ``partition_by``.
     :param persist_intermediate: If ``True``, persist each cleaned Silver dataframe
@@ -312,7 +307,7 @@ def clean_and_write_all_tables(
     :type include_schemas: list[str] | None
     :type exclude_tables: list[str] | None
     :type continue_on_error: bool
-    :type max_workers: int
+    :type max_workers: int | None
     :type auto_partition_when_partition_by_provided: bool
     :type persist_intermediate: bool
     :type spark: ~pyspark.sql.SparkSession | None
@@ -333,7 +328,6 @@ def clean_and_write_all_tables(
     >>> summary["successful_tables"]  # doctest: +SKIP
     8
     """
-    _validate_max_workers(max_workers)
     _spark = configure_parquet_datetime_rebase(spark or get_spark())
     table_jobs = _build_jobs(
         source_lakehouse_name=source_lakehouse_name,
@@ -361,11 +355,13 @@ def clean_and_write_all_tables(
     processed_tables: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     total_tables = len(table_jobs)
+    effective_max_workers = _resolve_max_workers(max_workers, total_tables)
 
     if verbose:
         log(
             f"Bulk clean/write started: {total_tables} table(s) "
-            f"from '{source_lakehouse_name}' to '{target_lakehouse_name}'."
+            f"from '{source_lakehouse_name}' to '{target_lakehouse_name}' "
+            f"with up to {effective_max_workers} concurrent task(s)."
         )
 
     source_base_path = get_lakehouse_abfs_path(source_lakehouse_name)
@@ -392,7 +388,7 @@ def clean_and_write_all_tables(
         )
 
     results_by_index: dict[int, dict[str, Any]] = {}
-    if max_workers == 1:
+    if effective_max_workers == 1:
         for index, table_job in enumerate(table_jobs, start=1):
             result = process(index, table_job)
             results_by_index[index] = result
@@ -402,7 +398,7 @@ def clean_and_write_all_tables(
                     raise exc
                 raise RuntimeError("Bulk clean/write failed without exception details.")
     else:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=effective_max_workers) as executor:
             future_to_index = {
                 executor.submit(process, index, table_job): index
                 for index, table_job in enumerate(table_jobs, start=1)
