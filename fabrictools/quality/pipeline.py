@@ -293,7 +293,7 @@ def clean_and_write_all_tables(
     :param exclude_tables: Discovery filter: table deny-list.
     :param continue_on_error: If ``False``, stop on first failure.
     :param max_workers: Maximum number of tables processed concurrently. When omitted,
-        uses ``min(total_tables, 4)``. Pass ``1`` to force sequential behavior.
+        uses ``min(total_tables, 5)``. Pass ``1`` to force sequential behavior.
     :param auto_partition_when_partition_by_provided: If ``False``, skip automatic
         partition detection when a table already has explicit ``partition_by``.
     :param persist_intermediate: If ``True``, persist each cleaned Silver dataframe

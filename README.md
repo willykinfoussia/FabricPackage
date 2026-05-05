@@ -289,7 +289,7 @@ result = ft.clean_and_write_all_tables(
     source_lakehouse_name="BronzeLakehouse",
     target_lakehouse_name="SilverLakehouse",
     include_schemas=["dbo"],
-    max_workers=None,  # default: min(nombre_de_tables, 4)
+    max_workers=None,  # default: min(nombre_de_tables, 5)
     continue_on_error=True,
 )
 ```

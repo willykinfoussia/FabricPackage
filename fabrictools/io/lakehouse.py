@@ -514,7 +514,7 @@ def _write_lakehouse_to_base(
 
 def _resolve_max_workers(max_workers: Optional[int], request_count: int) -> int:
     if max_workers is None:
-        return max(1, min(request_count, 4))
+        return max(1, min(request_count, 5))
     if not isinstance(max_workers, int) or max_workers < 1:
         raise ValueError("max_workers must be an integer greater than or equal to 1.")
     return max_workers
@@ -583,7 +583,7 @@ def read_lakehouses(
 
     :param requests: Per-read parameter dictionaries.
     :param max_workers: Maximum number of concurrent read tasks. When omitted,
-        uses ``min(len(requests), 4)``. Pass a value greater than ``4`` to opt in
+        uses ``min(len(requests), 5)``. Pass a value greater than ``5`` to opt in
         to higher parallelism.
     :param continue_on_error: If ``False`` (default), raise on the first failed read.
     :param spark: Optional ``SparkSession``; when omitted the active session is used.
@@ -760,7 +760,7 @@ def write_lakehouses(
 
     :param requests: Per-write parameter dictionaries.
     :param max_workers: Maximum number of concurrent write tasks. When omitted,
-        uses ``min(len(requests), 4)``. Pass a value greater than ``4`` to opt in
+        uses ``min(len(requests), 5)``. Pass a value greater than ``5`` to opt in
         to higher parallelism.
     :param continue_on_error: If ``False`` (default), raise on the first failed write.
     :param spark: Optional ``SparkSession``; when omitted the active session is used.

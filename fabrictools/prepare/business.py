@@ -192,7 +192,7 @@ def make_business_ready(
     :param auto_partition_threshold_bytes: Minimum estimated size before automatic
         partition cardinality checks run.
     :param max_workers: Maximum number of tables processed concurrently. If ``None``,
-        defaults to ``max(1, min(len(tables), 4))``.
+        defaults to ``max(1, min(len(tables), 5))``.
     :param spark: Optional SparkSession.
     :param verbose: Print processing details.
 
