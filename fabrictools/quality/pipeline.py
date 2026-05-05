@@ -35,7 +35,7 @@ def clean_and_write_data(
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
     spark: Optional[SparkSession] = None,
-    verbose: bool = False,
+    verbose: bool = True,
 ) -> DataFrame:
     """Read one Lakehouse path, clean, add Silver metadata, and write the target path.
 
@@ -268,7 +268,7 @@ def clean_and_write_all_tables(
     exclude_tables: Optional[list[str]] = None,
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
-    verbose: bool = False,
+    verbose: bool = True,
     *,
     max_workers: Optional[int] = None,
     auto_partition_when_partition_by_provided: bool = True,
@@ -411,7 +411,9 @@ def clean_and_write_all_tables(
                     exc = result.get("exception")
                     if isinstance(exc, BaseException):
                         raise exc
-                    raise RuntimeError("Bulk clean/write failed without exception details.")
+                    raise RuntimeError(
+                        "Bulk clean/write failed without exception details."
+                    )
 
     for index in range(1, total_tables + 1):
         result = results_by_index.get(index)
