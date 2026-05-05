@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import re
 from typing import Any, Optional
@@ -14,6 +15,7 @@ from fabrictools.core.logging import log
 from fabrictools.core.spark import get_spark
 from fabrictools.io.lakehouse import (
     _read_lakehouse_from_base,
+    _resolve_max_workers,
     _write_lakehouse_to_base,
 )
 from fabrictools.prepare.french_column_tokens import FRENCH_COLUMN_TOKEN_MAP
@@ -159,6 +161,7 @@ def make_business_ready(
     partition_by: Optional[list[str]] = None,
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
+    max_workers: Optional[int] = None,
     spark: Optional[SparkSession] = None,
     verbose: bool = False,
 ) -> dict[str, Any]:
@@ -188,6 +191,8 @@ def make_business_ready(
     :param auto_partition: Enable automatic partition detection on write.
     :param auto_partition_threshold_bytes: Minimum estimated size before automatic
         partition cardinality checks run.
+    :param max_workers: Maximum number of tables processed concurrently. If ``None``,
+        defaults to ``max(1, min(len(tables), 4))``.
     :param spark: Optional SparkSession.
     :param verbose: Print processing details.
 
@@ -211,14 +216,18 @@ def make_business_ready(
     failures: list[dict[str, str]] = []
     total_tables = len(tables)
     table_plan = _build_business_table_plan(tables, custom_mapping)
+    effective_max_workers = _resolve_max_workers(max_workers, total_tables)
 
     if verbose:
         log(f"Starting make_business_ready for {total_tables} tables.")
+        log(
+            f"Processing with up to {effective_max_workers} concurrent tasks."
+        )
 
     source_base_path = get_lakehouse_abfs_path(source_lakehouse_name)
     target_base_path = get_lakehouse_abfs_path(target_lakehouse_name)
 
-    for table in table_plan:
+    def process_table(table: _BusinessTablePlan) -> dict[str, Any]:
         src_table = table.source_relative_path
         tgt_table = table.target_relative_path
         try:
@@ -269,15 +278,17 @@ def make_business_ready(
                 auto_partition_threshold_bytes=auto_partition_threshold_bytes,
             )
 
-            processed_tables.append(
-                {
+            return {
+                "ok": True,
+                "index": table.index,
+                "entry": {
                     "source_relative_path": src_table,
                     "resolved_source_relative_path": resolved_source_relative_path,
                     "target_relative_path": tgt_table,
                     "resolved_target_relative_path": resolved_target_relative_path,
                     "mode": mode,
-                }
-            )
+                },
+            }
 
         except Exception as exc:
             if verbose:
@@ -285,7 +296,40 @@ def make_business_ready(
                     f"[{table.index}/{total_tables}] Failed for '{src_table}': {exc}",
                     level="warning",
                 )
-            failures.append({"source_relative_path": src_table, "error": str(exc)})
+            return {
+                "ok": False,
+                "index": table.index,
+                "entry": {"source_relative_path": src_table, "error": str(exc)},
+            }
+
+    if effective_max_workers == 1:
+        for table in table_plan:
+            result = process_table(table)
+            if result["ok"]:
+                processed_tables.append(result["entry"])
+            else:
+                failures.append(result["entry"])
+    else:
+        processed_by_index: dict[int, dict[str, str]] = {}
+        failures_by_index: dict[int, dict[str, str]] = {}
+        with ThreadPoolExecutor(max_workers=effective_max_workers) as executor:
+            future_to_table = {
+                executor.submit(process_table, table): table for table in table_plan
+            }
+            for future in as_completed(future_to_table):
+                result = future.result()
+                result_index = int(result["index"])
+                result_entry = result["entry"]
+                if result["ok"]:
+                    processed_by_index[result_index] = result_entry
+                else:
+                    failures_by_index[result_index] = result_entry
+
+        for index in range(1, total_tables + 1):
+            if index in processed_by_index:
+                processed_tables.append(processed_by_index[index])
+            if index in failures_by_index:
+                failures.append(failures_by_index[index])
 
     return {
         "total_tables": total_tables,
