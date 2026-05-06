@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
-from typing import Optional, List, Tuple
+from typing import Optional, List, Sequence, Tuple
 import re
 import unicodedata
 
@@ -350,10 +350,13 @@ def write_prepared_table(
     resolved_mappings: List[ResolvedColumn],
     target_lakehouse_name: str,
     target_relative_path: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
     vacuum_retention_hours: int = 168,
     spark: Optional[SparkSession] = None,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[Sequence[str]] = None,
 ) -> None:
     """Write ``df`` to the target Lakehouse path with heuristic Delta partitioning, then optional OPTIMIZE/VACUUM.
 
@@ -368,6 +371,11 @@ def write_prepared_table(
     :param mode: Spark write mode.
     :param max_partitions_guard: Upper cap for combined partition cardinality guard.
     :param vacuum_retention_hours: Retention passed to Delta ``VACUUM``.
+    :param merge_condition: Optional explicit upsert merge predicate; see
+        :py:func:`fabrictools.write_lakehouse`.
+    :param upsert_key_columns: Ordered upsert-key **candidates**; see
+        :py:func:`fabrictools.write_lakehouse`. When omitted in upsert mode, defaults to
+        ``["id"]`` before write.
     :param spark: Optional ``SparkSession``.
     :type df: ~pyspark.sql.DataFrame
     :type resolved_mappings: list
@@ -403,12 +411,24 @@ def write_prepared_table(
         excluded_tokens=excluded_partition_tokens,
     )
 
+    mc_eff = (
+        merge_condition.strip()
+        if isinstance(merge_condition, str) and merge_condition.strip()
+        else None
+    )
+    keys_eff_list = [str(k).strip() for k in (upsert_key_columns or []) if str(k).strip()]
+    keys_eff = keys_eff_list if keys_eff_list else None
+    if str(mode).strip().lower() in ("upsert", "merge") and not mc_eff and not keys_eff:
+        keys_eff = ["id"]
+
     write_lakehouse(
         df,
         lakehouse_name=target_lakehouse_name,
         relative_path=target_relative_path,
         mode=mode,
         partition_by=selected_partitions or None,
+        merge_condition=mc_eff,
+        upsert_key_columns=keys_eff,
         spark=_spark,
     )
 

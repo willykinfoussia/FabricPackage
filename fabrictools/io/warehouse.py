@@ -90,10 +90,18 @@ def write_warehouse(
     """
     _ = spark or get_spark()
     jdbc_url = get_warehouse_jdbc_url(warehouse_name)
+    mode_norm = str(mode).strip().lower()
     log(
         f"Writing to Warehouse '{warehouse_name}' → {table} "
-        f"[mode={mode}, batchSize={batch_size:,}]"
+        f"[mode={mode_norm}, batchSize={batch_size:,}]"
     )
+
+    if mode_norm in ("upsert", "merge"):
+        raise ValueError(
+            "Fabric Warehouse JDBC writes do not support Spark upsert/merge modes. "
+            "Use Lakehouse :py:func:`fabrictools.write_lakehouse` with "
+            "mode='upsert', or use overwrite/append for Warehouse."
+        )
 
     (
         df.write.format("jdbc")
@@ -101,7 +109,7 @@ def write_warehouse(
         .option("driver", _JDBC_DRIVER)
         .option("dbtable", table)
         .option("batchsize", batch_size)
-        .mode(mode)
+        .mode(mode_norm)
         .save()
     )
     log(f"  Write complete → {table}")

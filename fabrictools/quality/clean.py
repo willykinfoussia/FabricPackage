@@ -195,9 +195,7 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
         trimmed = F.trim(col_expr)
 
         agg_exprs.append(
-            F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(
-                f"{col_name}__nn"
-            )
+            F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn")
         )
         agg_exprs.append(
             F.sum(
@@ -224,18 +222,14 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
             parsed_date = _get_parsed_date_expr(safe_trimmed, date_parser)
             agg_exprs.append(
                 F.sum(
-                    F.when(
-                        col_expr.isNotNull() & parsed_date.isNull(), 1
-                    ).otherwise(0)
+                    F.when(col_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)
                 ).alias(_date_fail_key(col_name, idx))
             )
         for idx, ts_parser in enumerate(_TIMESTAMP_FORMATS):
             parsed_ts = _get_parsed_ts_expr(safe_trimmed, ts_parser)
             agg_exprs.append(
                 F.sum(
-                    F.when(
-                        col_expr.isNotNull() & parsed_ts.isNull(), 1
-                    ).otherwise(0)
+                    F.when(col_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)
                 ).alias(_ts_fail_key(col_name, idx))
             )
 
@@ -383,13 +377,6 @@ def add_silver_metadata(
         .withColumn(month_col, F.month(current_date_expr))
         .withColumn(day_col, F.dayofmonth(current_date_expr))
     )
-    if verbose:
-        log(
-            "Silver metadata added: "
-            f"{ingestion_timestamp_col}, {source_layer_col}, {source_path_col}, "
-            f"{year_col}, {month_col}, {day_col} "
-            "(partition source: current_date())"
-        )
     return metadata_df
 
 
@@ -419,8 +406,6 @@ def clean_data(
 
     >>> cleaned = clean_data(raw_df, drop_duplicates=True, drop_all_null_rows=True)  # doctest: +SKIP
     """
-    before_cols = len(df.columns)
-
     normalized_columns = _build_unique_column_names(df.columns)
     cleaned_df = df.toDF(*normalized_columns)
     cleaned_df = _replace_empty_strings_with_nulls(cleaned_df)
@@ -431,11 +416,6 @@ def clean_data(
     if drop_all_null_rows:
         cleaned_df = cleaned_df.dropna(how="all")
 
-    after_cols = len(cleaned_df.columns)
-    if verbose:
-        log(
-            f"Data cleaned: columns {before_cols} -> {after_cols}"
-        )
     return cleaned_df
 
 

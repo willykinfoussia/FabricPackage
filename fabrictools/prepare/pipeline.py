@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from pyspark.sql import SparkSession, DataFrame
 
@@ -33,18 +33,48 @@ def _build_jobs(
     tables_config: Optional[list[dict[str, Any]]],
     include_schemas: Optional[list[str]],
     exclude_tables: Optional[list[str]],
+    merge_condition: Optional[str],
+    upsert_key_columns: Optional[list[str]],
 ) -> list[TableJobConfig]:
     if tables_config is not None:
         return build_table_jobs_from_config(
             tables_config=tables_config,
             default_mode=mode,
-            supported_modes={"overwrite", "append", "ignore", "error"},
-            source_keys=("source_relative_path", "source_path", "source_table", "bronze_path"),
-            target_keys=("target_relative_path", "target_path", "target_table", "prepared_table", "silver_table"),
+            supported_modes={
+                "overwrite",
+                "append",
+                "ignore",
+                "error",
+                "merge",
+                "upsert",
+            },
+            source_keys=(
+                "source_relative_path",
+                "source_path",
+                "source_table",
+                "bronze_path",
+            ),
+            target_keys=(
+                "target_relative_path",
+                "target_path",
+                "target_table",
+                "prepared_table",
+                "silver_table",
+            ),
             require_target=False,
             require_mode=False,
-            allow_merge_condition=False,
+            allow_merge_condition=True,
         )
+    mode_l = str(mode).strip().lower()
+    merge_default = str(merge_condition).strip() if merge_condition else None
+    key_default = [
+        str(k).strip() for k in (upsert_key_columns or []) if str(k).strip()
+    ] or None
+    if key_default == []:
+        key_default = None
+    if mode_l in {"upsert", "merge"} and not merge_default and not key_default:
+        key_default = ["id"]
+
     return build_table_jobs_from_discovery(
         source_lakehouse_name=source_lakehouse_name,
         discover_fn=list_lakehouse_tables_for_pipeline,
@@ -52,14 +82,17 @@ def _build_jobs(
         exclude_tables=exclude_tables,
         mode=mode,
         partition_by=None,
+        merge_condition=merge_default,
+        upsert_key_columns=key_default,
     )
+
 
 def prepare_and_write_data(
     source_lakehouse_name: str,
     source_relative_path: str,
     target_lakehouse_name: str,
     target_relative_path: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     sample_size: int = 500,
     profiling_confidence_threshold: float = 0.80,
     max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
@@ -69,6 +102,9 @@ def prepare_and_write_data(
     semantic_model_name: str = "fabrictools_prepared_dataset",
     overwrite_semantic_model: bool = True,
     spark: Optional[SparkSession] = None,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[Sequence[str]] = None,
 ) -> DataFrame:
     """Run the full prepared pipeline for one source table (schema, resolve, transform, write).
 
@@ -118,7 +154,9 @@ def prepare_and_write_data(
     ... )
     """
     _spark = spark or get_spark()
-    source_df = read_lakehouse(source_lakehouse_name, source_relative_path, spark=_spark)
+    source_df = read_lakehouse(
+        source_lakehouse_name, source_relative_path, spark=_spark
+    )
     schema_hash = snapshot_source_schema(
         source_lakehouse_name=source_lakehouse_name,
         source_relative_path=source_relative_path,
@@ -146,6 +184,8 @@ def prepare_and_write_data(
         mode=mode,
         max_partitions_guard=max_partitions_guard,
         vacuum_retention_hours=vacuum_retention_hours,
+        merge_condition=merge_condition,
+        upsert_key_columns=upsert_key_columns,
         spark=_spark,
     )
     agg_tables = generate_prepared_aggregations(
@@ -167,10 +207,11 @@ def prepare_and_write_data(
         )
     return prepared_df
 
+
 def prepare_and_write_all_tables(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     tables_config: Optional[list[dict[str, Any]]] = None,
     include_schemas: Optional[list[str]] = None,
     exclude_tables: Optional[list[str]] = None,
@@ -184,6 +225,9 @@ def prepare_and_write_all_tables(
     overwrite_semantic_model: bool = True,
     continue_on_error: bool = False,
     spark: Optional[SparkSession] = None,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """Bulk prepared pipeline: discovery or ``tables_config``, then :py:func:`fabrictools.prepare_and_write_data` per job.
 
@@ -239,6 +283,8 @@ def prepare_and_write_all_tables(
         tables_config=tables_config,
         include_schemas=include_schemas,
         exclude_tables=exclude_tables,
+        merge_condition=merge_condition,
+        upsert_key_columns=upsert_key_columns,
     )
 
     if not table_jobs:
@@ -262,7 +308,11 @@ def prepare_and_write_all_tables(
         src = str(table_job["source_relative_path"])
         tgt = str(table_job["target_relative_path"])
         table_mode = str(table_job["mode"])
-        log(f"[{index}/{total_tables}] Preparing '{src}' -> '{tgt}' [mode={table_mode}]...")
+        job_merge = table_job.get("merge_condition")
+        job_keys = table_job.get("upsert_key_columns")
+        log(
+            f"[{index}/{total_tables}] Preparing '{src}' -> '{tgt}' [mode={table_mode}]..."
+        )
         try:
             prepare_and_write_data(
                 source_lakehouse_name=source_lakehouse_name,
@@ -278,6 +328,8 @@ def prepare_and_write_all_tables(
                 semantic_workspace=semantic_workspace,
                 semantic_model_name=semantic_model_name,
                 overwrite_semantic_model=overwrite_semantic_model,
+                merge_condition=job_merge,
+                upsert_key_columns=job_keys,
                 spark=_spark,
             )
             processed_tables.append(
@@ -310,4 +362,3 @@ def prepare_and_write_all_tables(
 
 
 __all__ = ["prepare_and_write_data", "prepare_and_write_all_tables"]
-

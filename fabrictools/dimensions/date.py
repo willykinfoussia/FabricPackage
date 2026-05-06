@@ -29,9 +29,12 @@ def build_dimension_date(
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "Dimension_Date",
-    mode: str = "overwrite",
+    mode: str = "upsert",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[list[str]] = None,
 ) -> DataFrame:
     """Build a calendar date dimension (keys, labels, fiscal attributes, weekend flag).
 
@@ -154,6 +157,9 @@ def build_dimension_date(
         .cast(BooleanType())
         .alias("is_weekend"),
     ).orderBy("date_key")
+    lakehouse_keys = upsert_key_columns
+    if lakehouse_keys is None and str(mode).strip().lower() in ("upsert", "merge"):
+        lakehouse_keys = ["date_key"]
     _write_dimension_targets(
         df=date_df,
         lakehouse_name=lakehouse_name,
@@ -164,6 +170,8 @@ def build_dimension_date(
         mode=mode,
         batch_size=batch_size,
         spark=_spark,
+        merge_condition=merge_condition,
+        upsert_key_columns=lakehouse_keys,
     )
     return date_df
 

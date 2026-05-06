@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
 from pyspark.sql.types import IntegralType  # type: ignore[reportMissingImports]
@@ -354,15 +354,90 @@ def _detect_partition_columns(
     return valid_columns[:2]
 
 
+def _is_lakehouse_upsert_mode(mode: str) -> bool:
+    return str(mode).strip().lower() in ("upsert", "merge")
+
+
+def _spark_sql_quote_ident(name: str) -> str:
+    return name.replace("`", "``")
+
+
+def _merge_condition_from_key_columns(resolved_physical_names: List[str]) -> str:
+    return " AND ".join(
+        f"src.`{_spark_sql_quote_ident(c)}` = tgt.`{_spark_sql_quote_ident(c)}`"
+        for c in resolved_physical_names
+    )
+
+
+def _resolved_upsert_physical_keys_from_candidates(
+    *,
+    candidates: Sequence[str],
+    df: DataFrame,
+    resolve_column_name: Any,
+) -> list[str]:
+    """Pick merge key columns: ordered candidates that resolve on ``df``, deduped by physical name."""
+    seen_physical: set[str] = set()
+    resolved: list[str] = []
+    for raw in candidates:
+        key = str(raw).strip()
+        if not key:
+            continue
+        phys = resolve_column_name(df, key, side="DataFrame")
+        if phys is None:
+            continue
+        if phys in seen_physical:
+            continue
+        seen_physical.add(phys)
+        resolved.append(phys)
+    return resolved
+
+
+def _resolve_upsert_merge_condition(
+    *,
+    merge_condition: Optional[str],
+    upsert_key_columns: Optional[Sequence[str]],
+    df: DataFrame,
+    resolve_column_name: Any,
+) -> str:
+    """Build Delta merge ON condition: explicit string wins over key column list.
+
+    ``upsert_key_columns`` is treated as an ordered list of **candidates**: only
+    names that resolve on ``df`` are used (AND). If none resolve, raises.
+    """
+    if merge_condition is not None and str(merge_condition).strip():
+        return str(merge_condition).strip()
+    keys = [str(k).strip() for k in (upsert_key_columns or []) if str(k).strip()]
+    if not keys:
+        raise ValueError(
+            "Lakehouse write mode 'upsert' (or 'merge') requires "
+            "'merge_condition' or a non-empty 'upsert_key_columns'."
+        )
+    resolved = _resolved_upsert_physical_keys_from_candidates(
+        candidates=keys,
+        df=df,
+        resolve_column_name=resolve_column_name,
+    )
+    if not resolved:
+        raise ValueError(
+            "Lakehouse upsert: no candidate in 'upsert_key_columns' matched any "
+            f"column on this DataFrame. Tried (in order): {keys!r}. "
+            "Use 'merge_condition' for a predicate that must not depend on column "
+            "resolution, or correct candidate names."
+        )
+    return _merge_condition_from_key_columns(resolved)
+
+
 def write_lakehouse(
     df: DataFrame,
     lakehouse_name: str,
     relative_path: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     partition_by: Optional[List[str]] = None,
     format: str = "delta",
     spark: Optional[SparkSession] = None,
     *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[Sequence[str]] = None,
     normalize_column_names: bool = True,
     enable_column_mapping: bool = False,
     auto_partition: bool = True,
@@ -374,8 +449,10 @@ def write_lakehouse(
     :param lakehouse_name: Display name of the target Lakehouse.
     :param relative_path: Destination path inside the Lakehouse (e.g.
         ``"sales_clean"``, ``"Tables/sales_clean"``, or ``"dbo.PdC Extraction"``).
-    :param mode: Spark write mode: ``"overwrite"`` (default), ``"append"``,
-        ``"ignore"``, or ``"error"``.
+    :param mode: ``"upsert"`` (default, Delta merge with bootstrap overwrite when the
+        target table does not exist), or Spark save modes ``"overwrite"``,
+        ``"append"``, ``"ignore"``, ``"error"``. ``"merge"`` is treated like
+        ``"upsert"``.
     :param partition_by: Optional column names to partition by. Each name is resolved
         like :py:func:`fabrictools.clean_data` /
         :py:func:`fabrictools.merge_dataframes` (physical name,
@@ -392,6 +469,15 @@ def write_lakehouse(
         column names with spaces or special characters.
     :param auto_partition: If ``True`` (default), automatically partition the data
         by detected date columns if they exist.
+    :param merge_condition: For ``mode="upsert"`` / ``"merge"``: Delta merge
+        predicate (e.g. ``"src.order_id = tgt.order_id"``). When set, overrides
+        ``upsert_key_columns`` entirely. Use this when every column in the join must
+        appear in the predicate regardless of resolution.
+    :param upsert_key_columns: Ordered **candidates** for key columns when
+        ``merge_condition`` is omitted. Each name is resolved like ``partition_by``;
+        **only candidates that match a column are kept**, then combined with ``AND``
+        (one match → simple key, several → composite). Duplicates collapse to one
+        conjunct per physical column. If none match, raises.
     :type df: ~pyspark.sql.DataFrame
     :type lakehouse_name: str
     :type relative_path: str
@@ -399,13 +485,16 @@ def write_lakehouse(
     :type partition_by: list[str] | None
     :type format: str
     :type spark: ~pyspark.sql.SparkSession | None
+    :type merge_condition: str | None
+    :type upsert_key_columns: collections.abc.Sequence[str] | None
     :type normalize_column_names: bool
     :type enable_column_mapping: bool
 
     .. rubric:: Example
 
     >>> write_lakehouse(  # doctest: +SKIP
-    ...     df, "SilverLakehouse", "sales_clean", mode="overwrite", partition_by=["year"]
+    ...     df, "SilverLakehouse", "sales_clean", partition_by=["year"],
+    ...     upsert_key_columns=["id"],
     ... )
     """
     _spark = spark or get_spark()  # validates spark availability early
@@ -419,6 +508,8 @@ def write_lakehouse(
         partition_by=partition_by,
         format=format,
         spark=_spark,
+        merge_condition=merge_condition,
+        upsert_key_columns=upsert_key_columns,
         normalize_column_names=normalize_column_names,
         enable_column_mapping=enable_column_mapping,
         auto_partition=auto_partition,
@@ -432,10 +523,12 @@ def _write_lakehouse_to_base(
     lakehouse_name: str,
     relative_path: str,
     base_path: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     partition_by: Optional[List[str]] = None,
     format: str = "delta",
     spark: SparkSession,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[Sequence[str]] = None,
     normalize_column_names: bool = True,
     enable_column_mapping: bool = False,
     auto_partition: bool = True,
@@ -480,7 +573,50 @@ def _write_lakehouse_to_base(
         user_partitions + auto_detected_partitions
     )
 
-    writer = df.write.format(format).option("overwriteSchema", "true").mode(mode)
+    mode_lower = str(mode).strip().lower()
+    if _is_lakehouse_upsert_mode(mode_lower):
+        if format.strip().lower() != "delta":
+            raise ValueError(
+                "Lakehouse upsert mode is only supported for format='delta' "
+                f"(got format={format!r})."
+            )
+        resolved_merge = _resolve_upsert_merge_condition(
+            merge_condition=merge_condition,
+            upsert_key_columns=upsert_key_columns,
+            df=df,
+            resolve_column_name=_resolve_column_name,
+        )
+        try:
+            from delta.tables import DeltaTable  # type: ignore[import-untyped]  # noqa: PLC0415
+        except ImportError as exc:
+            raise ValueError(
+                "Delta Lake is required for upsert writes; delta-spark "
+                "is not available."
+            ) from exc
+
+        is_delta_target = DeltaTable.isDeltaTable(spark, full_path)
+        if not is_delta_target:
+            log(
+                f"No Delta table at target path yet — bootstrap with overwrite "
+                f"({lakehouse_name} → {full_path})."
+            )
+            mode_save = "overwrite"
+        else:
+            log(
+                f"Upsert (Delta merge) into Lakehouse '{lakehouse_name}' → {full_path}"
+            )
+            merge_lakehouse(
+                df,
+                lakehouse_name=lakehouse_name,
+                relative_path=relative_path,
+                merge_condition=resolved_merge,
+                spark=spark,
+            )
+            return resolved_relative_path, full_path
+
+        writer = df.write.format(format).option("overwriteSchema", "true").mode(mode_save)
+    else:
+        writer = df.write.format(format).option("overwriteSchema", "true").mode(mode_lower)
     if format.lower() == "parquet":
         writer = writer.option("datetimeRebaseMode", "CORRECTED")
     elif format.lower() == "delta" and enable_column_mapping:
@@ -755,7 +891,9 @@ def write_lakehouses(
 
     Each request must contain ``df``, ``lakehouse_name`` and ``relative_path``.
     Optional keys mirror :py:func:`write_lakehouse`: ``mode``, ``partition_by``,
-    ``format``, ``normalize_column_names``, ``enable_column_mapping``,
+    ``format``, ``merge_condition``, ``upsert_key_columns`` (ordered merge-key
+    candidates; see that function),
+    ``normalize_column_names``, ``enable_column_mapping``,
     ``auto_partition`` and ``auto_partition_threshold_bytes``.
 
     :param requests: Per-write parameter dictionaries.
@@ -815,9 +953,11 @@ def write_lakehouses(
                 "relative_path": _required_text_request_value(
                     request, "relative_path", index=index, operation="write_lakehouses"
                 ),
-                "mode": str(request.get("mode", "overwrite")).strip() or "overwrite",
+                "mode": str(request.get("mode", "upsert")).strip() or "upsert",
                 "partition_by": request.get("partition_by"),
                 "format": str(request.get("format", "delta")).strip() or "delta",
+                "merge_condition": request.get("merge_condition"),
+                "upsert_key_columns": request.get("upsert_key_columns"),
                 "normalize_column_names": request.get("normalize_column_names", True),
                 "enable_column_mapping": request.get("enable_column_mapping", False),
                 "auto_partition": request.get("auto_partition", True),
@@ -850,6 +990,8 @@ def write_lakehouses(
             partition_by=request.get("partition_by"),
             format=write_format,
             spark=_spark,
+            merge_condition=request.get("merge_condition"),
+            upsert_key_columns=request.get("upsert_key_columns"),
             normalize_column_names=bool(request.get("normalize_column_names")),
             enable_column_mapping=bool(request.get("enable_column_mapping")),
             auto_partition=bool(request.get("auto_partition")),

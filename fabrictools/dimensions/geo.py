@@ -111,9 +111,12 @@ def build_dimension_country(
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "Dimension_Country",
-    mode: str = "overwrite",
+    mode: str = "upsert",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[list[str]] = None,
 ) -> DataFrame:
     """Build ``dimension_country`` from the ``countrystatecity-countries`` package.
 
@@ -191,6 +194,9 @@ def build_dimension_country(
             .orderBy("country_key")
         )
         log(f"Built dimension_country ({country_df.count():,} rows)")
+        lake_keys = upsert_key_columns
+        if lake_keys is None and str(mode).strip().lower() in ("upsert", "merge"):
+            lake_keys = ["country_key"]
         _write_dimension_targets(
             df=country_df,
             lakehouse_name=lakehouse_name,
@@ -201,6 +207,8 @@ def build_dimension_country(
             mode=mode,
             batch_size=batch_size,
             spark=_spark,
+            merge_condition=merge_condition,
+            upsert_key_columns=lake_keys,
         )
         return country_df
     except Exception as exc:
@@ -211,6 +219,9 @@ def build_dimension_country(
             level="warning",
         )
         empty_df = _spark.createDataFrame([], schema=_country_schema())
+        lake_keys = upsert_key_columns
+        if lake_keys is None and str(mode).strip().lower() in ("upsert", "merge"):
+            lake_keys = ["country_key"]
         _write_dimension_targets(
             df=empty_df,
             lakehouse_name=lakehouse_name,
@@ -221,6 +232,8 @@ def build_dimension_country(
             mode=mode,
             batch_size=batch_size,
             spark=_spark,
+            merge_condition=merge_condition,
+            upsert_key_columns=lake_keys,
         )
         return empty_df
 
@@ -263,9 +276,12 @@ def build_dimension_city(
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "Dimension_City",
-    mode: str = "overwrite",
+    mode: str = "upsert",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[list[str]] = None,
 ) -> DataFrame:
     """Build ``dimension_city`` from ``countrystatecity-countries`` with optional filters.
 
@@ -405,6 +421,9 @@ def build_dimension_city(
             .orderBy("city_key")
         )
         log(f"Built dimension_city ({city_df.count():,} rows)")
+        lake_keys = upsert_key_columns
+        if lake_keys is None and str(mode).strip().lower() in ("upsert", "merge"):
+            lake_keys = ["city_key"]
         _write_dimension_targets(
             df=city_df,
             lakehouse_name=lakehouse_name,
@@ -415,6 +434,8 @@ def build_dimension_city(
             mode=mode,
             batch_size=batch_size,
             spark=_spark,
+            merge_condition=merge_condition,
+            upsert_key_columns=lake_keys,
         )
         return city_df
     except Exception as exc:
@@ -425,6 +446,9 @@ def build_dimension_city(
             level="warning",
         )
         empty_df = _spark.createDataFrame([], schema=_city_schema())
+        lake_keys = upsert_key_columns
+        if lake_keys is None and str(mode).strip().lower() in ("upsert", "merge"):
+            lake_keys = ["city_key"]
         _write_dimension_targets(
             df=empty_df,
             lakehouse_name=lakehouse_name,
@@ -435,6 +459,8 @@ def build_dimension_city(
             mode=mode,
             batch_size=batch_size,
             spark=_spark,
+            merge_condition=merge_condition,
+            upsert_key_columns=lake_keys,
         )
         return empty_df
 

@@ -27,7 +27,7 @@ def generate_dimensions(
     city_regions: Optional[list[str]] = None,
     city_subregions: Optional[list[str]] = None,
     city_countries: Optional[list[str]] = None,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     batch_size: int = 10_000,
     date_relative_path: str = "Dimension_Date",
     country_relative_path: str = "Dimension_Country",

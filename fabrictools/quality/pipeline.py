@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import perf_counter
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from pyspark.sql import DataFrame, SparkSession
 
@@ -13,7 +13,6 @@ from fabrictools.core.logging import log
 from fabrictools.core.spark import configure_parquet_datetime_rebase, get_spark
 from fabrictools.io import (
     list_lakehouse_tables_for_pipeline,
-    merge_lakehouse,
     write_lakehouse,
 )
 from fabrictools.io.lakehouse import _read_lakehouse_from_base, _resolve_max_workers
@@ -30,12 +29,15 @@ def clean_and_write_data(
     source_relative_path: str,
     target_lakehouse_name: str,
     target_relative_path: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     partition_by: Optional[list[str]] = None,
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
     spark: Optional[SparkSession] = None,
     verbose: bool = True,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[Sequence[str]] = None,
 ) -> DataFrame:
     """Read one Lakehouse path, clean, add Silver metadata, and write the target path.
 
@@ -43,11 +45,15 @@ def clean_and_write_data(
     :param source_relative_path: Source ``Tables/...`` or logical path.
     :param target_lakehouse_name: Silver (or target) Lakehouse name.
     :param target_relative_path: Destination path for the write.
-    :param mode: Spark write mode (e.g. ``overwrite``, ``append``).
+    :param mode: Spark write mode (``overwrite``, ``append``) or Delta ``upsert`` /
+        ``merge`` (see :py:func:`fabrictools.write_lakehouse`).
     :param partition_by: Optional partition columns for :py:func:`fabrictools.write_lakehouse`.
     :param auto_partition: If ``True`` (default), automatically partition the data
         by detected date columns if they exist.
     :param auto_partition_threshold_bytes: Threshold in bytes to trigger auto-partitioning.
+    :param merge_condition: Delta merge predicate when using ``upsert`` / ``merge``.
+    :param upsert_key_columns: Ordered merge-key **candidates** for upsert (see
+        :py:func:`fabrictools.write_lakehouse`); only resolved names are used.
     :param spark: Optional ``SparkSession``.
     :type source_lakehouse_name: str
     :type source_relative_path: str
@@ -55,6 +61,8 @@ def clean_and_write_data(
     :type target_relative_path: str
     :type mode: str
     :type partition_by: list[str] | None
+    :type merge_condition: str | None
+    :type upsert_key_columns: collections.abc.Sequence[str] | None
     :type spark: ~pyspark.sql.SparkSession | None
 
     :returns: The Silver dataframe that was written.
@@ -88,12 +96,25 @@ def clean_and_write_data(
         verbose=verbose,
         resolved_source_relative_path=resolved_source_relative_path,
     )
+    mc_eff = (
+        merge_condition.strip()
+        if isinstance(merge_condition, str) and merge_condition.strip()
+        else None
+    )
+    keys_eff_list = [
+        str(k).strip() for k in (upsert_key_columns or []) if str(k).strip()
+    ]
+    keys_eff = keys_eff_list if keys_eff_list else None
+    if str(mode).strip().lower() in ("upsert", "merge") and not mc_eff and not keys_eff:
+        keys_eff = ["id"]
     write_lakehouse(
         silver_df,
         lakehouse_name=target_lakehouse_name,
         relative_path=target_relative_path,
         mode=mode,
         partition_by=partition_by,
+        merge_condition=mc_eff,
+        upsert_key_columns=keys_eff,
         auto_partition=auto_partition,
         auto_partition_threshold_bytes=auto_partition_threshold_bytes,
         spark=_spark,
@@ -109,13 +130,15 @@ def _build_jobs(
     tables_config: Optional[list[dict[str, Any]]],
     include_schemas: Optional[list[str]],
     exclude_tables: Optional[list[str]],
+    merge_condition: Optional[str],
+    upsert_key_columns: Optional[list[str]],
 ) -> list[TableJobConfig]:
     if tables_config is not None:
         return build_table_jobs_from_config(
             tables_config=tables_config,
             default_mode=mode,
             default_partition_by=partition_by,
-            supported_modes={"overwrite", "append", "merge"},
+            supported_modes={"overwrite", "append", "merge", "upsert"},
             source_keys=(
                 "source_relative_path",
                 "source_path",
@@ -132,6 +155,16 @@ def _build_jobs(
             require_mode=True,
             allow_merge_condition=True,
         )
+    mode_l = str(mode).strip().lower()
+    merge_default = str(merge_condition).strip() if merge_condition else None
+    key_default = [
+        str(k).strip() for k in (upsert_key_columns or []) if str(k).strip()
+    ] or None
+    if key_default == []:
+        key_default = None
+    if mode_l in {"upsert", "merge"} and not merge_default and not key_default:
+        key_default = ["id"]
+
     return build_table_jobs_from_discovery(
         source_lakehouse_name=source_lakehouse_name,
         discover_fn=list_lakehouse_tables_for_pipeline,
@@ -140,6 +173,8 @@ def _build_jobs(
         mode=mode,
         partition_by=partition_by,
         cleaned_table_prefix=True,
+        merge_condition=merge_default,
+        upsert_key_columns=key_default,
     )
 
 
@@ -163,6 +198,7 @@ def _process_clean_table_job(
     table_mode = str(table_job["mode"])
     table_partition_by = table_job.get("partition_by")
     merge_condition = table_job.get("merge_condition")
+    upsert_key_columns = table_job.get("upsert_key_columns")
     started_at = perf_counter()
     silver_df: Optional[DataFrame] = None
     is_persisted = False
@@ -206,14 +242,26 @@ def _process_clean_table_job(
                 auto_partition_threshold_bytes=auto_partition_threshold_bytes,
                 spark=spark,
             )
-        else:
-            merge_lakehouse(
-                source_df=silver_df,
+        elif table_mode in {"merge", "upsert"}:
+            effective_auto_partition = auto_partition and (
+                auto_partition_when_partition_by_provided or not table_partition_by
+            )
+            write_lakehouse(
+                silver_df,
                 lakehouse_name=target_lakehouse_name,
                 relative_path=tgt,
-                merge_condition=str(merge_condition),
+                mode="upsert",
+                partition_by=table_partition_by,
+                merge_condition=merge_condition.strip()
+                if isinstance(merge_condition, str) and merge_condition.strip()
+                else None,
+                upsert_key_columns=upsert_key_columns,
+                auto_partition=effective_auto_partition,
+                auto_partition_threshold_bytes=auto_partition_threshold_bytes,
                 spark=spark,
             )
+        else:
+            raise ValueError(f"Unsupported table write mode {table_mode!r}.")
 
         duration_seconds = round(perf_counter() - started_at, 3)
         if verbose:
@@ -259,7 +307,7 @@ def _process_clean_table_job(
 def clean_and_write_all_tables(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     partition_by: Optional[list[str]] = None,
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
@@ -273,6 +321,8 @@ def clean_and_write_all_tables(
     max_workers: Optional[int] = None,
     auto_partition_when_partition_by_provided: bool = True,
     persist_intermediate: bool = False,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """Bulk clean/write (or merge) using discovery or an explicit ``tables_config``.
 
@@ -283,7 +333,8 @@ def clean_and_write_all_tables(
 
     :param source_lakehouse_name: Lakehouse to read from.
     :param target_lakehouse_name: Lakehouse to write or merge into.
-    :param mode: Default mode when not overridden per table (``overwrite``, ``append``, ``merge``).
+    :param mode: Default mode when not overridden per table (``overwrite``, ``append``,
+        ``merge``, ``upsert``).
     :param partition_by: Default partition columns for writes.
     :param auto_partition: If ``True`` (default), automatically partition the data
         by detected date columns if they exist.
@@ -298,6 +349,10 @@ def clean_and_write_all_tables(
         partition detection when a table already has explicit ``partition_by``.
     :param persist_intermediate: If ``True``, persist each cleaned Silver dataframe
         for the duration of its write/merge, then unpersist it.
+    :param merge_condition: Discovery default merge predicate for upsert-like modes.
+    :param upsert_key_columns: Ordered merge-key candidate list propagated to each job;
+        names are filtered at write time—see :py:func:`fabrictools.write_lakehouse`.
+        If unset for upsert discovery, defaults internally to ``["id"]``.
     :param spark: Optional ``SparkSession``.
     :type source_lakehouse_name: str
     :type target_lakehouse_name: str
@@ -310,6 +365,8 @@ def clean_and_write_all_tables(
     :type max_workers: int | None
     :type auto_partition_when_partition_by_provided: bool
     :type persist_intermediate: bool
+    :type merge_condition: str | None
+    :type upsert_key_columns: list[str] | None
     :type spark: ~pyspark.sql.SparkSession | None
 
     :returns: Summary dict with ``total_tables``, ``successful_tables``, ``failed_tables``,
@@ -336,6 +393,8 @@ def clean_and_write_all_tables(
         tables_config=tables_config,
         include_schemas=include_schemas,
         exclude_tables=exclude_tables,
+        merge_condition=merge_condition,
+        upsert_key_columns=upsert_key_columns,
     )
 
     if not table_jobs:

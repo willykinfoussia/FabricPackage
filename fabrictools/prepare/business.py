@@ -5,7 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import re
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -148,7 +148,7 @@ def make_business_ready(
     target_lakehouse_name: str,
     tables: list[str],
     custom_table_names: Optional[dict[str, str]] = None,
-    mode: str = "overwrite",
+    mode: str = "upsert",
     ingestion_timestamp_col: str = "ingestion_timestamp",
     source_layer_col: str = "ingestion_source_layer",
     source_path_col: str = "ingestion_source_path",
@@ -164,6 +164,9 @@ def make_business_ready(
     max_workers: Optional[int] = None,
     spark: Optional[SparkSession] = None,
     verbose: bool = True,
+    *,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[Sequence[str]] = None,
 ) -> dict[str, Any]:
     """Transform Silver tables to Business Ready (Gold) tables.
 
@@ -176,7 +179,10 @@ def make_business_ready(
     :param tables: List of relative paths for tables to process.
     :param custom_table_names: Optional mapping from source table path to
         exact target table name (leaf only or full relative path leaf).
-    :param mode: Write mode (default: 'overwrite').
+    :param mode: Delta write mode (default ``upsert``); use ``overwrite`` for full reloads.
+    :param merge_condition: Optional explicit Delta merge condition for upsert merges.
+    :param upsert_key_columns: Ordered merge-key **candidates**; see
+        :py:func:`fabrictools.write_lakehouse`.
     :param ingestion_timestamp_col: Column name for the ingestion timestamp.
     :param source_layer_col: Column name for the ingestion layer.
     :param source_path_col: Column name for the source table path.
@@ -261,6 +267,18 @@ def make_business_ready(
             if new_columns != list(df.columns):
                 df = df.toDF(*new_columns)
 
+            lake_keys: Optional[list[str]] = None
+            if upsert_key_columns is not None:
+                lake_keys = [str(k).strip() for k in upsert_key_columns if str(k).strip()]
+            if lake_keys == []:
+                lake_keys = None
+            if (
+                lake_keys is None
+                and str(mode).strip().lower() in ("upsert", "merge")
+                and merge_condition is None
+            ):
+                lake_keys = ["id"]
+
             # Write to Gold
             resolved_target_relative_path, _ = _write_lakehouse_to_base(
                 df=df,
@@ -270,6 +288,8 @@ def make_business_ready(
                 mode=mode,
                 spark=_spark,
                 partition_by=partition_by,
+                merge_condition=merge_condition,
+                upsert_key_columns=lake_keys,
                 normalize_column_names=False,
                 enable_column_mapping=True,
                 auto_partition=auto_partition,

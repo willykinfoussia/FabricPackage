@@ -8,13 +8,20 @@ from typing import Any, Callable, Iterable, Optional, TypedDict
 
 
 class TableJobConfig(TypedDict, total=False):
-    """Canonical keys for one bulk pipeline table job."""
+    """Canonical keys for one bulk pipeline table job.
+
+    ``upsert_key_columns`` (when mode is ``merge`` or ``upsert``) is an ordered list
+    of **candidate** logical/physical names: at write time only names that resolve
+    on the dataframe are combined (AND) into the merge predicate; see
+    :py:func:`fabrictools.write_lakehouse`.
+    """
 
     source_relative_path: str
     target_relative_path: str
     mode: str
     partition_by: Optional[list[str]]
     merge_condition: Optional[str]
+    upsert_key_columns: Optional[list[str]]
 
 
 _TECHNICAL_TABLE_PREFIXES = ("dimension_", "fact_")
@@ -39,7 +46,7 @@ def _strip_technical_table_prefix(table_name: str) -> str:
     lowered = table_name.lower()
     for prefix in _TECHNICAL_TABLE_PREFIXES:
         if lowered.startswith(prefix):
-            return table_name[len(prefix):]
+            return table_name[len(prefix) :]
     return table_name
 
 
@@ -61,7 +68,9 @@ def _to_business_target_relative_path(
     :returns: Target relative path string.
     :rtype: str
     """
-    parts = [segment for segment in relative_path.strip().strip("/").split("/") if segment]
+    parts = [
+        segment for segment in relative_path.strip().strip("/").split("/") if segment
+    ]
     if not parts:
         return relative_path
 
@@ -88,8 +97,19 @@ def build_table_jobs_from_config(
     default_mode: str,
     default_partition_by: Optional[list[str]] = None,
     supported_modes: set[str],
-    source_keys: tuple[str, ...] = ("source_relative_path", "source_path", "source_table", "bronze_path"),
-    target_keys: tuple[str, ...] = ("target_relative_path", "target_path", "target_table", "prepared_table", "silver_table"),
+    source_keys: tuple[str, ...] = (
+        "source_relative_path",
+        "source_path",
+        "source_table",
+        "bronze_path",
+    ),
+    target_keys: tuple[str, ...] = (
+        "target_relative_path",
+        "target_path",
+        "target_table",
+        "prepared_table",
+        "silver_table",
+    ),
     require_target: bool = False,
     require_mode: bool = False,
     allow_merge_condition: bool = False,
@@ -137,7 +157,9 @@ def build_table_jobs_from_config(
         target_relative_path = _pick_first_non_empty(table_config, target_keys)
         if not target_relative_path:
             if require_target:
-                raise ValueError(f"tables_config[{index}] is missing a target path key.")
+                raise ValueError(
+                    f"tables_config[{index}] is missing a target path key."
+                )
             target_relative_path = _to_business_target_relative_path(
                 source_relative_path, cleaned_table_prefix=cleaned_table_prefix
             )
@@ -145,7 +167,9 @@ def build_table_jobs_from_config(
         if require_mode:
             mode_value = str(table_config.get("mode", "")).strip().lower()
             if not mode_value:
-                raise ValueError(f"tables_config[{index}] is missing required key 'mode'.")
+                raise ValueError(
+                    f"tables_config[{index}] is missing required key 'mode'."
+                )
         else:
             mode_value = str(table_config.get("mode", default_mode)).strip().lower()
             if not mode_value:
@@ -171,17 +195,38 @@ def build_table_jobs_from_config(
             partition_by = default_partition_by
 
         merge_condition = None
-        if allow_merge_condition:
-            raw_merge_condition = table_config.get("merge_condition")
-            merge_condition = (
-                str(raw_merge_condition).strip()
-                if raw_merge_condition is not None
-                else None
+        upsert_key_columns_list: Optional[list[str]] = None
+
+        raw_merge_condition = table_config.get("merge_condition")
+        merge_condition = (
+            str(raw_merge_condition).strip()
+            if raw_merge_condition is not None
+            else None
+        )
+
+        raw_keys = table_config.get("upsert_key_columns")
+        if raw_keys is None:
+            upsert_key_columns_list = None
+        elif isinstance(raw_keys, list):
+            upsert_key_columns_list = [
+                str(x).strip() for x in raw_keys if str(x).strip()
+            ]
+            if not upsert_key_columns_list:
+                upsert_key_columns_list = None
+        else:
+            raise ValueError(
+                f"tables_config[{index}] key 'upsert_key_columns' must be a list or None."
             )
-            if mode_value == "merge" and not merge_condition:
-                raise ValueError(
-                    f"tables_config[{index}] mode='merge' requires 'merge_condition'."
-                )
+
+        if (
+            mode_value in {"merge", "upsert"}
+            and not merge_condition
+            and not upsert_key_columns_list
+        ):
+            raise ValueError(
+                f"tables_config[{index}] mode={mode_value!r} requires 'merge_condition' "
+                "or 'upsert_key_columns'."
+            )
 
         jobs.append(
             TableJobConfig(
@@ -190,6 +235,7 @@ def build_table_jobs_from_config(
                 mode=mode_value,
                 partition_by=partition_by,
                 merge_condition=merge_condition,
+                upsert_key_columns=upsert_key_columns_list,
             )
         )
     return jobs
@@ -204,6 +250,8 @@ def build_table_jobs_from_discovery(
     mode: str,
     partition_by: Optional[list[str]] = None,
     cleaned_table_prefix: bool = False,
+    merge_condition: Optional[str] = None,
+    upsert_key_columns: Optional[list[str]] = None,
 ) -> list[TableJobConfig]:
     """Build :class:`TableJobConfig` rows by listing tables then deriving target paths.
 
@@ -214,6 +262,10 @@ def build_table_jobs_from_discovery(
     :param mode: Write mode for every generated job.
     :param partition_by: Optional partition columns for every job.
     :param cleaned_table_prefix: When ``True``, target leaf uses ``Cleaned_`` prefix logic.
+    :param merge_condition: When ``mode`` is ``merge`` or ``upsert``, applied
+        when no per-table condition exists.
+    :param upsert_key_columns: Ordered candidate names for every discovered job (same
+        semantics as ``upsert_key_columns`` on :py:func:`fabrictools.write_lakehouse`).
     :type source_lakehouse_name: str
     :type discover_fn: collections.abc.Callable
     :type include_schemas: list[str] | None
@@ -221,10 +273,33 @@ def build_table_jobs_from_discovery(
     :type mode: str
     :type partition_by: list[str] | None
     :type cleaned_table_prefix: bool
+    :type merge_condition: str | None
+    :type upsert_key_columns: list[str] | None
 
     :returns: One job per discovered relative path.
     :rtype: list
+
+    :raises ValueError: When ``mode`` is merge/upsert without condition or keys.
     """
+    mode_l = str(mode).strip().lower()
+    if mode_l in {"merge", "upsert"}:
+        has_cond = bool(merge_condition and str(merge_condition).strip())
+        keys = [str(x).strip() for x in (upsert_key_columns or []) if str(x).strip()]
+        if not has_cond and not keys:
+            raise ValueError(
+                "Discovery jobs with mode 'merge' or 'upsert' require "
+                "`merge_condition` or a non-empty `upsert_key_columns`."
+            )
+
+    merge_condition = str(merge_condition).strip() if merge_condition else None
+    upsert_keys = (
+        [str(x).strip() for x in upsert_key_columns if str(x).strip()]
+        if upsert_key_columns
+        else None
+    )
+    if upsert_keys == []:
+        upsert_keys = None
+
     discovered = discover_fn(
         lakehouse_name=source_lakehouse_name,
         include_schemas=include_schemas,
@@ -236,10 +311,10 @@ def build_table_jobs_from_discovery(
             target_relative_path=_to_business_target_relative_path(
                 relative_path, cleaned_table_prefix=cleaned_table_prefix
             ),
-            mode=mode,
+            mode=mode_l,
             partition_by=partition_by,
-            merge_condition=None,
+            merge_condition=merge_condition,
+            upsert_key_columns=upsert_keys,
         )
         for relative_path in discovered
     ]
-
