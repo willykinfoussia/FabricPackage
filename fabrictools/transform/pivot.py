@@ -167,14 +167,15 @@ def metric_value_for_class(
     class_col_candidates: Union[str, Sequence[str]],
     metric_col_candidates: Union[str, Sequence[str]],
     class_value: Any,
-) -> Any | None:
+    missing: Any = None,
+) -> Any:
     """Return the metric cell for one class key from a pre-aggregated table.
 
     Intended for dataframes with **at most one row per** class column value, for
     example the output of :func:`build_tcd` when grouping only on ``rows`` (no
     pivot columns). Uses ``filter`` + ``select`` + ``first`` without Spark casts
     on the metric column; the scalar is returned as Spark provides it. Callers
-    are responsible for any coercion (e.g. ``int(...)``, ``or 0``).
+    are responsible for any coercion (e.g. ``int(...)``).
 
     If several rows share the same ``class_value``, only the first row matched
     by Spark is used (unlike ``sum`` after ``groupBy`` on duplicates).
@@ -183,17 +184,21 @@ def metric_value_for_class(
     :param class_col_candidates: Class column name or ordered resolution candidates.
     :param metric_col_candidates: Metric column name or ordered resolution candidates.
     :param class_value: Value to match in the class column (passed to ``lit``).
-    :returns: Metric value, or ``None`` if columns do not resolve, no row matches,
-        or the metric cell is SQL ``NULL``.
+    :param missing: Value returned when columns do not resolve, no row matches the
+        filter, or the metric cell is SQL ``NULL``. Defaults to ``None``.
+    :returns: Metric value, or ``missing`` in the cases described above.
     """
     class_col = resolve_dataframe_column(df, class_col_candidates)
     metric_col = resolve_dataframe_column(df, metric_col_candidates)
     if class_col is None or metric_col is None:
-        return None
+        return missing
 
     row = (
         df.where(F.col(class_col) == F.lit(class_value))
         .select(F.col(metric_col).alias("metric_value"))
         .first()
     )
-    return None if row is None else row["metric_value"]
+    if row is None:
+        return missing
+    val = row["metric_value"]
+    return missing if val is None else val
