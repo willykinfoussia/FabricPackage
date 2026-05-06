@@ -147,25 +147,36 @@ def _resolve_column_name(
     return None
 
 
-def resolve_dataframe_column(df: DataFrame, name: str) -> Optional[str]:
+def resolve_dataframe_column(
+    df: DataFrame, name: Union[str, Sequence[str]]
+) -> Optional[str]:
     """Resolve ``name`` to the physical column name on ``df``.
 
     Accepts the physical name, a :py:func:`fabrictools.clean_data`-style
     normalized label, or snake_case (same rules as :py:func:`fabrictools.merge_dataframes` / :py:func:`fabrictools.remove_columns`).
 
-    :param df: Dataframe whose schema is searched.
-    :param name: Logical, normalized, or physical column label.
-    :type df: ~pyspark.sql.DataFrame
-    :type name: str
+    If ``name`` is a sequence of strings, each entry is tried in order and the
+    first that resolves wins.
 
-    :returns: Physical column name present on ``df``, or ``None`` if ``name`` cannot be resolved.
+    :param df: Dataframe whose schema is searched.
+    :param name: Logical, normalized, or physical column label, or ordered candidates.
+    :type df: ~pyspark.sql.DataFrame
+    :type name: str | collections.abc.Sequence[str]
+
+    :returns: Physical column name present on ``df``, or ``None`` if none resolve.
     :rtype: str | None
 
     .. rubric:: Example
 
     >>> physical = resolve_dataframe_column(df, "Customer ID")  # doctest: +SKIP
     """
-    return _resolve_column_name(df, name, side="DataFrame")
+    if isinstance(name, str):
+        return _resolve_column_name(df, name, side="DataFrame")
+    for candidate in name:
+        resolved = _resolve_column_name(df, candidate, side="DataFrame")
+        if resolved is not None:
+            return resolved
+    return None
 
 
 def rename_columns_normalized(df: DataFrame) -> DataFrame:

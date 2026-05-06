@@ -19,7 +19,7 @@ from fabrictools.transform.columns import (
 from fabrictools.transform.filter import filter_column_by_values
 from fabrictools.transform.merge import merge_dataframes
 from fabrictools.transform.params import ParamResolver
-from fabrictools.transform.pivot import build_tcd
+from fabrictools.transform.pivot import build_tcd, metric_value_for_class
 from fabrictools.transform.rows import drop_rows_over_empty_percent
 from fabrictools.transform.text import coalesce_dim, empty_or_null, norm_text
 from fabrictools.transform.wide_month_suffix import (
@@ -42,6 +42,7 @@ __all__ = [
     "empty_or_null",
     "filter_column_by_values",
     "merge_dataframes",
+    "metric_value_for_class",
     "month_start_from_ca_monthly_col",
     "norm_text",
     "remove_columns",

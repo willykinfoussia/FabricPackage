@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.types import NumericType
+
+from fabrictools.transform.columns import resolve_dataframe_column
 
 
 def build_tcd(
@@ -157,3 +159,41 @@ def build_tcd(
         result = result.toDF(*custom_columns_names)
 
     return result
+
+
+def metric_value_for_class(
+    df: DataFrame,
+    *,
+    class_col_candidates: Union[str, Sequence[str]],
+    metric_col_candidates: Union[str, Sequence[str]],
+    class_value: Any,
+) -> Any | None:
+    """Return the metric cell for one class key from a pre-aggregated table.
+
+    Intended for dataframes with **at most one row per** class column value, for
+    example the output of :func:`build_tcd` when grouping only on ``rows`` (no
+    pivot columns). Uses ``filter`` + ``select`` + ``first`` without Spark casts
+    on the metric column; the scalar is returned as Spark provides it. Callers
+    are responsible for any coercion (e.g. ``int(...)``, ``or 0``).
+
+    If several rows share the same ``class_value``, only the first row matched
+    by Spark is used (unlike ``sum`` after ``groupBy`` on duplicates).
+
+    :param df: Dataframe (e.g. aggregated / TCD).
+    :param class_col_candidates: Class column name or ordered resolution candidates.
+    :param metric_col_candidates: Metric column name or ordered resolution candidates.
+    :param class_value: Value to match in the class column (passed to ``lit``).
+    :returns: Metric value, or ``None`` if columns do not resolve, no row matches,
+        or the metric cell is SQL ``NULL``.
+    """
+    class_col = resolve_dataframe_column(df, class_col_candidates)
+    metric_col = resolve_dataframe_column(df, metric_col_candidates)
+    if class_col is None or metric_col is None:
+        return None
+
+    row = (
+        df.where(F.col(class_col) == F.lit(class_value))
+        .select(F.col(metric_col).alias("metric_value"))
+        .first()
+    )
+    return None if row is None else row["metric_value"]
