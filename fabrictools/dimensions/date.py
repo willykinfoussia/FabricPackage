@@ -36,7 +36,14 @@ def build_dimension_date(
     merge_condition: Optional[str] = None,
     upsert_key_columns: Optional[list[str]] = None,
 ) -> DataFrame:
-    """Build a calendar date dimension (keys, labels, fiscal attributes, weekend flag).
+    """Build a calendar date dimension (keys, labels, fiscal attributes, weekend flag,
+    rolling last-N-day flags vs. the job's current date).
+
+    Columns ``is_last_7days``, ``is_last_30days``, and ``is_last_90days`` are integers
+    0 or 1. A row is 1 when its calendar ``date`` falls in the inclusive window from
+    ``current_date() - N`` through ``current_date()`` in the Spark session at execution
+    time (not the client/report "today"). Re-run the dimension job when those flags
+    must stay aligned with the operational calendar day.
 
     Default inclusive range when ``start_date`` / ``end_date`` are omitted: from
     January 1st of ``current_year - (current_year % 100)`` through December 31st
@@ -103,6 +110,8 @@ def build_dimension_date(
         F.year("date"),
     ).otherwise(F.year("date") - F.lit(1))
 
+    ref_date = F.current_date()
+
     date_df = df.select(
         F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
         F.col("date").cast(DateType()).alias("date"),
@@ -156,6 +165,18 @@ def build_dimension_date(
         .otherwise(F.lit(False))
         .cast(BooleanType())
         .alias("is_weekend"),
+        F.col("date")
+        .between(F.date_sub(ref_date, 7), ref_date)
+        .cast("int")
+        .alias("is_last_7days"),
+        F.col("date")
+        .between(F.date_sub(ref_date, 30), ref_date)
+        .cast("int")
+        .alias("is_last_30days"),
+        F.col("date")
+        .between(F.date_sub(ref_date, 90), ref_date)
+        .cast("int")
+        .alias("is_last_90days"),
     ).orderBy("date_key")
     lakehouse_keys = upsert_key_columns
     if lakehouse_keys is None and str(mode).strip().lower() in ("upsert", "merge"):
