@@ -23,7 +23,7 @@ def _write_dimension_targets(
     warehouse_name: Optional[str],
     warehouse_table: Optional[str],
     default_relative_path: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     batch_size: int = 10_000,
     spark: Optional[SparkSession] = None,
     *,

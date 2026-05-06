@@ -29,7 +29,7 @@ def build_dimension_date(
     warehouse_name: Optional[str] = None,
     warehouse_table: Optional[str] = None,
     default_relative_path: str = "Dimension_Date",
-    mode: str = "upsert",
+    mode: str = "overwrite",
     batch_size: int = 10000,
     spark: Optional[SparkSession] = None,
     *,

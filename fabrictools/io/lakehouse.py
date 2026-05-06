@@ -431,7 +431,7 @@ def write_lakehouse(
     df: DataFrame,
     lakehouse_name: str,
     relative_path: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     partition_by: Optional[List[str]] = None,
     format: str = "delta",
     spark: Optional[SparkSession] = None,
@@ -449,10 +449,10 @@ def write_lakehouse(
     :param lakehouse_name: Display name of the target Lakehouse.
     :param relative_path: Destination path inside the Lakehouse (e.g.
         ``"sales_clean"``, ``"Tables/sales_clean"``, or ``"dbo.PdC Extraction"``).
-    :param mode: ``"upsert"`` (default, Delta merge with bootstrap overwrite when the
-        target table does not exist), or Spark save modes ``"overwrite"``,
-        ``"append"``, ``"ignore"``, ``"error"``. ``"merge"`` is treated like
-        ``"upsert"``.
+    :param mode: Spark save mode ``"overwrite"`` (default), ``"append"``,
+        ``"ignore"``, ``"error"``, or Delta merge modes ``"upsert"`` / ``"merge"``
+        (bootstrap overwrite when the target table does not exist). ``"merge"`` is
+        treated like ``"upsert"``.
     :param partition_by: Optional column names to partition by. Each name is resolved
         like :py:func:`fabrictools.clean_data` /
         :py:func:`fabrictools.merge_dataframes` (physical name,
@@ -493,7 +493,11 @@ def write_lakehouse(
     .. rubric:: Example
 
     >>> write_lakehouse(  # doctest: +SKIP
-    ...     df, "SilverLakehouse", "sales_clean", partition_by=["year"],
+    ...     df,
+    ...     "SilverLakehouse",
+    ...     "sales_clean",
+    ...     mode="upsert",
+    ...     partition_by=["year"],
     ...     upsert_key_columns=["id"],
     ... )
     """
@@ -523,7 +527,7 @@ def _write_lakehouse_to_base(
     lakehouse_name: str,
     relative_path: str,
     base_path: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     partition_by: Optional[List[str]] = None,
     format: str = "delta",
     spark: SparkSession,
@@ -890,9 +894,9 @@ def write_lakehouses(
     """Write multiple ``DataFrame`` objects to Lakehouses in parallel.
 
     Each request must contain ``df``, ``lakehouse_name`` and ``relative_path``.
-    Optional keys mirror :py:func:`write_lakehouse`: ``mode``, ``partition_by``,
-    ``format``, ``merge_condition``, ``upsert_key_columns`` (ordered merge-key
-    candidates; see that function),
+    Optional keys mirror :py:func:`write_lakehouse`: ``mode`` (defaults to
+    ``overwrite`` when omitted), ``partition_by``, ``format``, ``merge_condition``,
+    ``upsert_key_columns`` (ordered merge-key candidates; see that function),
     ``normalize_column_names``, ``enable_column_mapping``,
     ``auto_partition`` and ``auto_partition_threshold_bytes``.
 
@@ -953,7 +957,7 @@ def write_lakehouses(
                 "relative_path": _required_text_request_value(
                     request, "relative_path", index=index, operation="write_lakehouses"
                 ),
-                "mode": str(request.get("mode", "upsert")).strip() or "upsert",
+                "mode": str(request.get("mode", "overwrite")).strip() or "overwrite",
                 "partition_by": request.get("partition_by"),
                 "format": str(request.get("format", "delta")).strip() or "delta",
                 "merge_condition": request.get("merge_condition"),

@@ -29,7 +29,7 @@ def clean_and_write_data(
     source_relative_path: str,
     target_lakehouse_name: str,
     target_relative_path: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
@@ -46,7 +46,7 @@ def clean_and_write_data(
     :param target_lakehouse_name: Silver (or target) Lakehouse name.
     :param target_relative_path: Destination path for the write.
     :param mode: Spark write mode (``overwrite``, ``append``) or Delta ``upsert`` /
-        ``merge`` (see :py:func:`fabrictools.write_lakehouse`).
+        ``merge`` (see :py:func:`fabrictools.write_lakehouse`). Default ``overwrite``.
     :param partition_by: Optional partition columns for :py:func:`fabrictools.write_lakehouse`.
     :param auto_partition: If ``True`` (default), automatically partition the data
         by detected date columns if they exist.
@@ -307,7 +307,7 @@ def _process_clean_table_job(
 def clean_and_write_all_tables(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
     auto_partition: bool = True,
     auto_partition_threshold_bytes: int = 1_073_741_824,
@@ -334,7 +334,7 @@ def clean_and_write_all_tables(
     :param source_lakehouse_name: Lakehouse to read from.
     :param target_lakehouse_name: Lakehouse to write or merge into.
     :param mode: Default mode when not overridden per table (``overwrite``, ``append``,
-        ``merge``, ``upsert``).
+        ``merge``, ``upsert``). Default ``overwrite``.
     :param partition_by: Default partition columns for writes.
     :param auto_partition: If ``True`` (default), automatically partition the data
         by detected date columns if they exist.

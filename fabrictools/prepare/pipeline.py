@@ -92,7 +92,7 @@ def prepare_and_write_data(
     source_relative_path: str,
     target_lakehouse_name: str,
     target_relative_path: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     sample_size: int = 500,
     profiling_confidence_threshold: float = 0.80,
     max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
@@ -115,7 +115,7 @@ def prepare_and_write_data(
     :param source_relative_path: Source table path.
     :param target_lakehouse_name: Target Lakehouse for the prepared Delta table.
     :param target_relative_path: Target path for the prepared table.
-    :param mode: Spark write mode for the prepared table.
+    :param mode: Spark write mode for the prepared table (default ``overwrite``).
     :param sample_size: Profiling sample size for :py:func:`fabrictools.resolve_columns`.
     :param profiling_confidence_threshold: Minimum confidence to trust profiling cache hits.
     :param max_partitions_guard: Upper bound for partition column selection (see :py:func:`fabrictools.write_prepared_table`).
@@ -211,7 +211,7 @@ def prepare_and_write_data(
 def prepare_and_write_all_tables(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     tables_config: Optional[list[dict[str, Any]]] = None,
     include_schemas: Optional[list[str]] = None,
     exclude_tables: Optional[list[str]] = None,
@@ -233,7 +233,7 @@ def prepare_and_write_all_tables(
 
     :param source_lakehouse_name: Source Lakehouse.
     :param target_lakehouse_name: Target Lakehouse for prepared outputs.
-    :param mode: Default write mode for discovered jobs.
+    :param mode: Default write mode for discovered jobs (default ``overwrite``).
     :param tables_config: Optional explicit job list (see :mod:`fabrictools.pipelines.config`).
     :param include_schemas: Discovery schema filter.
     :param exclude_tables: Discovery exclusion list.

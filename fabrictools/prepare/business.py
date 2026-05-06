@@ -148,7 +148,7 @@ def make_business_ready(
     target_lakehouse_name: str,
     tables: list[str],
     custom_table_names: Optional[dict[str, str]] = None,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     ingestion_timestamp_col: str = "ingestion_timestamp",
     source_layer_col: str = "ingestion_source_layer",
     source_path_col: str = "ingestion_source_path",
@@ -179,7 +179,7 @@ def make_business_ready(
     :param tables: List of relative paths for tables to process.
     :param custom_table_names: Optional mapping from source table path to
         exact target table name (leaf only or full relative path leaf).
-    :param mode: Delta write mode (default ``upsert``); use ``overwrite`` for full reloads.
+    :param mode: Delta write mode (default ``overwrite``); use ``upsert`` / ``merge`` for merges.
     :param merge_condition: Optional explicit Delta merge condition for upsert merges.
     :param upsert_key_columns: Ordered merge-key **candidates**; see
         :py:func:`fabrictools.write_lakehouse`.

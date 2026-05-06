@@ -350,7 +350,7 @@ def write_prepared_table(
     resolved_mappings: List[ResolvedColumn],
     target_lakehouse_name: str,
     target_relative_path: str,
-    mode: str = "upsert",
+    mode: str = "overwrite",
     max_partitions_guard: int = DEFAULT_MAX_PARTITIONS_GUARD,
     vacuum_retention_hours: int = 168,
     spark: Optional[SparkSession] = None,
@@ -368,7 +368,7 @@ def write_prepared_table(
     :param resolved_mappings: Same mappings used to build ``df`` (for partition heuristics).
     :param target_lakehouse_name: Target Lakehouse name.
     :param target_relative_path: Target Delta path.
-    :param mode: Spark write mode.
+    :param mode: Spark write mode (default ``overwrite``).
     :param max_partitions_guard: Upper cap for combined partition cardinality guard.
     :param vacuum_retention_hours: Retention passed to Delta ``VACUUM``.
     :param merge_condition: Optional explicit upsert merge predicate; see
