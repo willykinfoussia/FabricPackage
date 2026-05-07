@@ -203,34 +203,61 @@ def rename_columns_normalized(df: DataFrame) -> DataFrame:
     return df.toDF(*normalized)
 
 
-def remove_columns(df: DataFrame, *columns: str) -> DataFrame:
+def remove_columns(
+    df: DataFrame,
+    *names: str,
+    columns: Sequence[str] | None = None,
+    keep_columns: bool = False,
+) -> DataFrame:
     """Drop columns by physical name or by the same resolution rules as :py:func:`fabrictools.merge_dataframes`.
 
-    :param df: Input dataframe.
-    :param columns: One or more labels; duplicates resolving to the same physical column are dropped once. Labels that do not resolve to a column on ``df`` are ignored.
-    :type df: ~pyspark.sql.DataFrame
-    :type columns: str
+    Pass column labels either as positional arguments or as ``columns=`` (not both). With
+    ``keep_columns=True``, only the resolved columns are kept and all others are dropped.
 
-    :returns: ``df`` without the resolved columns (unchanged if every label is unknown).
+    :param df: Input dataframe.
+    :param names: One or more labels (positional); duplicates resolving to the same physical column are dropped once. Labels that do not resolve to a column on ``df`` are ignored (drop mode) or skipped (keep mode).
+    :param columns: Optional sequence of labels; same resolution rules as ``names``. Use when the list is already in a variable.
+    :param keep_columns: If ``False`` (default), drop the resolved columns. If ``True``, drop every column *not* in the resolved set (keep-only).
+    :type df: ~pyspark.sql.DataFrame
+    :type names: str
+    :type columns: collections.abc.Sequence[str] | None
+    :type keep_columns: bool
+
+    :returns: Dataframe with columns removed per ``keep_columns``. In drop mode, unchanged if every label is unknown.
     :rtype: ~pyspark.sql.DataFrame
 
-    :raises ValueError: If no names are passed.
+    :raises ValueError: If no names are passed, if both positional names and ``columns`` are provided, or if ``keep_columns=True`` and no label resolves to a column on ``df``.
 
     .. rubric:: Example
 
     >>> slim = remove_columns(df, "temp_flag", "raw_json_blob")  # doctest: +SKIP
+    >>> slim = remove_columns(df, columns=["temp_flag", "raw_json_blob"])  # doctest: +SKIP
+    >>> keep_few = remove_columns(df, "id", "ts", keep_columns=True)  # doctest: +SKIP
     """
-    if not columns:
+    if names and columns is not None:
+        raise ValueError(
+            "remove_columns: pass column names either positionally or via columns=, not both"
+        )
+    effective: list[str] = list(columns) if columns is not None else list(names)
+    if not effective:
         raise ValueError("remove_columns requires at least one column name")
     resolved: list[str] = []
     seen: set[str] = set()
-    for name in columns:
+    for name in effective:
         actual = _resolve_column_name(df, name, side="DataFrame")
         if actual is None:
             continue
         if actual not in seen:
             seen.add(actual)
             resolved.append(actual)
+    if keep_columns:
+        if not resolved:
+            raise ValueError(
+                "remove_columns(..., keep_columns=True) requires at least one column name that resolves on the dataframe"
+            )
+        keep = set(resolved)
+        to_drop = [c for c in df.columns if c not in keep]
+        return df.drop(*to_drop) if to_drop else df
     return df.drop(*resolved)
 
 

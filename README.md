@@ -497,10 +497,12 @@ df_kept = ft.drop_rows_over_empty_percent(df, 0.5)
 
 #### `remove_columns`
 
-Retire une ou plusieurs colonnes ; les noms sont resolus comme pour `merge_dataframes` (nom physique, libelle normalise ou snake_case).
+Retire une ou plusieurs colonnes ; les noms sont resolus comme pour `merge_dataframes` (nom physique, libelle normalise ou snake_case). On peut passer une liste avec `columns=[...]` (sans autres arguments positionnels pour les noms). Avec `keep_columns=True`, on conserve uniquement les colonnes indiquees et on supprime les autres.
 
 ```python
 df2 = ft.remove_columns(df, "Colonne inutile")
+df2 = ft.remove_columns(df, columns=["A", "B"])
+df2 = ft.remove_columns(df, "id", "ts", keep_columns=True)
 ```
 
 #### `rename_columns_normalized`
