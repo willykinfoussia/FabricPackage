@@ -9,6 +9,7 @@ from typing import Any, Optional, Sequence
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
 from fabrictools.core import build_lakehouse_write_path, get_lakehouse_abfs_path
 from fabrictools.core.logging import log
@@ -143,6 +144,30 @@ def _build_business_table_plan(
     return plan
 
 
+def _is_date_dimension_source_path(source_relative_path: str) -> bool:
+    """True when the path leaf names the calendar dimension (Dimension_Date, etc.)."""
+    leaf = source_relative_path.replace("\\", "/").rstrip("/").split("/")[-1]
+    leaf = re.sub(r"^(Cleaned|Processed)_?", "", leaf, flags=re.IGNORECASE)
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "", leaf).casefold()
+    return normalized == "dimensiondate"
+
+
+def _plan_includes_date_dimension(plan: list[_BusinessTablePlan]) -> bool:
+    return any(_is_date_dimension_source_path(t.source_relative_path) for t in plan)
+
+
+def _build_periode_dataframe(spark: SparkSession):
+    """Three-row lookup matching a Power BI DATATABLE-style definition."""
+    schema = StructType(
+        [
+            StructField("PeriodeLabel", StringType(), nullable=False),
+            StructField("Jours", IntegerType(), nullable=False),
+        ]
+    )
+    rows = [("7 jours", 7), ("30 jours", 30), ("90 jours", 90)]
+    return spark.createDataFrame(rows, schema)
+
+
 def make_business_ready(
     source_lakehouse_name: str,
     target_lakehouse_name: str,
@@ -174,6 +199,11 @@ def make_business_ready(
     snake_case to Normal Case, renames tables (PascalCase, removing
     Cleaned/Processed), and writes them to the target Lakehouse.
 
+    When the batch includes a successful write for the date dimension table
+    (source path leaf matching ``Dimension_Date`` / ``DimensionDate`` style names),
+    a small Delta lookup ``Periode`` (columns ``PeriodeLabel``, ``Jours``) is also
+    written to the target Lakehouse (always ``overwrite``).
+
     :param source_lakehouse_name: Source Lakehouse (e.g. Silver).
     :param target_lakehouse_name: Target Lakehouse (e.g. Gold).
     :param tables: List of relative paths for tables to process.
@@ -202,7 +232,9 @@ def make_business_ready(
     :param spark: Optional SparkSession.
     :param verbose: Print processing details.
 
-    :returns: Summary dictionary.
+    :returns: Summary dictionary with keys ``total_tables``, ``successful_tables``,
+        ``failed_tables``, ``tables``, ``failures``, and when applicable
+        ``periode_written``, ``periode_resolved_target_relative_path``.
     :rtype: dict
 
     .. rubric:: Example
@@ -349,12 +381,52 @@ def make_business_ready(
             if index in failures_by_index:
                 failures.append(failures_by_index[index])
 
+    periode_written = False
+    periode_resolved_target_relative_path: Optional[str] = None
+
+    date_dimension_succeeded = (
+        _plan_includes_date_dimension(table_plan)
+        and any(
+            _is_date_dimension_source_path(entry["source_relative_path"])
+            for entry in processed_tables
+        )
+    )
+
+    if date_dimension_succeeded:
+        try:
+            periode_df = _build_periode_dataframe(_spark)
+            resolved_periode_path, _ = _write_lakehouse_to_base(
+                df=periode_df,
+                lakehouse_name=target_lakehouse_name,
+                relative_path="Periode",
+                base_path=target_base_path,
+                mode="overwrite",
+                spark=_spark,
+                partition_by=None,
+                normalize_column_names=False,
+                enable_column_mapping=True,
+                auto_partition=auto_partition,
+                auto_partition_threshold_bytes=auto_partition_threshold_bytes,
+            )
+            periode_written = True
+            periode_resolved_target_relative_path = resolved_periode_path
+            if verbose:
+                log(
+                    "Wrote lookup table 'Periode' -> "
+                    f"'{periode_resolved_target_relative_path}'."
+                )
+        except Exception as exc:
+            if verbose:
+                log(f"Failed to write 'Periode': {exc}", level="warning")
+
     return {
         "total_tables": total_tables,
         "successful_tables": len(processed_tables),
         "failed_tables": len(failures),
         "tables": processed_tables,
         "failures": failures,
+        "periode_written": periode_written,
+        "periode_resolved_target_relative_path": periode_resolved_target_relative_path,
     }
 
 

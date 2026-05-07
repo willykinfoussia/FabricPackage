@@ -432,6 +432,8 @@ all_tables = ft.prepare_and_write_all_tables(
 
 Transforme les tables pour le métier : renommage des colonnes (`snake_case` -> `Normal Case`), nettoyage du nom des tables (retrait de Cleaned/Processed et conversion en PascalCase) et mise à jour des métadonnées d'ingestion.
 
+Si la liste inclut une dimension date (`Dimension_Date` ou équivalent sur le dernier segment du chemin source) et que cette table est écrite avec succès, une petite table Delta `Periode` (`PeriodeLabel`, `Jours`) est aussi publiée dans le lakehouse cible (mode `overwrite`).
+
 ```python
 business_result = ft.make_business_ready(
     source_lakehouse_name="SilverLakehouse",
