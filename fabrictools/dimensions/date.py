@@ -45,6 +45,11 @@ def build_dimension_date(
     time (not the client/report "today"). Re-run the dimension job when those flags
     must stay aligned with the operational calendar day.
 
+    Column ``periode_relation_key`` is a string bridge key for relating to the small
+    ``Periode`` lookup written by :py:func:`fabrictools.make_business_ready`:
+    ``7_30_90`` if in the last-7-days window, else ``30_90`` if in last 30 (but not 7),
+    else ``90`` if in last 90 (but not 30), else ``0``.
+
     Default inclusive range when ``start_date`` / ``end_date`` are omitted: from
     January 1st of ``current_year - (current_year % 100)`` through December 31st
     of ``current_year + 4``.
@@ -177,6 +182,20 @@ def build_dimension_date(
         .between(F.date_sub(ref_date, 90), ref_date)
         .cast("int")
         .alias("is_last_90days"),
+        F.when(
+            F.col("date").between(F.date_sub(ref_date, 7), ref_date),
+            F.lit("7_30_90"),
+        )
+        .when(
+            F.col("date").between(F.date_sub(ref_date, 30), ref_date),
+            F.lit("30_90"),
+        )
+        .when(
+            F.col("date").between(F.date_sub(ref_date, 90), ref_date),
+            F.lit("90"),
+        )
+        .otherwise(F.lit("0"))
+        .alias("periode_relation_key"),
     ).orderBy("date_key")
     lakehouse_keys = upsert_key_columns
     if lakehouse_keys is None and str(mode).strip().lower() in ("upsert", "merge"):

@@ -157,14 +157,22 @@ def _plan_includes_date_dimension(plan: list[_BusinessTablePlan]) -> bool:
 
 
 def _build_periode_dataframe(spark: SparkSession):
-    """Three-row lookup matching a Power BI DATATABLE-style definition."""
+    """Lookup rows matching ``build_dimension_date.periode_relation_key`` values."""
     schema = StructType(
         [
             StructField("PeriodeLabel", StringType(), nullable=False),
             StructField("Jours", IntegerType(), nullable=False),
+            StructField("periode_relation_key", StringType(), nullable=False),
         ]
     )
-    rows = [("7 jours", 7), ("30 jours", 30), ("90 jours", 90)]
+    rows = [
+        ("7 jours", 7, "7_30_90"),
+        ("30 jours", 30, "7_30_90"),
+        ("30 jours", 30, "30_90"),
+        ("90 jours", 90, "7_30_90"),
+        ("90 jours", 90, "30_90"),
+        ("90 jours", 90, "90"),
+    ]
     return spark.createDataFrame(rows, schema)
 
 
@@ -201,8 +209,10 @@ def make_business_ready(
 
     When the batch includes a successful write for the date dimension table
     (source path leaf matching ``Dimension_Date`` / ``DimensionDate`` style names),
-    a small Delta lookup ``Periode`` (columns ``PeriodeLabel``, ``Jours``) is also
-    written to the target Lakehouse (always ``overwrite``).
+    a small Delta lookup ``Periode`` is also written (always ``overwrite``,
+    ``auto_partition=False``): columns ``PeriodeLabel``, ``Jours``, and
+    ``periode_relation_key`` (six rows keyed like :py:func:`fabrictools.dimensions.date.build_dimension_date`
+    ``periode_relation_key``) so the semantic model can relate ``DimensionDate`` to ``Periode``.
 
     :param source_lakehouse_name: Source Lakehouse (e.g. Silver).
     :param target_lakehouse_name: Target Lakehouse (e.g. Gold).
@@ -405,7 +415,7 @@ def make_business_ready(
                 partition_by=None,
                 normalize_column_names=False,
                 enable_column_mapping=True,
-                auto_partition=auto_partition,
+                auto_partition=False,
                 auto_partition_threshold_bytes=auto_partition_threshold_bytes,
             )
             periode_written = True

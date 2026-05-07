@@ -312,6 +312,8 @@ ft.write_warehouse(df_wh, warehouse_name="RetailWarehouse", table="dbo.orders_sn
 
 #### `build_dimension_date`
 
+Ajoute notamment les indicateurs glissants (`is_last_7days`, …) et la colonne `periode_relation_key` (`7_30_90`, `30_90`, `90`, `0`) pour relier la dimension à la table `Periode` publiée par `make_business_ready`.
+
 ```python
 dim_date = ft.build_dimension_date(start_date="2020-01-01", end_date="2030-12-31")
 ```
@@ -432,7 +434,7 @@ all_tables = ft.prepare_and_write_all_tables(
 
 Transforme les tables pour le métier : renommage des colonnes (`snake_case` -> `Normal Case`), nettoyage du nom des tables (retrait de Cleaned/Processed et conversion en PascalCase) et mise à jour des métadonnées d'ingestion.
 
-Si la liste inclut une dimension date (`Dimension_Date` ou équivalent sur le dernier segment du chemin source) et que cette table est écrite avec succès, une petite table Delta `Periode` (`PeriodeLabel`, `Jours`) est aussi publiée dans le lakehouse cible (mode `overwrite`).
+Si la liste inclut une dimension date (`Dimension_Date` ou équivalent sur le dernier segment du chemin source) et que cette table est écrite avec succès, une petite table Delta `Periode` est aussi publiée (`PeriodeLabel`, `Jours`, `periode_relation_key`, six lignes ; mode `overwrite`, sans auto-partitionnement), pour une relation vers la colonne homonyme de la dimension date.
 
 ```python
 business_result = ft.make_business_ready(
