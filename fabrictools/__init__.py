@@ -6,7 +6,7 @@ behaviour are documented on the **defining modules** (and mirrored in Sphinx):
 * :mod:`fabrictools.io` — read/write/merge Lakehouse, Warehouse JDBC, discovery
 * :mod:`fabrictools.quality` — ``clean_data``, Silver metadata, scans, bronze→silver pipelines
 * :mod:`fabrictools.prepare` — prepared-layer schema, resolution, transforms, semantic publish
-* :mod:`fabrictools.dimensions` — date / country / city dimensions and orchestration
+* :mod:`fabrictools.dimensions` — date / country / city / attribute dimensions and orchestration
 * :mod:`fabrictools.transform` — column renames, filters, joins, wide-month reshapes
 * :mod:`fabrictools.pipelines` — shared bulk job config (``tables_config`` parsing)
 """
@@ -18,6 +18,7 @@ from fabrictools.dimensions import (
     build_dimension_city,
     build_dimension_country,
     build_dimension_date,
+    build_dimension_from_columns,
     generate_dimensions,
 )
 from fabrictools.io.lakehouse import (
@@ -91,6 +92,7 @@ _EXPORT_REGISTRY = {
     "build_dimension_date": build_dimension_date,
     "build_dimension_country": build_dimension_country,
     "build_dimension_city": build_dimension_city,
+    "build_dimension_from_columns": build_dimension_from_columns,
     "generate_dimensions": generate_dimensions,
     "snapshot_source_schema": snapshot_source_schema,
     "resolve_columns": resolve_columns,

@@ -9,6 +9,8 @@ Dimensions (calendrier et géographie)
 
 .. automodule:: fabrictools.dimensions.geo
 
+.. automodule:: fabrictools.dimensions.attribute
+
 .. automodule:: fabrictools.dimensions.pipeline
 
 .. automodule:: fabrictools.dimensions

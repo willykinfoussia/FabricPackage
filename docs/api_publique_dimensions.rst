@@ -1,7 +1,7 @@
 Dimensions (calendrier et géographie)
 =====================================
 
-Construction des dimensions date, pays, ville et orchestration.
+Construction des dimensions date, pays, ville, attributs dérivés des données et orchestration.
 
 .. currentmodule:: fabrictools
 
@@ -10,5 +10,7 @@ Construction des dimensions date, pays, ville et orchestration.
 .. autofunction:: build_dimension_country
 
 .. autofunction:: build_dimension_city
+
+.. autofunction:: build_dimension_from_columns
 
 .. autofunction:: generate_dimensions
