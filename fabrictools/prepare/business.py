@@ -33,13 +33,39 @@ class _BusinessTablePlan:
 
 
 def _format_column_token(token: str) -> str:
-    """Format one token with French mapping and safe special cases."""
-    normalized = token.strip().lower()
-    if not normalized:
+    """Format one token with French mapping and safe special cases.
+
+    All-uppercase ASCII letter tokens with length >= 2 are kept as-is (e.g.
+    ``CA``, ``OIT``) so acronyms are not turned into ``Ca``.
+    """
+    raw = token.strip()
+    if not raw:
         return ""
+    if (
+        len(raw) >= 2
+        and raw.isascii()
+        and raw.isalpha()
+        and raw.isupper()
+    ):
+        return raw
+    normalized = raw.lower()
     if normalized == "n":
         return "N°"
     return FRENCH_COLUMN_TOKEN_MAP.get(normalized, normalized.capitalize())
+
+
+def _split_identifier_words(segment: str) -> list[str]:
+    """Split one identifier chunk on acronym / PascalCase boundaries.
+
+    Applies the usual two-pass heuristic: ``CATable`` → ``CA``, ``Table``;
+    ``TableCA`` → ``Table``, ``CA``. Ambiguous runs (e.g. ``USAID``) may split
+    arbitrarily without a domain dictionary.
+    """
+    if not segment.strip():
+        return []
+    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", segment)
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", spaced)
+    return [w for w in spaced.split() if w]
 
 
 def _to_pascal_case(name: str) -> str:
@@ -53,18 +79,28 @@ def _to_pascal_case(name: str) -> str:
 
 
 def _to_normal_case(name: str) -> str:
-    """Convert snake_case column name to Normal Case.
+    """Convert column identifiers to Normal Case (spaces between words).
 
-    Uses token-level mapping to restore common French accents/abbreviations.
+    Splits on underscores, then splits each segment on PascalCase / acronym
+    boundaries so names like ``CATable`` become ``CA Table``. Uses token-level
+    mapping to restore common French accents/abbreviations.
 
     Examples:
-    - 'client_description' -> 'Client Description'
-    - 'annee_cree' -> 'Année Créée'
-    - 'n_element' -> 'N° Élément'
-    - 'qte_entree' -> 'Qté Entrée'
+    - ``client_description`` -> ``Client Description``
+    - ``CATable`` -> ``CA Table``
+    - ``OITTableClients`` -> ``OIT Table Clients``
+    - ``TableCA`` -> ``Table CA``
+    - ``annee_cree`` -> ``Année Créée``
+    - ``n_element`` -> ``N° Élément``
+    - ``qte_entree`` -> ``Qté Entrée``
     """
-    parts = re.split(r"_", name)
-    return " ".join(_format_column_token(part) for part in parts if part)
+    segments = re.split(r"_", name)
+    words: list[str] = []
+    for segment in segments:
+        if not segment:
+            continue
+        words.extend(_split_identifier_words(segment))
+    return " ".join(_format_column_token(w) for w in words if w)
 
 
 def _unique_name_key(name: str) -> str:
