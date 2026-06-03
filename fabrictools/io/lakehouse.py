@@ -1141,6 +1141,56 @@ def merge_lakehouse(
     log("  Merge complete")
 
 
+def delete_lakehouse(
+    lakehouse_name: str,
+    relative_path: str,
+    condition: str,
+    spark: Optional[SparkSession] = None,
+) -> None:
+    """Delete rows from a Delta table in a Lakehouse matching ``condition``.
+
+    Uses Delta Lake ``DeltaTable.forPath`` and ``delete(condition=...)``. The
+    predicate is a SQL expression evaluated against target columns (same style
+    as :py:func:`merge_lakehouse`'s ``merge_condition``).
+
+    :param lakehouse_name: Lakehouse display name holding the target table.
+    :param relative_path: Path of the Delta table inside the Lakehouse (same rules as
+        :py:func:`write_lakehouse`, including ``schema.table`` with spaces).
+    :param condition: SQL predicate selecting rows to delete (e.g.
+        ``"to_date(`LoadDate`) = '2025-06-03'"``).
+    :param spark: Optional ``SparkSession``; when omitted the active session is used.
+    :type lakehouse_name: str
+    :type relative_path: str
+    :type condition: str
+    :type spark: ~pyspark.sql.SparkSession | None
+
+    .. rubric:: Example
+
+    >>> delete_lakehouse(  # doctest: +SKIP
+    ...     "SilverLakehouse",
+    ...     "suivi_journalier",
+    ...     condition="to_date(`Date`) = '2025-06-03'",
+    ... )
+    """
+    from delta.tables import DeltaTable  # type: ignore[import-untyped]  # noqa: PLC0415
+
+    _spark = spark or get_spark()
+    base = get_lakehouse_abfs_path(lakehouse_name)
+    resolved_relative_path = build_lakehouse_write_path(relative_path)
+    full_path = f"{base}/{resolved_relative_path}"
+    if resolved_relative_path != relative_path:
+        log(
+            f"Auto-corrected delete relative_path '{relative_path}' "
+            f"-> '{resolved_relative_path}'"
+        )
+    log(f"Deleting from Lakehouse '{lakehouse_name}' → {full_path}")
+    log(f"  Condition: {condition}")
+
+    target = DeltaTable.forPath(_spark, full_path)
+    target.delete(condition)
+    log("  Delete complete")
+
+
 def lakehouse_table_exists(
     lakehouse_name: str,
     relative_path: str,
@@ -1295,6 +1345,7 @@ __all__ = [
     "write_lakehouse",
     "write_lakehouses",
     "merge_lakehouse",
+    "delete_lakehouse",
     "lakehouse_table_exists",
     "delete_all_lakehouse_tables",
 ]

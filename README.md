@@ -19,7 +19,6 @@ Documentation detaillee (reference API et guides Sphinx) : [https://willykinfous
 - [Transform DataFrame (filtre / jointure)](#transform-dataframe)
 - [FAQ](#faq)
 - [Support](#support)
-- [Ressources mainteneur](#ressources-mainteneur)
 - [Licence](#licence)
 
 ---
@@ -74,135 +73,141 @@ pip install "fabrictools[visualization]"
 ```python
 import fabrictools as ft
 
-# Lire une table/fichier depuis un Lakehouse
-df = ft.read_lakehouse("BronzeLakehouse", "dbo/orders")
-df.show(5)
+# Lire plusieurs tables en parallele
+bronze = ft.read_lakehouses(
+    [
+        {"name": "orders_raw", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/orders_raw"},
+        {"name": "customers_raw", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/customers_raw"},
+    ],
+    continue_on_error=False,
+)
+
+orders_raw = bronze["orders_raw"]
+customers_raw = bronze["customers_raw"]
+bronze["summary"]
 ```
 
-Ensuite, vous pouvez faire :
+Chemin recommande (usage courant) :
 
-1. Nettoyer les donnees (`clean_data`)
-2. Ajouter des metadonnees (`add_silver_metadata`)
-3. Ecrire vers un Lakehouse cible (`write_lakehouse`)
+1. Nettoyage et publication Silver en lot (`clean_and_write_all_tables`)
+2. Lecture/ecriture multi-tables (`read_lakehouses`, `write_lakehouses`)
+3. Enrichissements DataFrame (`merge_dataframes`, `build_tcd`)
+4. Publication metier (`make_business_ready`)
+5. Dimensions reporting (`generate_dimensions`)
 
 ---
 
 ## Tutoriel interactif : projet fictif NovaRetail
 
-Objectif : partir de donnees brutes de ventes et finir avec des tables preparees pour le reporting.
+Objectif : partir de donnees brutes et finir avec des tables metier prêtes pour BI.
 
 ### Vue d'ensemble (visuel)
 
 ```mermaid
 flowchart LR
-    sourceLakehouse["BronzeLakehouse (brut)"] --> cleanStep["Nettoyage"]
-    cleanStep --> silverStep["Enrichissement Silver"]
-    silverStep --> curatedLakehouse["SilverLakehouse (curated)"]
-    curatedLakehouse --> preparedStep["Preparation semantique"]
-    preparedStep --> preparedLakehouse["PreparedLakehouse"]
-    preparedLakehouse --> warehouseStep["Warehouse + BI"]
+    sourceLakehouse["BronzeLakehouse (brut)"] --> cleanBulkStep["clean_and_write_all_tables"]
+    cleanBulkStep --> silverLakehouse["SilverLakehouse (Cleaned_*)"]
+    silverLakehouse --> dataframeStep["merge_dataframes + build_tcd"]
+    dataframeStep --> curatedSilver["SilverLakehouse (Curated_*)"]
+    curatedSilver --> businessStep["make_business_ready"]
+    businessStep --> goldLakehouse["GoldLakehouse (Business)"]
+    goldLakehouse --> dimensionsStep["generate_dimensions"]
 ```
 
 
 
-### Etape 1 - Lire les ventes brutes
+### Etape 1 - Lire les donnees brutes (multi-tables)
 
 ```python
 import fabrictools as ft
 
-orders_raw = ft.read_lakehouse("BronzeLakehouse", "dbo/orders_raw")
-orders_raw.show(5)
+bronze = ft.read_lakehouses(
+    [
+        {"name": "orders_raw", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/orders_raw"},
+        {"name": "customers_raw", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/customers_raw"},
+        {"name": "products_raw", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/products_raw"},
+    ],
+    max_workers=3,
+    continue_on_error=False,
+)
+
+orders_raw = bronze["orders_raw"]
+bronze["summary"]
 ```
 
-### Etape 2 - Nettoyer les donnees
+### Etape 2 - Nettoyer et publier en Silver (bulk)
 
 ```python
-orders_clean = ft.clean_data(orders_raw)
-```
-
-### Etape 3 - Enrichir en metadonnees Silver
-
-```python
-orders_silver = ft.add_silver_metadata(
-    orders_clean,
+silver_bulk = ft.clean_and_write_all_tables(
     source_lakehouse_name="BronzeLakehouse",
-    source_relative_path="dbo/orders_raw",
-    source_layer="bronze",
-)
-```
-
-### Etape 4 - Ecrire en Silver
-
-```python
-ft.write_lakehouse(
-    orders_silver,
-    lakehouse_name="SilverLakehouse",
-    relative_path="dbo/orders",
-    mode="overwrite",
-    partition_by=["year", "month", "day"],
-)
-```
-
-### Etape 5 - Scanner la qualite
-
-```python
-quality = ft.scan_data_errors(orders_silver, include_samples=True, display_results=True)
-quality["summary_df"].show(truncate=False)
-```
-
-### Etape 6 - Fusion incrementale (upsert)
-
-```python
-orders_updates = ft.read_lakehouse("BronzeLakehouse", "dbo/orders_updates")
-
-ft.merge_lakehouse(
-    source_df=orders_updates,
-    lakehouse_name="SilverLakehouse",
-    relative_path="dbo/orders",
-    merge_condition="src.order_id = tgt.order_id",
-)
-```
-
-### Etape 7 - Ecriture dans un Warehouse
-
-```python
-ft.write_warehouse(
-    df=orders_silver,
-    warehouse_name="RetailWarehouse",
-    table="dbo.orders",
-    mode="overwrite",
-)
-```
-
-### Etape 8 - Pipeline prepare (table unique)
-
-```python
-prepared_df = ft.prepare_and_write_data(
-    source_lakehouse_name="SilverLakehouse",
-    source_relative_path="Tables/dbo/orders",
-    target_lakehouse_name="PreparedLakehouse",
-    target_relative_path="Tables/dbo/orders_prepared",
-    mode="overwrite",
-)
-```
-
-### Etape 9 - Pipeline prepare (bulk)
-
-```python
-bulk_result = ft.prepare_and_write_all_tables(
-    source_lakehouse_name="SilverLakehouse",
-    target_lakehouse_name="PreparedLakehouse",
+    target_lakehouse_name="SilverLakehouse",
     include_schemas=["dbo"],
     continue_on_error=True,
 )
-print(bulk_result["successful_tables"], bulk_result["failed_tables"])
+print(silver_bulk["successful_tables"], silver_bulk["failed_tables"])
 ```
 
-### Etape 10 - Dimensions pour reporting
+### Etape 3 - Enrichir les donnees avec `merge_dataframes`
+
+```python
+orders_clean = ft.read_lakehouse("SilverLakehouse", "Tables/dbo/Cleaned_OrdersRaw")
+customers_clean = ft.read_lakehouse("SilverLakehouse", "Tables/dbo/Cleaned_CustomersRaw")
+
+orders_enriched = ft.merge_dataframes(
+    main=orders_clean,
+    join_df=customers_clean,
+    join_columns=["customer_name", "segment"],
+    keys=[("customer_id", "customer_id")],
+    how="left",
+    join_prefix="customer",
+)
+```
+
+### Etape 4 - Ecrire les tables enrichies en lot
+
+```python
+write_summary = ft.write_lakehouses(
+    [
+        {
+            "df": orders_enriched,
+            "lakehouse_name": "SilverLakehouse",
+            "relative_path": "Tables/dbo/Curated_Orders",
+            "mode": "overwrite",
+            "partition_by": ["ingestion_year", "ingestion_month"],
+        }
+    ],
+    continue_on_error=False,
+)
+print(write_summary["successful_tables"], write_summary["failed_tables"])
+```
+
+### Etape 5 - Construire un TCD pour analyse rapide
+
+```python
+tcd_orders = ft.build_tcd(
+    orders_enriched,
+    rows="country",
+    columns="ingestion_year",
+    values={"total_amount": "sum"},
+)
+```
+
+### Etape 6 - Passer en couche metier (Gold)
+
+```python
+business_result = ft.make_business_ready(
+    source_lakehouse_name="SilverLakehouse",
+    target_lakehouse_name="GoldLakehouse",
+    tables=["Tables/dbo/Curated_Orders"],
+    mode="overwrite",
+)
+```
+
+### Etape 7 - Generer les dimensions de reporting
 
 ```python
 dims = ft.generate_dimensions(
-    lakehouse_name="PreparedLakehouse",
+    lakehouse_name="GoldLakehouse",
     warehouse_name="RetailWarehouse",
     include_date=True,
     include_country=True,
@@ -218,10 +223,38 @@ Chaque fonction ci-dessous est exportee directement depuis `import fabrictools a
 
 ### Lakehouse
 
+Pour les traitements en lot, privilegiez d'abord les variantes multi-tables.
+
+#### `read_lakehouses`
+
+```python
+result = ft.read_lakehouses(
+    [
+        {"name": "orders", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/orders"},
+        {"name": "customers", "lakehouse_name": "BronzeLakehouse", "relative_path": "dbo/customers"},
+    ],
+    continue_on_error=False,
+)
+orders_df = result["orders"]
+summary = result["summary"]
+```
+
 #### `read_lakehouse`
 
 ```python
 df = ft.read_lakehouse("BronzeLakehouse", "dbo/customers")
+```
+
+#### `write_lakehouses`
+
+```python
+summary = ft.write_lakehouses(
+    [
+        {"df": orders_df, "lakehouse_name": "SilverLakehouse", "relative_path": "dbo/orders"},
+        {"df": customers_df, "lakehouse_name": "SilverLakehouse", "relative_path": "dbo/customers"},
+    ],
+    continue_on_error=False,
+)
 ```
 
 #### `write_lakehouse`
@@ -445,7 +478,7 @@ business_result = ft.make_business_ready(
 )
 ```
 
-### Transform (DataFrame)
+## Transform DataFrame
 
 Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees suit l’ordre : nom de variable `join_df` a l’appel si l’introspection reussit, sinon **alias** logique Spark du DataFrame de droite (ex. `join_df.alias("projets")`), sinon la valeur par defaut `join` ; vous pouvez forcer avec `join_prefix=...`. Les suffixes sont **normalises** (snake_case, comme `clean_data`).
 
@@ -667,7 +700,7 @@ Oui, c'est une action destructive. Commencez avec `dry_run=True` pour verifier l
 
 ### 6) Je debute : quel chemin minimum recommandez-vous ?
 
-`read_lakehouse` -> `clean_data` -> `add_silver_metadata` -> `write_lakehouse`.
+`read_lakehouses` -> `clean_and_write_all_tables` -> `write_lakehouses` -> `make_business_ready` -> `generate_dimensions`.
 
 ---
 
