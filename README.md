@@ -653,7 +653,14 @@ from pyspark.sql import functions as F
 df = df.withColumn("annee", ft.year_from_fr_text(F.col("libelle_periode")))
 df = df.withColumn("mois", ft.month_from_fr_text(F.col("libelle_periode")))
 
-df = ft.with_year_month_from_fr_text(df, "libelle_periode", year_col="annee", month_col="mois")
+df = ft.with_year_month_from_fr_text(df, "libelle_periode")
+
+# noms de colonnes personnalises (positionnels ou par mot-cle)
+df = ft.with_year_month_from_fr_text(df, "libelle_periode", "Annee", "Mois")
+df = ft.with_year_month_from_fr_text(df, "libelle_periode", year_col="Year", month_col="Month")
+
+# une seule colonne (l'autre a None)
+df = ft.with_year_month_from_fr_text(df, "libelle_periode", year_col="Annee", month_col=None)
 ```
 
 #### `norm_text`

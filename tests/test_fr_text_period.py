@@ -91,6 +91,22 @@ def test_with_year_month_from_fr_text_spark(spark: SparkSession) -> None:
     assert row["mois"] == 2
 
 
+def test_with_year_month_from_fr_text_custom_column_names(spark: SparkSession) -> None:
+    df = spark.createDataFrame([("OIT fev 2026",)], ["libelle_periode"])
+    out = with_year_month_from_fr_text(df, "libelle_periode", "Year", "Month")
+    row = out.collect()[0]
+    assert row["Year"] == 2026
+    assert row["Month"] == 2
+
+
+def test_with_year_month_from_fr_text_year_only(spark: SparkSession) -> None:
+    df = spark.createDataFrame([("OIT fev 2026",)], ["libelle_periode"])
+    out = with_year_month_from_fr_text(df, "libelle_periode", year_col="Annee", month_col=None)
+    row = out.collect()[0]
+    assert row["Annee"] == 2026
+    assert "mois" not in out.columns
+
+
 def test_with_year_month_from_fr_text_unknown_column(spark: SparkSession) -> None:
     df = spark.createDataFrame([("x",)], ["a"])
     with pytest.raises(ValueError, match="does not resolve"):

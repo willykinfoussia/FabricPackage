@@ -98,37 +98,46 @@ def month_from_fr_text(expr: Union[Column, str]) -> Column:
 def with_year_month_from_fr_text(
     df: DataFrame,
     source_col: str,
-    *,
-    year_col: str = "annee",
-    month_col: str = "mois",
+    year_col: str | None = "annee",
+    month_col: str | None = "mois",
 ) -> DataFrame:
-    """Add year and month columns parsed from ``source_col`` (resolved like other transform helpers).
+    """Add year and/or month columns parsed from ``source_col`` (resolved like other transform helpers).
 
     :param df: Input dataframe.
     :param source_col: Source text column (physical, normalized, or snake_case label).
-    :param year_col: Output year column name.
-    :param month_col: Output month column name.
+    :param year_col: Output year column name (default ``"annee"``). Pass ``None`` to skip.
+    :param month_col: Output month column name (default ``"mois"``). Pass ``None`` to skip.
     :type df: ~pyspark.sql.DataFrame
     :type source_col: str
-    :type year_col: str
-    :type month_col: str
+    :type year_col: str | None
+    :type month_col: str | None
 
-    :returns: Dataframe with two added columns.
+    :returns: Dataframe with one or two added columns.
     :rtype: ~pyspark.sql.DataFrame
 
-    :raises ValueError: If ``source_col`` does not resolve on ``df``.
+    :raises ValueError: If ``source_col`` does not resolve on ``df``, or if both output names are ``None``.
 
     .. rubric:: Example
 
     >>> out = with_year_month_from_fr_text(df, "libelle_periode")  # doctest: +SKIP
+    >>> out = with_year_month_from_fr_text(df, "libelle_periode", "Annee", "Mois")  # doctest: +SKIP
+    >>> out = with_year_month_from_fr_text(  # doctest: +SKIP
+    ...     df, "libelle_periode", year_col="Year", month_col="Month"
+    ... )
     """
+    if year_col is None and month_col is None:
+        raise ValueError(
+            "with_year_month_from_fr_text: at least one of year_col or month_col must be set."
+        )
     physical = resolve_dataframe_column(df, source_col)
     if physical is None:
         raise ValueError(
             f"with_year_month_from_fr_text: source column {source_col!r} does not resolve on the dataframe"
         )
     src = F.col(physical)
-    return (
-        df.withColumn(year_col, year_from_fr_text(src))
-        .withColumn(month_col, month_from_fr_text(src))
-    )
+    out = df
+    if year_col is not None:
+        out = out.withColumn(year_col, year_from_fr_text(src))
+    if month_col is not None:
+        out = out.withColumn(month_col, month_from_fr_text(src))
+    return out
