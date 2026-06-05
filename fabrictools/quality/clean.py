@@ -19,7 +19,26 @@ from fabrictools.core import log
 from fabrictools.io import resolve_lakehouse_read_candidate
 
 
-def _to_snake_case(name: str) -> str:
+def to_snake_case(name: str) -> str:
+    """Normalize a label to snake_case (same rules as :py:func:`fabrictools.clean_data`).
+
+    Strips accents, replaces non-alphanumeric runs with ``_``, collapses repeated
+    underscores, lowercases, and prefixes with ``col_`` when the result starts with a digit.
+    Empty input yields ``"col"``.
+
+    :param name: Source label (e.g. column name, file name, join prefix).
+    :type name: str
+
+    :returns: Snake-case identifier.
+    :rtype: str
+
+    .. rubric:: Example
+
+    >>> to_snake_case("OIT avril 2026.xlsx")  # doctest: +SKIP
+    'oit_avril_2026_xlsx'
+    >>> to_snake_case("n_commande_OIT avril 2026")  # doctest: +SKIP
+    'n_commande_oit_avril_2026'
+    """
     normalized = unicodedata.normalize("NFKD", name.strip())
     cleaned = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     cleaned = re.sub(r"[^0-9A-Za-z]+", "_", cleaned)
@@ -29,6 +48,9 @@ def _to_snake_case(name: str) -> str:
     if cleaned[0].isdigit():
         return f"col_{cleaned}"
     return cleaned
+
+
+_to_snake_case = to_snake_case
 
 
 def _build_unique_column_names(columns: List[str]) -> List[str]:
@@ -423,6 +445,7 @@ __all__ = [
     "clean_data",
     "add_silver_metadata",
     "detect_and_cast_columns",
+    "to_snake_case",
     "_to_snake_case",
     "_build_unique_column_names",
     "_normalized_name_collisions",

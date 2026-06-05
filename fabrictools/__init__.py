@@ -43,7 +43,7 @@ from fabrictools.prepare import (
     transform_to_prepared,
     write_prepared_table,
 )
-from fabrictools.quality.clean import add_silver_metadata, clean_data
+from fabrictools.quality.clean import add_silver_metadata, clean_data, to_snake_case
 from fabrictools.quality.pipeline import (
     clean_and_write_all_tables,
     clean_and_write_data,
@@ -89,6 +89,7 @@ _EXPORT_REGISTRY = {
     "delete_all_lakehouse_tables": delete_all_lakehouse_tables,
     "clean_data": clean_data,
     "add_silver_metadata": add_silver_metadata,
+    "to_snake_case": to_snake_case,
     "scan_data_errors": scan_data_errors,
     "clean_and_write_data": clean_and_write_data,
     "clean_and_write_all_tables": clean_and_write_all_tables,

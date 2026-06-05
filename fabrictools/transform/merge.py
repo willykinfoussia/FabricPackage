@@ -11,7 +11,7 @@ from typing import Sequence
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
+from fabrictools.quality.clean import _build_unique_column_names, to_snake_case
 from fabrictools.transform.columns import _resolve_column_name
 
 
@@ -263,7 +263,7 @@ def merge_dataframes(
     if not raw_prefix:
         raw_prefix = "join"
         
-    prefix = _to_snake_case(raw_prefix)
+    prefix = to_snake_case(raw_prefix)
 
     valid_pairs: list[tuple[str, str]] = []
     for mk, jk in keys:
@@ -282,7 +282,7 @@ def merge_dataframes(
 
     output_names = join_column_names if join_column_names is not None else join_columns
     normalized_suffixes = _build_unique_column_names(
-        [_to_snake_case(requested) for requested in output_names]
+        [to_snake_case(requested) for requested in output_names]
     )
     for requested, suffix in zip(join_columns, normalized_suffixes):
         actual = _resolve_column_name(join_df, requested, side="join_df")

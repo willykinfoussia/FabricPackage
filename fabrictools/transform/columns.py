@@ -12,7 +12,7 @@ from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.types import DataType
 
-from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
+from fabrictools.quality.clean import _build_unique_column_names, to_snake_case
 from fabrictools.transform._fr_month_tokens import FR_MONTH_NAMES, strip_accents
 
 # Excel / Power Query-style serial day 0 (Date.From in M uses the same origin as Excel).
@@ -123,7 +123,7 @@ def _resolve_column_name(
     norm_list = _build_unique_column_names(cols)
     if name in norm_list:
         return cols[norm_list.index(name)]
-    candidate = _to_snake_case(name)
+    candidate = to_snake_case(name)
     if candidate in norm_list:
         return cols[norm_list.index(candidate)]
     return None
