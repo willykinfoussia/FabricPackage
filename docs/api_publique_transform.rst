@@ -35,6 +35,12 @@ Filtres, renommages, jointures et helpers pour colonnes « wide month » et text
 
 .. autofunction:: transform_wide_month_suffix
 
+.. autofunction:: year_from_fr_text
+
+.. autofunction:: month_from_fr_text
+
+.. autofunction:: with_year_month_from_fr_text
+
 .. autofunction:: norm_text
 
 .. autofunction:: empty_or_null

@@ -643,6 +643,19 @@ out = ft.transform_wide_month_suffix(
 )
 ```
 
+#### `year_from_fr_text` / `month_from_fr_text` / `with_year_month_from_fr_text`
+
+Expressions Spark pour extraire l’annee (entier, premiere occurrence 19xx/20xx) et le mois (entier 1–12) depuis un libelle texte libre en francais (ex. `"OIT fev 2026"`, `"févr"`).
+
+```python
+from pyspark.sql import functions as F
+
+df = df.withColumn("annee", ft.year_from_fr_text(F.col("libelle_periode")))
+df = df.withColumn("mois", ft.month_from_fr_text(F.col("libelle_periode")))
+
+df = ft.with_year_month_from_fr_text(df, "libelle_periode", year_col="annee", month_col="mois")
+```
+
 #### `norm_text`
 
 Expression Spark : chaine en minuscules, caracteres de controle retires, espaces supprimes (style Power Query `Text.Clean`).

@@ -3,6 +3,7 @@
 See submodules :mod:`fabrictools.transform.columns`, :mod:`fabrictools.transform.filter`,
 :mod:`fabrictools.transform.merge`, :mod:`fabrictools.transform.pivot`,
 :mod:`fabrictools.transform.rows`, :mod:`fabrictools.transform.text`,
+:mod:`fabrictools.transform.fr_text_period`,
 :mod:`fabrictools.transform.wide_month_suffix`.
 """
 
@@ -21,6 +22,11 @@ from fabrictools.transform.merge import merge_dataframes
 from fabrictools.transform.params import ParamResolver
 from fabrictools.transform.pivot import build_tcd, metric_value_for_class
 from fabrictools.transform.rows import drop_rows_over_empty_percent
+from fabrictools.transform.fr_text_period import (
+    month_from_fr_text,
+    with_year_month_from_fr_text,
+    year_from_fr_text,
+)
 from fabrictools.transform.text import coalesce_dim, empty_or_null, norm_text
 from fabrictools.transform.wide_month_suffix import (
     dataframe_last_nonnull_wide_month_from_long,
@@ -42,6 +48,7 @@ __all__ = [
     "empty_or_null",
     "filter_column_by_values",
     "merge_dataframes",
+    "month_from_fr_text",
     "metric_value_for_class",
     "month_start_from_ca_monthly_col",
     "norm_text",
@@ -53,4 +60,6 @@ __all__ = [
     "resolve_dataframe_column",
     "transform_wide_month_suffix",
     "wide_value_columns",
+    "with_year_month_from_fr_text",
+    "year_from_fr_text",
 ]

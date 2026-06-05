@@ -62,6 +62,7 @@ from fabrictools.transform import (
     filter_column_by_values,
     merge_dataframes,
     metric_value_for_class,
+    month_from_fr_text,
     month_start_from_ca_monthly_col,
     norm_text,
     remove_columns,
@@ -72,6 +73,8 @@ from fabrictools.transform import (
     resolve_dataframe_column,
     transform_wide_month_suffix,
     wide_value_columns,
+    with_year_month_from_fr_text,
+    year_from_fr_text,
 )
 
 _EXPORT_REGISTRY = {
@@ -115,6 +118,7 @@ _EXPORT_REGISTRY = {
     "rename_columns_pq_serial_to_dates": rename_columns_pq_serial_to_dates,
     "rename_columns_pq_serial_to_mois_annee": rename_columns_pq_serial_to_mois_annee,
     "rename_columns_month_year_block_labels": rename_columns_month_year_block_labels,
+    "month_from_fr_text": month_from_fr_text,
     "month_start_from_ca_monthly_col": month_start_from_ca_monthly_col,
     "resolve_dataframe_column": resolve_dataframe_column,
     "wide_value_columns": wide_value_columns,
@@ -126,6 +130,8 @@ _EXPORT_REGISTRY = {
     "empty_or_null": empty_or_null,
     "coalesce_dim": coalesce_dim,
     "build_tcd": build_tcd,
+    "year_from_fr_text": year_from_fr_text,
+    "with_year_month_from_fr_text": with_year_month_from_fr_text,
 }
 
 __all__ = list(_EXPORT_REGISTRY.keys())

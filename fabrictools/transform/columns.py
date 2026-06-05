@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import calendar
 import re
-import unicodedata
 from collections.abc import Callable, Collection, Sequence
 from datetime import date, timedelta
 from typing import Optional, Union
@@ -14,6 +13,7 @@ import pyspark.sql.functions as F
 from pyspark.sql.types import DataType
 
 from fabrictools.quality.clean import _build_unique_column_names, _to_snake_case
+from fabrictools.transform._fr_month_tokens import FR_MONTH_NAMES, strip_accents
 
 # Excel / Power Query-style serial day 0 (Date.From in M uses the same origin as Excel).
 PQ_EPOCH = date(1899, 12, 30)
@@ -75,26 +75,8 @@ def _allocate_unique_column_name(base: str, taken: set[str]) -> str:
         k += 1
 
 
-# French month names for "mois année" column labels (index 1 = janvier).
-_FR_MONTHS = (
-    "",
-    "janvier",
-    "février",
-    "mars",
-    "avril",
-    "mai",
-    "juin",
-    "juillet",
-    "août",
-    "septembre",
-    "octobre",
-    "novembre",
-    "décembre",
-)
-
-
 def _format_mois_annee_fr(d: date, *, capitalize_month: bool = False) -> str:
-    mois = _FR_MONTHS[d.month]
+    mois = FR_MONTH_NAMES[d.month - 1]
     if capitalize_month:
         mois = mois.capitalize()
     return f"{mois}_{d.year}"
@@ -344,16 +326,8 @@ _DEFAULT_MONTH_BLOCK_LABELS: tuple[str, ...] = (
     "CA Monthly",
 )
 
-# French month words (lowercase) for parsing column names; same order as ``_FR_MONTHS[1:]``.
-_FR_MONTH_WORDS: tuple[str, ...] = _FR_MONTHS[1:]
-
 _MONTH_YEAR_HEAD = re.compile(r"^([A-Za-zÀ-ÿà-ÿ]+)[\s_]+(\d{4})\s*$")
 _TRAILING_INDEX_TAIL = re.compile(r"^(.*?_\d+)_\d+$")
-
-
-def _strip_accents(s: str) -> str:
-    nk = unicodedata.normalize("NFKD", s)
-    return "".join(c for c in nk if not unicodedata.combining(c))
 
 
 def _strip_trailing_index(name: str) -> str:
@@ -389,10 +363,10 @@ def _try_parse_month_year(col_name: str) -> Optional[date]:
     if not m:
         return None
     month_word, year_s = m.group(1), m.group(2)
-    key = _strip_accents(month_word).lower()
+    key = strip_accents(month_word).lower()
     month_idx: Optional[int] = None
-    for i, fr in enumerate(_FR_MONTH_WORDS, start=1):
-        if _strip_accents(fr).lower() == key:
+    for i, fr in enumerate(FR_MONTH_NAMES, start=1):
+        if strip_accents(fr).lower() == key:
             month_idx = i
             break
     if month_idx is None:
