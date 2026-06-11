@@ -12,3 +12,5 @@ Chaque page ci-dessous regroupe l’API par thème ; la doc détaillée est cell
    api_publique_dimensions
    api_publique_prepare
    api_publique_transform
+   api_publique_powerquery
+   api_publique_excel

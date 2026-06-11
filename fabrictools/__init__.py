@@ -8,6 +8,8 @@ behaviour are documented on the **defining modules** (and mirrored in Sphinx):
 * :mod:`fabrictools.prepare` — prepared-layer schema, resolution, transforms, semantic publish
 * :mod:`fabrictools.dimensions` — date / country / city / attribute dimensions and orchestration
 * :mod:`fabrictools.transform` — column renames, filters, joins, wide-month reshapes
+* :mod:`fabrictools.powerquery` — Power Query-style ``Table.*``, ``Text.*``, ``Date.*``, ``Number.*`` API
+* :mod:`fabrictools.excel` — Excel formula-style ``Excel.XLookup``, ``Excel.SumIf``, … API
 * :mod:`fabrictools.pipelines` — shared bulk job config (``tables_config`` parsing)
 """
 
@@ -49,6 +51,18 @@ from fabrictools.quality.pipeline import (
     clean_and_write_data,
 )
 from fabrictools.quality.scan import scan_data_errors
+from fabrictools.excel import Excel
+from fabrictools.powerquery import (
+    Date,
+    Int64,
+    List,
+    Number,
+    Order,
+    Percentage,
+    Table,
+    Text,
+    type,
+)
 from fabrictools.transform import (
     ParamResolver,
     build_tcd,
@@ -135,7 +149,20 @@ _EXPORT_REGISTRY = {
     "with_year_month_from_fr_text": with_year_month_from_fr_text,
 }
 
-__all__ = list(_EXPORT_REGISTRY.keys())
+_PQ_EXPORTS = {
+    "Date": Date,
+    "Excel": Excel,
+    "Int64": Int64,
+    "List": List,
+    "Number": Number,
+    "Order": Order,
+    "Percentage": Percentage,
+    "Table": Table,
+    "Text": Text,
+    "type": type,
+}
+
+__all__ = list(_EXPORT_REGISTRY.keys()) + list(_PQ_EXPORTS.keys())
 
 for _exported_function in _EXPORT_REGISTRY.values():
     _exported_function.__module__ = __name__

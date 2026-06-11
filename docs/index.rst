@@ -54,6 +54,8 @@ les sous-packages Python pour contribuer ou déboguer.
 
    guide_premiers_pas
    guide_tutoriel_novaretail
+   guide_powerquery_migration
+   guide_excel_migration
    guide_faq
 
 .. toctree::

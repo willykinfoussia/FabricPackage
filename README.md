@@ -5,6 +5,11 @@ Vous utilisez des fonctions courtes pour lire, nettoyer, fusionner et publier vo
 
 Documentation detaillee (reference API et guides Sphinx) : [https://willykinfoussia.github.io/FabricPackage/](https://willykinfoussia.github.io/FabricPackage/)
 
+Guides de migration Excel / Power Query vers fabrictools :
+
+- [ExcelToFabric.md](ExcelToFabric.md) — conversion des formules Excel (tableaux structures) en Python
+- [PowerQueryToFabric.md](PowerQueryToFabric.md) — conversion des scripts Power Query (M) en Python
+
 ---
 
 ## Table des matieres
@@ -13,6 +18,7 @@ Documentation detaillee (reference API et guides Sphinx) : [https://willykinfous
 - [Prerequis](#prerequis)
 - [Installation](#installation)
 - [Documentation en ligne](#documentation-en-ligne)
+- [Guides de migration Excel / Power Query](#guides-de-migration-excel--power-query)
 - [Premiers pas (5 minutes)](#premiers-pas-5-minutes)
 - [Tutoriel interactif : projet fictif NovaRetail](#tutoriel-interactif--projet-fictif-novaretail)
 - [Index rapide : toutes les fonctions publiques](#index-rapide--toutes-les-fonctions-publiques)
@@ -65,6 +71,19 @@ pip install "fabrictools[visualization]"
 ## Documentation en ligne
 
 - Site Sphinx (API, guides) : [https://willykinfoussia.github.io/FabricPackage/](https://willykinfoussia.github.io/FabricPackage/)
+
+---
+
+## Guides de migration Excel / Power Query
+
+Si vous migrez depuis Excel ou Power Query vers des notebooks Fabric, deux guides du depot couvrent la correspondance avec **fabrictools** (notamment pour une conversion assistee par IA) :
+
+| Guide | Contenu |
+|-------|---------|
+| [ExcelToFabric.md](ExcelToFabric.md) | Formules Excel, tableaux structures, references `[@Col]` → colonnes DataFrame |
+| [PowerQueryToFabric.md](PowerQueryToFabric.md) | Scripts M (`Table.*`, `Text.*`, etc.) → modules `fabrictools.powerquery` |
+
+Les deux guides partagent la meme regle d'or : avec `read_lakehouse`, ignorer le chargement Excel deja remplace par les tables Lakehouse.
 
 ---
 

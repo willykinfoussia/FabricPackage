@@ -15,6 +15,8 @@ Référence API
    fabrictools.dimensions
    fabrictools.io
    fabrictools.pipelines
+   fabrictools.powerquery
+   fabrictools.excel
    fabrictools.prepare
    fabrictools.quality
    fabrictools.transform

@@ -44,6 +44,9 @@ coverage.xml
 *.log
 nosetests.xml
 test-results/
+scripts_excel/
+scripts_powerquery/
+scripts_fabrictools/
 
 # PySpark / Spark
 derby.log
