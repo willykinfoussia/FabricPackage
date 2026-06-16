@@ -20,4 +20,5 @@ Référence API
    fabrictools.prepare
    fabrictools.quality
    fabrictools.transform
+   fabrictools.integrations.ifs
 

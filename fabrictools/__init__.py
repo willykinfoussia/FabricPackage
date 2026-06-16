@@ -11,6 +11,7 @@ behaviour are documented on the **defining modules** (and mirrored in Sphinx):
 * :mod:`fabrictools.powerquery` — Power Query-style ``Table.*``, ``Text.*``, ``Date.*``, ``Number.*`` API
 * :mod:`fabrictools.excel` — Excel formula-style ``Excel.XLookup``, ``Excel.SumIf``, … API
 * :mod:`fabrictools.pipelines` — shared bulk job config (``tables_config`` parsing)
+* :mod:`fabrictools.integrations.ifs` — IFS Cloud OData read helpers (OAuth2, Spark, Lakehouse)
 """
 
 from __future__ import annotations
@@ -34,6 +35,14 @@ from fabrictools.io.lakehouse import (
     write_lakehouses,
 )
 from fabrictools.io.warehouse import read_warehouse, write_warehouse
+from fabrictools.integrations.ifs import (
+    IFSClient,
+    IFSConfig,
+    IFSError,
+    ifs_config_with_keyvault_secret,
+    read_ifs_entity,
+    read_ifs_to_lakehouse,
+)
 from fabrictools.prepare import (
     generate_prepared_aggregations,
     make_business_ready,
@@ -109,6 +118,12 @@ _EXPORT_REGISTRY = {
     "clean_and_write_all_tables": clean_and_write_all_tables,
     "read_warehouse": read_warehouse,
     "write_warehouse": write_warehouse,
+    "IFSConfig": IFSConfig,
+    "IFSClient": IFSClient,
+    "IFSError": IFSError,
+    "ifs_config_with_keyvault_secret": ifs_config_with_keyvault_secret,
+    "read_ifs_entity": read_ifs_entity,
+    "read_ifs_to_lakehouse": read_ifs_to_lakehouse,
     "build_dimension_date": build_dimension_date,
     "build_dimension_country": build_dimension_country,
     "build_dimension_city": build_dimension_city,
