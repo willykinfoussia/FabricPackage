@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from fabrictools.integrations.ifs._logging import log_ifs, log_ifs_config
 from fabrictools.integrations.ifs.config import IFSConfig
 
 
@@ -16,9 +17,14 @@ def _get_keyvault_secret(keyvault_url: str, secret_name: str) -> str:
             "Microsoft Fabric? Use IFSConfig with an explicit client_secret instead."
         ) from exc
 
+    log_ifs(
+        f"Récupération secret Key Vault — vault={keyvault_url!r}, secret={secret_name!r}"
+    )
     secret = mssparkutils.credentials.getSecret(keyvault_url, secret_name)
     if secret is None or not str(secret).strip():
+        log_ifs(f"Secret Key Vault vide ou manquant: {secret_name!r}", level="error")
         raise ValueError(f"Key Vault secret '{secret_name}' is empty or missing")
+    log_ifs(f"Secret Key Vault récupéré: {secret_name!r} ({len(str(secret))} caractères)")
     return str(secret)
 
 
@@ -38,10 +44,13 @@ def ifs_config_with_keyvault_secret(
     :param client_secret_name: Secret name holding the IAM client secret.
     :param kwargs: Additional :class:`IFSConfig` fields (``layer``, ``token_endpoint``, etc.).
     """
+    log_ifs("Construction IFSConfig via Key Vault")
     client_secret = _get_keyvault_secret(keyvault_url, client_secret_name)
-    return IFSConfig(
+    config = IFSConfig(
         host=host,
         client_id=client_id,
         client_secret=client_secret,
         **kwargs,
     )
+    log_ifs_config(config)
+    return config

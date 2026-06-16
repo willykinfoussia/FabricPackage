@@ -6,7 +6,8 @@ from typing import Optional
 
 from pyspark.sql import DataFrame, SparkSession  # type: ignore[reportMissingImports]
 
-from fabrictools.core import get_spark, log
+from fabrictools.core import get_spark
+from fabrictools.integrations.ifs._logging import log_ifs
 from fabrictools.integrations.ifs.client import IFSClient
 from fabrictools.integrations.ifs.config import IFSConfig
 from fabrictools.io.lakehouse import write_lakehouse
@@ -32,6 +33,8 @@ def read_ifs_entity(
     :param fetch_all: When ``True``, paginate through all result pages.
     :param spark: Optional Spark session; active session is used when omitted.
     """
+    log_ifs("read_ifs_entity — démarrage")
+
     client = IFSClient(config)
     rows = client.get_entity(
         projection,
@@ -42,9 +45,15 @@ def read_ifs_entity(
     )
     _spark = spark or get_spark()
     if not rows:
-        log(f"IFS entity {projection}/{entity_set} returned no rows — empty DataFrame")
+        log_ifs(f"read_ifs_entity — 0 ligne, DataFrame Spark vide pour {projection}/{entity_set}")
         return _spark.createDataFrame([], schema=None)
-    return _spark.createDataFrame(rows)
+
+    df = _spark.createDataFrame(rows)
+    log_ifs(
+        f"read_ifs_entity — DataFrame créé: {df.count()} ligne(s), "
+        f"{len(df.columns)} colonne(s): {df.columns}"
+    )
+    return df
 
 
 def read_ifs_to_lakehouse(
@@ -73,6 +82,10 @@ def read_ifs_to_lakehouse(
     :param fetch_all: When ``True``, paginate through all result pages.
     :param spark: Optional Spark session.
     """
+    log_ifs(
+        f"read_ifs_to_lakehouse — démarrage "
+        f"(lakehouse={lakehouse_name!r}, path={relative_path!r}, mode={mode!r})"
+    )
     df = read_ifs_entity(
         config,
         projection,
@@ -82,5 +95,7 @@ def read_ifs_to_lakehouse(
         fetch_all=fetch_all,
         spark=spark,
     )
+    log_ifs(f"Écriture Lakehouse — {lakehouse_name}/{relative_path} (mode={mode})")
     write_lakehouse(df, lakehouse_name, relative_path, mode=mode, spark=spark)
+    log_ifs(f"read_ifs_to_lakehouse — terminé ({df.count()} ligne(s) écrites)")
     return df
