@@ -39,8 +39,11 @@ from fabrictools.integrations.ifs import (
     IFSClient,
     IFSConfig,
     IFSError,
+    diagnose_ifs_connectivity,
     ifs_config_with_keyvault_secret,
+    ifs_request_json,
     read_ifs_entity,
+    read_ifs_entity_with_token,
     read_ifs_to_lakehouse,
 )
 from fabrictools.prepare import (
@@ -121,8 +124,11 @@ _EXPORT_REGISTRY = {
     "IFSConfig": IFSConfig,
     "IFSClient": IFSClient,
     "IFSError": IFSError,
+    "diagnose_ifs_connectivity": diagnose_ifs_connectivity,
     "ifs_config_with_keyvault_secret": ifs_config_with_keyvault_secret,
+    "ifs_request_json": ifs_request_json,
     "read_ifs_entity": read_ifs_entity,
+    "read_ifs_entity_with_token": read_ifs_entity_with_token,
     "read_ifs_to_lakehouse": read_ifs_to_lakehouse,
     "build_dimension_date": build_dimension_date,
     "build_dimension_country": build_dimension_country,

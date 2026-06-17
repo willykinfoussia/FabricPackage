@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from fabrictools.integrations.ifs.api import ifs_request_json, read_ifs_entity_with_token
 from fabrictools.integrations.ifs.auth import IFSAuthManager
 from fabrictools.integrations.ifs.client import IFSClient
 from fabrictools.integrations.ifs.config import IFSConfig
@@ -148,6 +149,67 @@ def test_ifs_config_rejects_invalid_layer() -> None:
             client_secret="client-secret",
             layer="invalid",
         )
+
+
+@patch("fabrictools.integrations.ifs.api.http_request_json")
+def test_ifs_request_json_sends_bearer_token(mock_http_request_json: MagicMock) -> None:
+    mock_http_request_json.return_value = {"value": []}
+
+    ifs_request_json("my-token", "https://ifs.example.com/main/test")
+
+    mock_http_request_json.assert_called_once_with(
+        "GET",
+        "https://ifs.example.com/main/test",
+        headers={
+            "Authorization": "Bearer my-token",
+            "Accept": "application/json",
+        },
+        data=None,
+        timeout_seconds=60,
+    )
+
+
+@patch("fabrictools.integrations.ifs.api.ifs_get_json_with_token")
+def test_read_ifs_entity_with_token_single_page(mock_get_json: MagicMock) -> None:
+    mock_get_json.return_value = {"value": [{"CustomerId": "C1"}]}
+
+    rows = read_ifs_entity_with_token(
+        "token-1",
+        "https://ifs.example.com",
+        "CustomerHandling",
+        "CustomerInfoSet",
+        layer="main",
+        top=5,
+    )
+
+    assert rows == [{"CustomerId": "C1"}]
+    called_url = mock_get_json.call_args[0][1]
+    assert called_url.startswith(
+        "https://ifs.example.com/main/ifsapplications/projection/v1/"
+        "CustomerHandling.svc/CustomerInfoSet?"
+    )
+    assert "$top=5" in called_url
+
+
+@patch("fabrictools.integrations.ifs.api.ifs_get_json_with_token")
+def test_read_ifs_entity_with_token_pagination(mock_get_json: MagicMock) -> None:
+    mock_get_json.side_effect = [
+        {"value": [{"id": 1}, {"id": 2}]},
+        {"value": [{"id": 3}]},
+    ]
+
+    rows = read_ifs_entity_with_token(
+        "token-1",
+        "https://ifs.example.com",
+        "CustomerHandling",
+        "CustomerInfoSet",
+        layer="main",
+        fetch_all=True,
+        page_size=2,
+    )
+
+    assert rows == [{"id": 1}, {"id": 2}, {"id": 3}]
+    assert mock_get_json.call_count == 2
 
 
 pytest.importorskip("pyspark")

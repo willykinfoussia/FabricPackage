@@ -15,6 +15,10 @@ Fonctions réexportées par ``fabrictools`` pour lire des données IFS Cloud via
 
 .. autofunction:: ifs_config_with_keyvault_secret
 
+.. autofunction:: ifs_request_json
+
+.. autofunction:: read_ifs_entity_with_token
+
 .. autofunction:: read_ifs_entity
 
 .. autofunction:: read_ifs_to_lakehouse
