@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 
 from fabrictools.integrations.ifs._logging import log_ifs, log_ifs_entity_request
 from fabrictools.integrations.ifs.config import IFSConfig
+from fabrictools.integrations.ifs.errors import IFSError
 from fabrictools.integrations.ifs.http import http_request_json
 from fabrictools.integrations.ifs.odata import (
     build_entity_url,
@@ -150,7 +151,9 @@ def _fetch_all_pages(
         payload = get_json(url)
         rows = extract_entity_rows(payload)
         all_rows.extend(rows)
-        log_ifs(f"Page {page_number}: {len(rows)} ligne(s), total cumulé={len(all_rows)}")
+        log_ifs(
+            f"Page {page_number}: {len(rows)} ligne(s), total cumulé={len(all_rows)}"
+        )
 
         next_link = extract_next_link(payload)
         if next_link:
@@ -167,7 +170,9 @@ def _fetch_all_pages(
                     f"total cumulé={len(all_rows)}"
                 )
                 follow_link = extract_next_link(payload)
-                next_url = resolve_next_url(config, follow_link) if follow_link else None
+                next_url = (
+                    resolve_next_url(config, follow_link) if follow_link else None
+                )
                 next_page_number += 1
             break
 
@@ -181,7 +186,9 @@ def _fetch_all_pages(
         skip += page_size
         page_number += 1
 
-    log_ifs(f"Lecture terminée — {len(all_rows)} ligne(s) depuis {projection}/{entity_set}")
+    log_ifs(
+        f"Lecture terminée — {len(all_rows)} ligne(s) depuis {projection}/{entity_set}"
+    )
     return all_rows
 
 
@@ -236,15 +243,32 @@ def read_ifs_entity_with_token(
         skip=skip,
     )
     get_json = lambda url: ifs_get_json_with_token(access_token, url, config)
-    return fetch_ifs_entity_rows(
-        config,
-        get_json,
-        projection,
-        entity_set,
-        odata_filter=odata_filter,
-        select=select,
-        top=top,
-        skip=skip,
-        orderby=orderby,
-        fetch_all=fetch_all,
-    )
+
+    try:
+        return fetch_ifs_entity_rows(
+            config,
+            get_json,
+            projection,
+            entity_set,
+            odata_filter=odata_filter,
+            select=select,
+            top=top,
+            skip=skip,
+            orderby=orderby,
+            fetch_all=fetch_all,
+        )
+    except IFSError as exc:
+        if exc.status_code == 403:
+            log_ifs(
+                (
+                    f"IFS 403 — {exc.error_code or 'FORBIDDEN'}: {exc}. "
+                    f"Le token est valide mais l'accès est refusé pour "
+                    f"{layer}/{projection}/{entity_set} sur {host}. "
+                    "Vérifiez les permissions IAM du client sur cette couche/"
+                    "projection/entité."
+                ),
+                level="error",
+            )
+        else:
+            log_ifs(f"Erreur IFS — {exc}", level="error")
+        return []

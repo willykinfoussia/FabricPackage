@@ -212,6 +212,30 @@ def test_read_ifs_entity_with_token_pagination(mock_get_json: MagicMock) -> None
     assert mock_get_json.call_count == 2
 
 
+@patch("fabrictools.integrations.ifs.api.ifs_get_json_with_token")
+def test_read_ifs_entity_with_token_logs_and_returns_empty_on_error(
+    mock_get_json: MagicMock,
+) -> None:
+    from fabrictools.integrations.ifs.errors import IFSError
+
+    mock_get_json.side_effect = IFSError(
+        "Insufficient privileges.",
+        status_code=403,
+        error_code="SE_UNAUTHORIZED",
+    )
+
+    rows = read_ifs_entity_with_token(
+        "token-1",
+        "https://ifs.example.com",
+        "CustomerHandling",
+        "CustomerInfoSet",
+        layer="main",
+        top=5,
+    )
+
+    assert rows == []
+
+
 pytest.importorskip("pyspark")
 from pyspark.sql import SparkSession  # noqa: E402
 
