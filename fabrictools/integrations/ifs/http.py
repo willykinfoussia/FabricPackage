@@ -45,10 +45,11 @@ def http_request(
     try:
         with request.urlopen(req, timeout=timeout_seconds) as response:
             body = response.read().decode("utf-8")
-            response_headers = {key.lower(): value for key, value in response.headers.items()}
+            response_headers = {
+                key.lower(): value for key, value in response.headers.items()
+            }
             log_ifs(
-                f"HTTP {method_upper} {url} → {response.status} "
-                f"({len(body)} bytes)",
+                f"HTTP {method_upper} {url} → {response.status} ({len(body)} bytes)",
             )
             return response.status, body, response_headers
     except error.HTTPError as exc:
@@ -94,17 +95,28 @@ def http_request_json(
         payload = json.loads(body)
     except json.JSONDecodeError as exc:
         log_ifs(
-            f"HTTP {method.upper()} {url} → JSON invalide: {body[:200]!r}",
+            f"HTTP {method.upper()} {url} → JSON invalide: {body}",
             level="error",
         )
         raise IFSError(f"IFS response is not valid JSON: {body[:200]}") from exc
     if not isinstance(payload, dict):
-        raise IFSError(f"IFS JSON response must be an object, got {type(payload).__name__}")
-    value_count = len(payload.get("value", [])) if isinstance(payload.get("value"), list) else None
+        raise IFSError(
+            f"IFS JSON response must be an object, got {type(payload).__name__}"
+        )
+    value_count = (
+        len(payload.get("value", []))
+        if isinstance(payload.get("value"), list)
+        else None
+    )
     if value_count is not None:
-        log_ifs(f"HTTP {method.upper()} {url} → JSON parsé, {value_count} ligne(s) dans value[]")
+        log_ifs(
+            f"HTTP {method.upper()} {url} → JSON parsé, {value_count} ligne(s) dans value[]"
+        )
     else:
-        log_ifs(f"HTTP {method.upper()} {url} → JSON parsé ({len(body)} bytes)", level="debug")
+        log_ifs(
+            f"HTTP {method.upper()} {url} → JSON parsé ({len(body)} bytes)",
+            level="debug",
+        )
     return payload
 
 
