@@ -12,7 +12,10 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from fabrictools.quality.clean import _build_unique_column_names, to_snake_case
-from fabrictools.transform.columns import _resolve_column_name
+from fabrictools.transform.columns import (
+    _allocate_unique_column_name,
+    _resolve_column_name,
+)
 
 
 def _is_merge_dataframes_call(node: ast.AST) -> bool:
@@ -210,17 +213,21 @@ def merge_dataframes(
     join_prefix: str | None = None,
     join_column_names: Sequence[str] | None = None,
 ) -> DataFrame:
-    """Left-join ``main`` to ``join_df`` and project right columns as ``{prefix}_{suffix}``.
+    """Left-join ``main`` to ``join_df`` and project right-side columns with normalized names.
 
-    Prefix is snake_case from, in order: inferred ``join_df`` variable name at the
-    call site, else first ``SubqueryAlias`` on ``join_df``'s analyzed plan, else
-    ``join`` (see ``DEFAULT_JOIN_PREFIX``). Pass ``join_prefix`` to force a value. Suffixes match
+    When ``join_column_names`` is omitted, each ``join_columns`` label is snake_cased.
+    If that name is **not** already present on ``main`` (normalized labels), it is kept
+    as-is; otherwise it is prefixed ``{prefix}_{suffix}``. The prefix is snake_case from,
+    in order: inferred ``join_df`` variable name at the call site, else first
+    ``SubqueryAlias`` on ``join_df``'s analyzed plan, else ``join``. Pass
+    ``join_prefix`` to force a value. Output names are made unique against ``main`` and
+    among joined columns (``_2``, ``_3``, …). Suffixes match
     :py:func:`fabrictools.clean_data` uniqueness rules.
 
     :param main: Left dataframe.
     :param join_df: Right dataframe (only ``join_columns`` projected, plus key temps).
-    :param join_columns: Right-side columns to expose with prefixed names; labels that do not resolve on ``join_df`` are omitted.
-    :param join_column_names: Optional output names for ``join_columns`` (same order, same length). If omitted, ``join_columns`` names are reused.
+    :param join_columns: Right-side columns to expose; labels that do not resolve on ``join_df`` are omitted.
+    :param join_column_names: Optional output names for ``join_columns`` (same order, same length). If provided, names are used as-is (no prefix), still uniquified against ``main``.
     :param keys: ``(main_col, join_col)`` pairs for the join predicate (AND); names resolved per frame. Pairs where either side does not resolve are skipped; if none resolve, ``main`` is returned unchanged.
     :param how: Spark join type (e.g. ``left``, ``inner``).
     :param join_prefix: Optional explicit prefix (snake_cased); overrides inference.
@@ -284,16 +291,20 @@ def merge_dataframes(
     normalized_suffixes = _build_unique_column_names(
         [to_snake_case(requested) for requested in output_names]
     )
+    main_taken = set(_build_unique_column_names([f.name for f in main.schema.fields]))
     for requested, suffix in zip(join_columns, normalized_suffixes):
         actual = _resolve_column_name(join_df, requested, side="join_df")
         if actual is None:
             continue
-            
+
         if join_column_names is not None:
-            final_name = suffix
+            base = suffix
+        elif suffix in main_taken:
+            base = f"{prefix}_{suffix}" if prefix else suffix
         else:
-            final_name = f"{prefix}_{suffix}" if prefix else suffix
-            
+            base = suffix
+
+        final_name = _allocate_unique_column_name(base, main_taken)
         exprs.append(F.col(actual).alias(final_name))
 
     right_proj = join_df.select(*exprs)

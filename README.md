@@ -499,7 +499,7 @@ business_result = ft.make_business_ready(
 
 ## Transform DataFrame
 
-Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** des colonnes ajoutees suit l’ordre : nom de variable `join_df` a l’appel si l’introspection reussit, sinon **alias** logique Spark du DataFrame de droite (ex. `join_df.alias("projets")`), sinon la valeur par defaut `join` ; vous pouvez forcer avec `join_prefix=...`. Les suffixes sont **normalises** (snake_case, comme `clean_data`).
+Helpers reutilisables **DataFrame → DataFrame** (notebooks, Bronze/Silver/Gold). Pour `merge_dataframes`, le **prefixe** n'est ajoute que si le nom normalise d'une colonne de `join_columns` entre en collision avec une colonne de `main` ; sinon la colonne garde son nom snake_case. Le prefixe (quand necessaire) suit l'ordre : nom de variable `join_df` a l'appel si l'introspection reussit, sinon **alias** logique Spark du DataFrame de droite (ex. `join_df.alias("projets")`), sinon la valeur par defaut `join` ; vous pouvez forcer avec `join_prefix=...`. Les suffixes sont **normalises** (snake_case, comme `clean_data`).
 
 #### `build_tcd`
 
@@ -526,7 +526,7 @@ df2 = ft.filter_column_by_values(df, "Compte", ("70830000", "70840000"), exclude
 
 #### `merge_dataframes`
 
-Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`, renommees en `{prefix_snake}_{colonne_snake_unique}` (prefixe = nom de variable a l’appel, sinon alias Spark du `join_df`, sinon `join`, ou `join_prefix="..."` pour forcer).
+Joint `main` a `join_df` sur une ou plusieurs paires de cles `(colonne_main, colonne_droite)` ; apporte les colonnes listees dans `join_columns`. Le **prefixe n'est ajoute que si le nom normalise entre en collision** avec une colonne deja presente sur `main` (`{prefix_snake}_{colonne}`) ; sinon la colonne garde son nom snake_case (ex. `statut`). Prefixe infere : nom de variable a l'appel, sinon alias Spark du `join_df`, sinon `join` ; `join_prefix="..."` pour forcer. Passer `join_column_names=[...]` pour imposer les noms de sortie sans prefixe.
 
 ```python
 out = ft.merge_dataframes(
@@ -536,7 +536,8 @@ out = ft.merge_dataframes(
     keys=[("Code projet", "ID projet")],
     how="left",
 )
-# Ex. colonnes : projets_client, projets_type_projet, projets_nom_client
+# Ex. sans collision avec main : client, type_projet, nom_client
+# Ex. si main a deja "client" : projets_client, type_projet, nom_client
 ```
 
 #### `drop_rows_over_empty_percent`
