@@ -313,3 +313,112 @@ def test_ifs_data_to_dataframe_handles_all_null_columns(spark: SparkSession) -> 
     assert "AssociationNo" in df.columns
     assert "CorporateForm" in df.columns
     assert df.filter("CustomerId = '173'").collect()[0]["Name"] == "BEDEK-IAI"
+
+
+@patch("fabrictools.integrations.ifs.lakehouse.write_lakehouse")
+@patch("fabrictools.integrations.ifs.lakehouse.ifs_data_to_dataframe")
+def test_write_ifs_data_to_lakehouse(
+    mock_ifs_data_to_dataframe: MagicMock,
+    mock_write_lakehouse: MagicMock,
+    spark: SparkSession,
+) -> None:
+    from fabrictools.integrations.ifs.lakehouse import write_ifs_data_to_lakehouse
+
+    mock_df = spark.createDataFrame([{"CustomerId": "173"}])
+    mock_ifs_data_to_dataframe.return_value = mock_df
+
+    result = write_ifs_data_to_lakehouse(
+        json.dumps([{"CustomerId": "173"}]),
+        "BronzeLakehouse",
+        "Tables/dbo/ifs_customers",
+        mode="append",
+        spark=spark,
+    )
+
+    mock_ifs_data_to_dataframe.assert_called_once_with(
+        json.dumps([{"CustomerId": "173"}]),
+        spark=spark,
+    )
+    mock_write_lakehouse.assert_called_once()
+    write_args, write_kwargs = mock_write_lakehouse.call_args
+    assert write_args[0] is mock_df
+    assert write_args[1] == "BronzeLakehouse"
+    assert write_args[2] == "Tables/dbo/ifs_customers"
+    assert write_kwargs["mode"] == "append"
+    assert write_kwargs["spark"] is spark
+    assert result is mock_df
+
+
+@patch("fabrictools.integrations.ifs.lakehouse.write_lakehouses")
+@patch("fabrictools.integrations.ifs.lakehouse.ifs_data_to_dataframe")
+def test_write_ifs_data_to_lakehouses(
+    mock_ifs_data_to_dataframe: MagicMock,
+    mock_write_lakehouses: MagicMock,
+    spark: SparkSession,
+) -> None:
+    from fabrictools.integrations.ifs.lakehouse import write_ifs_data_to_lakehouses
+
+    df_one = spark.createDataFrame([{"CustomerId": "173"}])
+    df_two = spark.createDataFrame([{"OrderId": "O1"}])
+    mock_ifs_data_to_dataframe.side_effect = [df_one, df_two]
+    mock_write_lakehouses.return_value = {
+        "total_tables": 2,
+        "successful_tables": 2,
+        "failed_tables": 0,
+        "tables": [],
+        "failures": [],
+    }
+
+    summary = write_ifs_data_to_lakehouses(
+        [
+            {
+                "ifs_data": json.dumps([{"CustomerId": "173"}]),
+                "lakehouse_name": "BronzeLakehouse",
+                "relative_path": "Tables/dbo/ifs_customers",
+            },
+            {
+                "ifs_data": json.dumps([{"OrderId": "O1"}]),
+                "lakehouse_name": "BronzeLakehouse",
+                "relative_path": "Tables/dbo/ifs_orders",
+                "mode": "append",
+            },
+        ],
+        max_workers=2,
+        spark=spark,
+    )
+
+    assert mock_ifs_data_to_dataframe.call_count == 2
+    mock_write_lakehouses.assert_called_once()
+    write_requests = mock_write_lakehouses.call_args[0][0]
+    assert len(write_requests) == 2
+    assert write_requests[0]["df"] is df_one
+    assert write_requests[0]["lakehouse_name"] == "BronzeLakehouse"
+    assert write_requests[0]["relative_path"] == "Tables/dbo/ifs_customers"
+    assert write_requests[1]["df"] is df_two
+    assert write_requests[1]["mode"] == "append"
+    assert mock_write_lakehouses.call_args[1]["max_workers"] == 2
+    assert mock_write_lakehouses.call_args[1]["spark"] is spark
+    assert summary["successful_tables"] == 2
+
+
+def test_write_ifs_data_to_lakehouses_requires_ifs_data() -> None:
+    from fabrictools.integrations.ifs.lakehouse import write_ifs_data_to_lakehouses
+
+    with pytest.raises(ValueError, match="missing required key 'ifs_data'"):
+        write_ifs_data_to_lakehouses(
+            [{"lakehouse_name": "BronzeLakehouse", "relative_path": "Tables/dbo/ifs_customers"}]
+        )
+
+
+def test_write_ifs_data_to_lakehouses_empty_requests() -> None:
+    from fabrictools.integrations.ifs.lakehouse import write_ifs_data_to_lakehouses
+
+    summary = write_ifs_data_to_lakehouses([])
+
+    assert summary == {
+        "total_tables": 0,
+        "successful_tables": 0,
+        "failed_tables": 0,
+        "tables": [],
+        "failures": [],
+    }
