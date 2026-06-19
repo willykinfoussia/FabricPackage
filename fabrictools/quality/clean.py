@@ -54,10 +54,14 @@ _to_snake_case = to_snake_case
 
 
 def _build_unique_column_names(columns: List[str]) -> List[str]:
+    normalized = [_to_snake_case(col_name) for col_name in columns]
+    is_odata = "odata_context" in normalized
+
     seen: dict[str, int] = {}
     result: List[str] = []
-    for col_name in columns:
-        base = _to_snake_case(col_name)
+    for base in normalized:
+        if is_odata and base != "odata_context" and base.startswith("value_"):
+            base = base[len("value_") :]
         count = seen.get(base, 0) + 1
         seen[base] = count
         if count == 1:
