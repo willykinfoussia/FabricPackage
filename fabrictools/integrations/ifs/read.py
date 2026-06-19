@@ -10,6 +10,7 @@ from fabrictools.core import get_spark
 from fabrictools.integrations.ifs._logging import log_ifs
 from fabrictools.integrations.ifs.client import IFSClient
 from fabrictools.integrations.ifs.config import IFSConfig
+from fabrictools.integrations.ifs.dataframe import rows_to_dataframe
 from fabrictools.io.lakehouse import write_lakehouse
 
 
@@ -46,9 +47,8 @@ def read_ifs_entity(
     _spark = spark or get_spark()
     if not rows:
         log_ifs(f"read_ifs_entity — 0 ligne, DataFrame Spark vide pour {projection}/{entity_set}")
-        return _spark.createDataFrame([], schema=None)
 
-    df = _spark.createDataFrame(rows)
+    df = rows_to_dataframe(rows, spark=_spark)
     log_ifs(
         f"read_ifs_entity — DataFrame créé: {df.count()} ligne(s), "
         f"{len(df.columns)} colonne(s): {df.columns}"

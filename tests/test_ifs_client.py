@@ -270,3 +270,46 @@ def test_read_ifs_entity_returns_dataframe(mock_client_cls: MagicMock, spark: Sp
 
     assert df.count() == 2
     assert set(df.columns) == {"ActivityId", "Company"}
+
+
+def test_parse_ifs_data_accepts_array_and_odata_payload() -> None:
+    from fabrictools.integrations.ifs.dataframe import parse_ifs_data
+
+    rows = parse_ifs_data(json.dumps([{"CustomerId": "173", "Name": "ACME"}]))
+    assert rows == [{"CustomerId": "173", "Name": "ACME"}]
+
+    rows = parse_ifs_data(json.dumps({"value": [{"CustomerId": "171"}]}))
+    assert rows == [{"CustomerId": "171"}]
+
+    assert parse_ifs_data("") == []
+    assert parse_ifs_data("   ") == []
+
+
+def test_ifs_data_to_dataframe_handles_all_null_columns(spark: SparkSession) -> None:
+    from fabrictools.integrations.ifs.dataframe import ifs_data_to_dataframe
+
+    ifs_data = json.dumps(
+        [
+            {
+                "CustomerId": "173",
+                "Name": "BEDEK-IAI",
+                "DefaultDomain": True,
+                "AssociationNo": None,
+                "CorporateForm": None,
+            },
+            {
+                "CustomerId": "171",
+                "Name": "ITA Airways",
+                "DefaultDomain": True,
+                "AssociationNo": None,
+                "CorporateForm": None,
+            },
+        ]
+    )
+
+    df = ifs_data_to_dataframe(ifs_data, spark=spark)
+
+    assert df.count() == 2
+    assert "AssociationNo" in df.columns
+    assert "CorporateForm" in df.columns
+    assert df.filter("CustomerId = '173'").collect()[0]["Name"] == "BEDEK-IAI"
