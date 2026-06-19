@@ -315,6 +315,24 @@ def test_ifs_data_to_dataframe_handles_all_null_columns(spark: SparkSession) -> 
     assert df.filter("CustomerId = '173'").collect()[0]["Name"] == "BEDEK-IAI"
 
 
+def test_ifs_data_to_dataframe_mixed_int_and_float_columns(spark: SparkSession) -> None:
+    from fabrictools.integrations.ifs.dataframe import ifs_data_to_dataframe
+
+    ifs_data = json.dumps(
+        [
+            {"LineNo": "1", "BaseSaleUnitPrice": 335, "Cost": 108.895},
+            {"LineNo": "2", "BaseSaleUnitPrice": 520, "Cost": 159.72666666666666},
+        ]
+    )
+
+    df = ifs_data_to_dataframe(ifs_data, spark=spark)
+
+    assert df.count() == 2
+    row = df.filter("LineNo = '1'").collect()[0]
+    assert row["BaseSaleUnitPrice"] == 335.0
+    assert row["Cost"] == 108.895
+
+
 @patch("fabrictools.integrations.ifs.lakehouse.write_lakehouse")
 @patch("fabrictools.integrations.ifs.lakehouse.ifs_data_to_dataframe")
 def test_write_ifs_data_to_lakehouse(

@@ -75,7 +75,8 @@ def rows_to_dataframe(
     if not rows:
         return _spark.createDataFrame([], schema=StructType([]))
     schema = _infer_schema_from_rows(rows)
-    return _spark.createDataFrame(rows, schema=schema)
+    normalized_rows = _normalize_rows_to_schema(rows, schema)
+    return _spark.createDataFrame(normalized_rows, schema=schema)
 
 
 def _normalize_entity_rows(rows: list[Any]) -> list[dict[str, Any]]:
@@ -124,6 +125,32 @@ def _column_order(rows: list[dict[str, Any]]) -> list[str]:
                 ordered.append(key)
                 seen.add(key)
     return ordered
+
+
+def _normalize_value_for_type(value: Any, data_type: DataType) -> Any:
+    if value is None:
+        return None
+    if isinstance(data_type, DoubleType) and isinstance(value, int) and not isinstance(
+        value, bool
+    ):
+        return float(value)
+    return value
+
+
+def _normalize_rows_to_schema(
+    rows: list[dict[str, Any]],
+    schema: StructType,
+) -> list[dict[str, Any]]:
+    type_by_field = {field.name: field.dataType for field in schema.fields}
+    return [
+        {
+            key: _normalize_value_for_type(
+                value, type_by_field.get(key, StringType())
+            )
+            for key, value in row.items()
+        }
+        for row in rows
+    ]
 
 
 def _infer_schema_from_rows(rows: list[dict[str, Any]]) -> StructType:
