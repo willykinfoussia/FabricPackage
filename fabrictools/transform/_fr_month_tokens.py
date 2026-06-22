@@ -25,16 +25,16 @@ FR_MONTH_NAMES: tuple[str, ...] = (
 _FR_MONTH_ABBREVS: tuple[tuple[str, ...], ...] = (
     ("jan", "janv"),
     ("fev", "fevr"),
-    ("mar",),
-    ("avr",),
-    ("mai",),
-    ("jun", "jui"),
-    ("juil", "jul"),
-    ("aou", "aug"),
+    ("mar", "mars"),
+    ("avr", "avril"),
+    ("mai", "mai"),
+    ("jun", "juin", "jui"),
+    ("juil", "juil", "jul"),
+    ("aou", "août", "aug"),
     ("sep", "sept"),
-    ("oct",),
-    ("nov",),
-    ("dec",),
+    ("oct", "oct"),
+    ("nov", "nov"),
+    ("dec", "dec"),
 )
 
 
