@@ -897,8 +897,13 @@ def write_lakehouses(
     Optional keys mirror :py:func:`write_lakehouse`: ``mode`` (defaults to
     ``overwrite`` when omitted), ``partition_by``, ``format``, ``merge_condition``,
     ``upsert_key_columns`` (ordered merge-key candidates; see that function),
-    ``normalize_column_names``, ``enable_column_mapping``,
-    ``auto_partition`` and ``auto_partition_threshold_bytes``.
+    ``normalize_column_names`` and ``enable_column_mapping``.
+
+    Automatic partition detection is **disabled** in this bulk path for
+    performance (no call to :py:func:`write_lakehouse`'s auto-partition heuristics).
+    Use explicit ``partition_by`` per request when partitioning is required.
+    Keys ``auto_partition`` and ``auto_partition_threshold_bytes`` are ignored
+    if present.
 
     :param requests: Per-write parameter dictionaries.
     :param max_workers: Maximum number of concurrent write tasks. When omitted,
@@ -964,10 +969,6 @@ def write_lakehouses(
                 "upsert_key_columns": request.get("upsert_key_columns"),
                 "normalize_column_names": request.get("normalize_column_names", True),
                 "enable_column_mapping": request.get("enable_column_mapping", False),
-                "auto_partition": request.get("auto_partition", True),
-                "auto_partition_threshold_bytes": request.get(
-                    "auto_partition_threshold_bytes", 1_073_741_824
-                ),
             }
         )
 
@@ -998,10 +999,7 @@ def write_lakehouses(
             upsert_key_columns=request.get("upsert_key_columns"),
             normalize_column_names=bool(request.get("normalize_column_names")),
             enable_column_mapping=bool(request.get("enable_column_mapping")),
-            auto_partition=bool(request.get("auto_partition")),
-            auto_partition_threshold_bytes=int(
-                request["auto_partition_threshold_bytes"]
-            ),
+            auto_partition=False,
         )
         entry = {
             "lakehouse_name": lakehouse_name,
