@@ -665,7 +665,7 @@ out = ft.transform_wide_month_suffix(
 
 #### `year_from_fr_text` / `month_from_fr_text` / `with_year_month_from_fr_text`
 
-Expressions Spark pour extraire l’annee (entier, premiere occurrence 19xx/20xx) et le mois (entier 1–12) depuis un libelle texte libre en francais (ex. `"OIT fev 2026"`, `"févr"`).
+Expressions Spark pour extraire l’annee (entier, premiere occurrence 19xx/20xx) et le mois (entier 1–12) depuis un libelle texte libre en francais (ex. `"OIT fev 2026"`, `"févr"`). `with_year_month_from_fr_text` ajoute aussi une cle annee-mois `yyyymm` (`annee * 100 + mois`, ex. fevrier 2026 → `202602`) lorsque annee et mois sont tous deux produits.
 
 ```python
 from pyspark.sql import functions as F
@@ -673,14 +673,17 @@ from pyspark.sql import functions as F
 df = df.withColumn("annee", ft.year_from_fr_text(F.col("libelle_periode")))
 df = df.withColumn("mois", ft.month_from_fr_text(F.col("libelle_periode")))
 
-df = ft.with_year_month_from_fr_text(df, "libelle_periode")
+df = ft.with_year_month_from_fr_text(df, "libelle_periode")  # annee, mois, yyyymm
 
 # noms de colonnes personnalises (positionnels ou par mot-cle)
 df = ft.with_year_month_from_fr_text(df, "libelle_periode", "Annee", "Mois")
 df = ft.with_year_month_from_fr_text(df, "libelle_periode", year_col="Year", month_col="Month")
 
-# une seule colonne (l'autre a None)
+# une seule colonne (l'autre a None) — pas de yyyymm si annee ou mois manquant
 df = ft.with_year_month_from_fr_text(df, "libelle_periode", year_col="Annee", month_col=None)
+
+# desactiver yyyymm explicitement
+df = ft.with_year_month_from_fr_text(df, "libelle_periode", yyyymm_col=None)
 ```
 
 #### `norm_text`

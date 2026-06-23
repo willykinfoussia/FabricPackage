@@ -89,6 +89,7 @@ def test_with_year_month_from_fr_text_spark(spark: SparkSession) -> None:
     row = out.collect()[0]
     assert row["annee"] == 2026
     assert row["mois"] == 2
+    assert row["yyyymm"] == 202602
 
 
 def test_with_year_month_from_fr_text_custom_column_names(spark: SparkSession) -> None:
@@ -97,6 +98,7 @@ def test_with_year_month_from_fr_text_custom_column_names(spark: SparkSession) -
     row = out.collect()[0]
     assert row["Year"] == 2026
     assert row["Month"] == 2
+    assert row["yyyymm"] == 202602
 
 
 def test_with_year_month_from_fr_text_year_only(spark: SparkSession) -> None:
@@ -105,6 +107,16 @@ def test_with_year_month_from_fr_text_year_only(spark: SparkSession) -> None:
     row = out.collect()[0]
     assert row["Annee"] == 2026
     assert "mois" not in out.columns
+    assert "yyyymm" not in out.columns
+
+
+def test_with_year_month_from_fr_text_no_yyyymm(spark: SparkSession) -> None:
+    df = spark.createDataFrame([("OIT fev 2026",)], ["libelle_periode"])
+    out = with_year_month_from_fr_text(df, "libelle_periode", yyyymm_col=None)
+    row = out.collect()[0]
+    assert row["annee"] == 2026
+    assert row["mois"] == 2
+    assert "yyyymm" not in out.columns
 
 
 def test_with_year_month_from_fr_text_unknown_column(spark: SparkSession) -> None:

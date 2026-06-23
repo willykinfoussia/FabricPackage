@@ -100,19 +100,25 @@ def with_year_month_from_fr_text(
     source_col: str,
     year_col: str | None = "annee",
     month_col: str | None = "mois",
+    yyyymm_col: str | None = "annee_mois",
 ) -> DataFrame:
     """Add year and/or month columns parsed from ``source_col`` (resolved like other transform helpers).
+
+    When both ``year_col`` and ``month_col`` are set, also adds a year-month key column
+    (``année × 100 + mois``, e.g. February 2026 → ``202602``) unless ``yyyymm_col`` is ``None``.
 
     :param df: Input dataframe.
     :param source_col: Source text column (physical, normalized, or snake_case label).
     :param year_col: Output year column name (default ``"annee"``). Pass ``None`` to skip.
     :param month_col: Output month column name (default ``"mois"``). Pass ``None`` to skip.
+    :param yyyymm_col: Output year-month key column (default ``"yyyymm"``). Pass ``None`` to skip.
     :type df: ~pyspark.sql.DataFrame
     :type source_col: str
     :type year_col: str | None
     :type month_col: str | None
+    :type yyyymm_col: str | None
 
-    :returns: Dataframe with one or two added columns.
+    :returns: Dataframe with one to three added columns.
     :rtype: ~pyspark.sql.DataFrame
 
     :raises ValueError: If ``source_col`` does not resolve on ``df``, or if both output names are ``None``.
@@ -140,4 +146,9 @@ def with_year_month_from_fr_text(
         out = out.withColumn(year_col, year_from_fr_text(src))
     if month_col is not None:
         out = out.withColumn(month_col, month_from_fr_text(src))
+    if year_col is not None and month_col is not None and yyyymm_col is not None:
+        out = out.withColumn(
+            yyyymm_col,
+            F.col(year_col) * F.lit(100) + F.col(month_col),
+        )
     return out
