@@ -160,35 +160,168 @@ _TIMESTAMP_FORMATS: tuple[str, ...] = (
 )
 
 
-def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
+def _format_separator(format_str: str) -> str | None:
+    if "'T'" in format_str:
+        return "T"
+    for sep in ("-", "/", "."):
+        if sep in format_str:
+            return sep
+    return None
+
+
+def _sample_date_part(sample: str) -> str:
+    return re.split(r"[Tt]", sample.strip())[0].split()[0]
+
+
+def _sample_looks_date_like(sample: str | None) -> bool:
+    if not sample or not str(sample).strip():
+        return False
+    s = str(sample).strip()
+    if re.match(_DATE_CANDIDATE_PATTERN, s):
+        return True
+    return bool(re.match(r"^\d{4}-\d{1,2}-\d{1,2}[Tt]", s))
+
+
+def _candidate_date_format_indices(sample: str | None) -> list[int]:
+    if not _sample_looks_date_like(sample):
+        return []
+
+    assert sample is not None
+    s = sample.strip()
+    date_part = _sample_date_part(s)
+    sample_has_ampm = bool(re.search(r"\b[AP]M\b", s, re.I))
+    yyyy_first = bool(re.match(r"^\d{4}", date_part))
+
+    sample_sep: str | None = None
+    if "T" in s.upper() and re.match(r"^\d{4}-\d{1,2}-\d{1,2}[Tt]", s):
+        sample_sep = "T"
+    else:
+        for sep in ("-", "/", "."):
+            if sep in date_part:
+                sample_sep = sep
+                break
+
+    indices: list[int] = []
+    for idx, (kind, fmt) in enumerate(_DATE_FORMATS):
+        if sample_has_ampm and kind == "date" and " a" not in fmt:
+            continue
+        if not sample_has_ampm and kind == "timestamp" and " a" in fmt:
+            continue
+
+        fmt_sep = _format_separator(fmt)
+        if sample_sep == "T":
+            if fmt_sep != "T" and not (fmt_sep == "-" and fmt.startswith("yyyy")):
+                if fmt_sep != "-":
+                    continue
+        elif sample_sep and fmt_sep and fmt_sep != sample_sep:
+            continue
+
+        fmt_yyyy_first = fmt.startswith("yyyy")
+        if yyyy_first and not fmt_yyyy_first:
+            continue
+        if not yyyy_first and fmt_yyyy_first:
+            continue
+
+        indices.append(idx)
+
+    if indices:
+        return indices
+    return list(range(len(_DATE_FORMATS)))
+
+
+def _candidate_timestamp_format_indices(sample: str | None) -> list[int]:
+    if not _sample_looks_date_like(sample):
+        return []
+
+    assert sample is not None
+    s = sample.strip()
+    sample_has_ampm = bool(re.search(r"\b[AP]M\b", s, re.I))
+    sample_has_time = bool(re.search(r"[Tt]\d|\s+\d{1,2}:\d", s))
+    if not sample_has_time and not sample_has_ampm:
+        return []
+
+    date_part = _sample_date_part(s)
+    yyyy_first = bool(re.match(r"^\d{4}", date_part))
+
+    sample_sep: str | None = None
+    if "T" in s.upper() and re.match(r"^\d{4}-\d{1,2}-\d{1,2}[Tt]", s):
+        sample_sep = "T"
+    else:
+        for sep in ("-", "/", "."):
+            if sep in date_part:
+                sample_sep = sep
+                break
+
+    indices: list[int] = []
+    for idx, fmt in enumerate(_TIMESTAMP_FORMATS):
+        fmt_has_ampm = " a" in fmt
+        if sample_has_ampm and not fmt_has_ampm:
+            continue
+        if not sample_has_ampm and fmt_has_ampm:
+            continue
+
+        fmt_sep = _format_separator(fmt)
+        if sample_sep == "T":
+            if "'T'" not in fmt and fmt_sep != "-":
+                continue
+        elif sample_sep and fmt_sep and fmt_sep != sample_sep:
+            continue
+
+        fmt_yyyy_first = fmt.startswith("yyyy")
+        if yyyy_first and not fmt_yyyy_first:
+            continue
+        if not yyyy_first and fmt_yyyy_first:
+            continue
+
+        indices.append(idx)
+
+    if indices:
+        return indices
+    return list(range(len(_TIMESTAMP_FORMATS)))
+
+
+def _normalized_string_expr(col_expr, *, normalize_strings: bool):
+    trimmed = F.trim(col_expr)
+    if normalize_strings:
+        return F.when(trimmed == "", F.lit(None)).otherwise(trimmed)
+    return trimmed
+
+
+def detect_and_cast_columns(
+    df: DataFrame,
+    verbose: bool = False,
+    *,
+    normalize_strings: bool = False,
+) -> DataFrame:
     """Infer primitive types from string columns and cast when the column is uniform.
 
-    Order of detection (first match wins): **date** (the first ``to_date`` /
-    ``to_timestamp`` format that succeeds for every non-null value—European forms
-    before US for ambiguous day/month; strings with a trailing time-of-day may still
-    yield a calendar day and are cast to ``date``, dropping the time part; US slash
-    dates with 12-hour clock and AM/PM suffix are handled via ``h:mm[:ss] a``
-    patterns), **timestamp** (the first ``to_timestamp`` format that succeeds for
-    every non-null value, including US 12h + AM/PM, 24h, plus ISO ``T``),
-    **integer** (full string matches
-    ``^[+-]?\\d+$``), **double** (decimal/scientific), else the column remains
-    ``string``. Columns that are all-null are skipped; null cells are kept through
-    casts.
+    Uses a two-pass strategy: a lightweight first aggregation collects per-column
+    integer/float failure counts plus one representative non-empty sample value;
+    candidate date/timestamp formats are derived from that sample on the driver,
+    then a second aggregation validates only those formats across all rows.
+
+    Order of detection (first match wins): **date**, **timestamp**, **integer**,
+    **double**, else **string**. Columns that are all-null are skipped.
+
+    When ``normalize_strings`` is ``True``, string columns are trimmed and blank
+    strings are converted to null in the final projection (same behavior as
+    :py:func:`_replace_empty_strings_with_nulls`).
 
     Sets ``spark.sql.legacy.timeParserPolicy`` to ``CORRECTED`` so Spark can
     evaluate the returned lazy DataFrame with the same parser policy.
 
     :param df: Input dataframe.
+    :param verbose: Reserved for future logging; currently unused.
+    :param normalize_strings: If ``True``, trim strings and map ``""`` to null.
     :type df: ~pyspark.sql.DataFrame
+    :type verbose: bool
+    :type normalize_strings: bool
 
     :returns: Dataframe with qualifying string columns cast.
     :rtype: ~pyspark.sql.DataFrame
     """
+    _ = verbose
     spark = df.sparkSession
-    # Use CORRECTED to let Spark handle ancient dates (before 1582/1900)
-    # without throwing and to fix LEGACY failures like 4/14/2026.
-    # Note: We do not restore the policy because the returned DataFrame is lazy
-    # and requires CORRECTED policy during evaluation (e.g. write/count).
     spark.conf.set(_TIME_PARSER_POLICY_KEY, "CORRECTED")
 
     string_columns = [
@@ -215,51 +348,84 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
     def _ts_fail_key(col_name: str, idx: int) -> str:
         return f"{col_name}__ts_fail_{idx}"
 
-    agg_exprs = []
+    phase1_exprs = []
     for col_name in string_columns:
         col_expr = F.col(col_name)
         trimmed = F.trim(col_expr)
-
-        agg_exprs.append(
-            F.sum(F.when(col_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn")
+        value_expr = (
+            F.when(trimmed == "", F.lit(None)).otherwise(trimmed)
+            if normalize_strings
+            else trimmed
         )
-        agg_exprs.append(
+
+        phase1_exprs.append(
+            F.sum(F.when(value_expr.isNotNull(), 1).otherwise(0)).alias(f"{col_name}__nn")
+        )
+        phase1_exprs.append(
             F.sum(
                 F.when(
-                    col_expr.isNotNull() & ~trimmed.rlike(_INT_TEXT_PATTERN),
+                    value_expr.isNotNull() & ~value_expr.rlike(_INT_TEXT_PATTERN),
                     1,
                 ).otherwise(0)
             ).alias(f"{col_name}__int_fail")
         )
-        agg_exprs.append(
+        phase1_exprs.append(
             F.sum(
                 F.when(
-                    col_expr.isNotNull() & ~trimmed.rlike(_FLOAT_TEXT_PATTERN),
+                    value_expr.isNotNull() & ~value_expr.rlike(_FLOAT_TEXT_PATTERN),
                     1,
                 ).otherwise(0)
             ).alias(f"{col_name}__float_fail")
         )
+        phase1_exprs.append(
+            F.first(value_expr, ignorenulls=True).alias(f"{col_name}__sample")
+        )
 
+    phase1_stats = df.agg(*phase1_exprs).collect()[0].asDict()
+
+    date_candidates: dict[str, list[int]] = {}
+    ts_candidates: dict[str, list[int]] = {}
+    for col_name in string_columns:
+        sample = phase1_stats.get(f"{col_name}__sample")
+        if sample is not None and not isinstance(sample, str):
+            sample = str(sample)
+        date_candidates[col_name] = _candidate_date_format_indices(sample)
+        ts_candidates[col_name] = _candidate_timestamp_format_indices(sample)
+
+    phase2_exprs = []
+    for col_name in string_columns:
+        if not date_candidates[col_name] and not ts_candidates[col_name]:
+            continue
+
+        col_expr = F.col(col_name)
+        trimmed = F.trim(col_expr)
+        value_expr = (
+            F.when(trimmed == "", F.lit(None)).otherwise(trimmed)
+            if normalize_strings
+            else trimmed
+        )
         safe_trimmed = F.when(
-            trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed
+            value_expr.rlike(_DATE_CANDIDATE_PATTERN), value_expr
         ).otherwise(F.lit(None))
 
-        for idx, date_parser in enumerate(_DATE_FORMATS):
-            parsed_date = _get_parsed_date_expr(safe_trimmed, date_parser)
-            agg_exprs.append(
+        for idx in date_candidates[col_name]:
+            parsed_date = _get_parsed_date_expr(safe_trimmed, _DATE_FORMATS[idx])
+            phase2_exprs.append(
                 F.sum(
-                    F.when(col_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)
+                    F.when(value_expr.isNotNull() & parsed_date.isNull(), 1).otherwise(0)
                 ).alias(_date_fail_key(col_name, idx))
             )
-        for idx, ts_parser in enumerate(_TIMESTAMP_FORMATS):
-            parsed_ts = _get_parsed_ts_expr(safe_trimmed, ts_parser)
-            agg_exprs.append(
+        for idx in ts_candidates[col_name]:
+            parsed_ts = _get_parsed_ts_expr(safe_trimmed, _TIMESTAMP_FORMATS[idx])
+            phase2_exprs.append(
                 F.sum(
-                    F.when(col_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)
+                    F.when(value_expr.isNotNull() & parsed_ts.isNull(), 1).otherwise(0)
                 ).alias(_ts_fail_key(col_name, idx))
             )
 
-    stats = df.agg(*agg_exprs).collect()[0].asDict() if agg_exprs else {}
+    phase2_stats = (
+        df.agg(*phase2_exprs).collect()[0].asDict() if phase2_exprs else {}
+    )
 
     select_exprs = []
     for col_name in df.columns:
@@ -267,33 +433,40 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
             select_exprs.append(F.col(col_name))
             continue
 
-        nn = stats.get(f"{col_name}__nn", 0)
+        nn = phase1_stats.get(f"{col_name}__nn", 0)
         if nn == 0:
-            select_exprs.append(F.col(col_name))
+            if normalize_strings:
+                select_exprs.append(
+                    _normalized_string_expr(F.col(col_name), normalize_strings=True).alias(
+                        col_name
+                    )
+                )
+            else:
+                select_exprs.append(F.col(col_name))
             continue
 
-        int_fail = stats.get(f"{col_name}__int_fail", 0)
-        float_fail = stats.get(f"{col_name}__float_fail", 0)
+        int_fail = phase1_stats.get(f"{col_name}__int_fail", 0)
+        float_fail = phase1_stats.get(f"{col_name}__float_fail", 0)
 
         col_expr = F.col(col_name)
-        trimmed = F.trim(col_expr)
+        value_expr = _normalized_string_expr(col_expr, normalize_strings=normalize_strings)
         safe_trimmed = F.when(
-            trimmed.rlike(_DATE_CANDIDATE_PATTERN), trimmed
+            value_expr.rlike(_DATE_CANDIDATE_PATTERN), value_expr
         ).otherwise(F.lit(None))
 
         date_parser = next(
             (
-                parser
-                for idx, parser in enumerate(_DATE_FORMATS)
-                if stats.get(_date_fail_key(col_name, idx), nn) == 0
+                _DATE_FORMATS[idx]
+                for idx in date_candidates[col_name]
+                if phase2_stats.get(_date_fail_key(col_name, idx), nn) == 0
             ),
             None,
         )
         ts_parser = next(
             (
-                parser
-                for idx, parser in enumerate(_TIMESTAMP_FORMATS)
-                if stats.get(_ts_fail_key(col_name, idx), nn) == 0
+                _TIMESTAMP_FORMATS[idx]
+                for idx in ts_candidates[col_name]
+                if phase2_stats.get(_ts_fail_key(col_name, idx), nn) == 0
             ),
             None,
         )
@@ -301,25 +474,27 @@ def detect_and_cast_columns(df: DataFrame, verbose: bool = False) -> DataFrame:
         if date_parser is not None:
             parsed_date = _get_parsed_date_expr(safe_trimmed, date_parser)
             select_exprs.append(
-                F.when(col_expr.isNull(), None).otherwise(parsed_date).alias(col_name)
+                F.when(value_expr.isNull(), None).otherwise(parsed_date).alias(col_name)
             )
         elif ts_parser is not None:
             parsed_ts = _get_parsed_ts_expr(safe_trimmed, ts_parser)
             select_exprs.append(
-                F.when(col_expr.isNull(), None).otherwise(parsed_ts).alias(col_name)
+                F.when(value_expr.isNull(), None).otherwise(parsed_ts).alias(col_name)
             )
         elif int_fail == 0:
             select_exprs.append(
-                F.when(col_expr.isNull(), None)
-                .otherwise(col_expr.cast(IntegerType()))
+                F.when(value_expr.isNull(), None)
+                .otherwise(value_expr.cast(IntegerType()))
                 .alias(col_name)
             )
         elif float_fail == 0:
             select_exprs.append(
-                F.when(col_expr.isNull(), None)
-                .otherwise(col_expr.cast(DoubleType()))
+                F.when(value_expr.isNull(), None)
+                .otherwise(value_expr.cast(DoubleType()))
                 .alias(col_name)
             )
+        elif normalize_strings:
+            select_exprs.append(value_expr.alias(col_name))
         else:
             select_exprs.append(col_expr)
 
@@ -408,21 +583,18 @@ def add_silver_metadata(
 
 def clean_data(
     df: DataFrame,
-    drop_duplicates: bool = True,
     drop_all_null_rows: bool = True,
     verbose: bool = False,
 ) -> DataFrame:
-    """Normalize names, trim empty strings to null, infer types, optionally dedupe.
+    """Normalize names, trim empty strings to null, and infer column types.
 
-    Renames columns to unique snake_case (via internal helpers), replaces blank
-    strings with null on string columns, runs :py:func:`detect_and_cast_columns`,
-    then optionally drops duplicate rows and rows that are all-null.
+    Renames columns to unique snake_case (via internal helpers), then runs
+    :py:func:`detect_and_cast_columns` with string normalization enabled, and
+    optionally drops rows that are all-null.
 
     :param df: Input dataframe.
-    :param drop_duplicates: If ``True``, call ``dropDuplicates()`` after cleaning.
     :param drop_all_null_rows: If ``True``, call ``dropna(how="all")``.
     :type df: ~pyspark.sql.DataFrame
-    :type drop_duplicates: bool
     :type drop_all_null_rows: bool
 
     :returns: Cleaned dataframe.
@@ -430,15 +602,14 @@ def clean_data(
 
     .. rubric:: Example
 
-    >>> cleaned = clean_data(raw_df, drop_duplicates=True, drop_all_null_rows=True)  # doctest: +SKIP
+    >>> cleaned = clean_data(raw_df, drop_all_null_rows=True)  # doctest: +SKIP
     """
     normalized_columns = _build_unique_column_names(df.columns)
     cleaned_df = df.toDF(*normalized_columns)
-    cleaned_df = _replace_empty_strings_with_nulls(cleaned_df)
-    cleaned_df = detect_and_cast_columns(cleaned_df, verbose=verbose)
+    cleaned_df = detect_and_cast_columns(
+        cleaned_df, verbose=verbose, normalize_strings=True
+    )
 
-    if drop_duplicates:
-        cleaned_df = cleaned_df.dropDuplicates()
     if drop_all_null_rows:
         cleaned_df = cleaned_df.dropna(how="all")
 
