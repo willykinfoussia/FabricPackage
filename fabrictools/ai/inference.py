@@ -11,7 +11,7 @@ def ai_response(
     system_prompt: str | None = None,
     timeout_seconds: int = 60,
 ) -> str:
-    """Run a LangChain ReAct agent (OpenRouter + DuckDuckGo) and return the final answer.
+    """Run a LangChain agent (OpenRouter + DuckDuckGo) and return the final answer.
 
     The agent may search the web via DuckDuckGo when the prompt requires up-to-date
     or factual information. Each call can trigger multiple LLM and search requests.
