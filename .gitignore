@@ -47,6 +47,7 @@ test-results/
 scripts_excel/
 scripts_powerquery/
 scripts_fabrictools/
+tests/
 
 # PySpark / Spark
 derby.log

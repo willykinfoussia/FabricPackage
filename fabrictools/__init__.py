@@ -12,6 +12,7 @@ behaviour are documented on the **defining modules** (and mirrored in Sphinx):
 * :mod:`fabrictools.excel` — Excel formula-style ``Excel.XLookup``, ``Excel.SumIf``, … API
 * :mod:`fabrictools.pipelines` — shared bulk job config (``tables_config`` parsing)
 * :mod:`fabrictools.integrations.ifs` — IFS Cloud OData read helpers (OAuth2, Spark, Lakehouse)
+* :mod:`fabrictools.ai` — agent LangChain OpenRouter + recherche DuckDuckGo (``ai_response``, colonnes IA)
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from fabrictools.io.lakehouse import (
     write_lakehouses,
 )
 from fabrictools.io.warehouse import read_warehouse, write_warehouse
+from fabrictools.ai import AIError, ai_response, transform_ai_column, with_ai_column
 from fabrictools.integrations.ifs import (
     IFSClient,
     IFSConfig,
@@ -176,6 +178,10 @@ _EXPORT_REGISTRY = {
     "build_tcd": build_tcd,
     "year_from_fr_text": year_from_fr_text,
     "with_year_month_from_fr_text": with_year_month_from_fr_text,
+    "AIError": AIError,
+    "ai_response": ai_response,
+    "with_ai_column": with_ai_column,
+    "transform_ai_column": transform_ai_column,
 }
 
 _PQ_EXPORTS = {
