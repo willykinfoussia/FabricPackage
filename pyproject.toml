@@ -34,7 +34,7 @@ dependencies = [
     "langgraph>=0.2",
     "langchain-openrouter>=0.1",
     "langchain-community>=0.3",
-    "duckduckgo-search>=6.0",
+    "ddgs>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -55,7 +55,7 @@ dev = [
     "langgraph>=0.2",
     "langchain-openrouter>=0.1",
     "langchain-community>=0.3",
-    "duckduckgo-search>=6.0",
+    "ddgs>=6.0",
     "pytest>=7.4",
     "pytest-mock>=3.12",
     "build>=1.0",
