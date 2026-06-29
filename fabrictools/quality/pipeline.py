@@ -31,7 +31,7 @@ def clean_and_write_data(
     target_relative_path: str,
     mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
-    auto_partition: bool = True,
+    auto_partition: bool = False,
     auto_partition_threshold_bytes: int = 1_073_741_824,
     spark: Optional[SparkSession] = None,
     verbose: bool = True,
@@ -48,8 +48,8 @@ def clean_and_write_data(
     :param mode: Spark write mode (``overwrite``, ``append``) or Delta ``upsert`` /
         ``merge`` (see :py:func:`fabrictools.write_lakehouse`). Default ``overwrite``.
     :param partition_by: Optional partition columns for :py:func:`fabrictools.write_lakehouse`.
-    :param auto_partition: If ``True`` (default), automatically partition the data
-        by detected date columns if they exist.
+    :param auto_partition: If ``True``, automatically partition the data by detected
+        date columns if they exist. Default ``False``.
     :param auto_partition_threshold_bytes: Threshold in bytes to trigger auto-partitioning.
     :param merge_condition: Delta merge predicate when using ``upsert`` / ``merge``.
     :param upsert_key_columns: Ordered merge-key **candidates** for upsert (see
@@ -190,6 +190,7 @@ def _process_clean_table_job(
     auto_partition_threshold_bytes: int,
     auto_partition_when_partition_by_provided: bool,
     persist_intermediate: bool,
+    persist_source: bool,
     spark: SparkSession,
     verbose: bool,
 ) -> dict[str, Any]:
@@ -200,6 +201,8 @@ def _process_clean_table_job(
     merge_condition = table_job.get("merge_condition")
     upsert_key_columns = table_job.get("upsert_key_columns")
     started_at = perf_counter()
+    source_df: Optional[DataFrame] = None
+    source_is_persisted = False
     silver_df: Optional[DataFrame] = None
     is_persisted = False
 
@@ -215,6 +218,9 @@ def _process_clean_table_job(
             base_path=source_base_path,
             spark=spark,
         )
+        if persist_source:
+            source_df = source_df.persist()
+            source_is_persisted = True
         cleaned_df = clean_data(source_df, verbose=verbose)
         silver_df = add_silver_metadata(
             cleaned_df,
@@ -300,6 +306,8 @@ def _process_clean_table_job(
             },
         }
     finally:
+        if source_is_persisted and source_df is not None:
+            source_df.unpersist()
         if is_persisted and silver_df is not None:
             silver_df.unpersist()
 
@@ -309,7 +317,7 @@ def clean_and_write_all_tables(
     target_lakehouse_name: str,
     mode: str = "overwrite",
     partition_by: Optional[list[str]] = None,
-    auto_partition: bool = True,
+    auto_partition: bool = False,
     auto_partition_threshold_bytes: int = 1_073_741_824,
     tables_config: Optional[list[dict[str, Any]]] = None,
     include_schemas: Optional[list[str]] = None,
@@ -321,6 +329,7 @@ def clean_and_write_all_tables(
     max_workers: Optional[int] = None,
     auto_partition_when_partition_by_provided: bool = True,
     persist_intermediate: bool = False,
+    persist_source: bool = False,
     merge_condition: Optional[str] = None,
     upsert_key_columns: Optional[list[str]] = None,
 ) -> dict[str, Any]:
@@ -336,8 +345,8 @@ def clean_and_write_all_tables(
     :param mode: Default mode when not overridden per table (``overwrite``, ``append``,
         ``merge``, ``upsert``). Default ``overwrite``.
     :param partition_by: Default partition columns for writes.
-    :param auto_partition: If ``True`` (default), automatically partition the data
-        by detected date columns if they exist.
+    :param auto_partition: If ``True``, automatically partition the data by detected
+        date columns if they exist. Default ``False``.
     :param auto_partition_threshold_bytes: Threshold in bytes to trigger auto-partitioning.
     :param tables_config: Optional list of per-table job dicts (see ``pipelines.config``).
     :param include_schemas: Discovery filter: schema allow-list.
@@ -349,6 +358,10 @@ def clean_and_write_all_tables(
         partition detection when a table already has explicit ``partition_by``.
     :param persist_intermediate: If ``True``, persist each cleaned Silver dataframe
         for the duration of its write/merge, then unpersist it.
+    :param persist_source: If ``True``, persist each source dataframe after read so
+        type profiling (``detect_and_cast_columns``) and the write reuse cached data
+        instead of rescanning storage. Trades cluster memory/disk for fewer I/O scans;
+        most useful when profiling runs both aggregation phases. Default ``False``.
     :param merge_condition: Discovery default merge predicate for upsert-like modes.
     :param upsert_key_columns: Ordered merge-key candidate list propagated to each job;
         names are filtered at write time—see :py:func:`fabrictools.write_lakehouse`.
@@ -365,6 +378,7 @@ def clean_and_write_all_tables(
     :type max_workers: int | None
     :type auto_partition_when_partition_by_provided: bool
     :type persist_intermediate: bool
+    :type persist_source: bool
     :type merge_condition: str | None
     :type upsert_key_columns: list[str] | None
     :type spark: ~pyspark.sql.SparkSession | None
@@ -442,6 +456,7 @@ def clean_and_write_all_tables(
                 auto_partition_with_explicit_partitions
             ),
             persist_intermediate=persist_intermediate,
+            persist_source=persist_source,
             spark=_spark,
             verbose=verbose,
         )

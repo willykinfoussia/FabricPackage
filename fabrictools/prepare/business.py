@@ -228,7 +228,7 @@ def make_business_ready(
     target_layer: str = "gold",
     source_format: str = "auto",
     partition_by: Optional[list[str]] = None,
-    auto_partition: bool = True,
+    auto_partition: bool = False,
     auto_partition_threshold_bytes: int = 1_073_741_824,
     max_workers: Optional[int] = None,
     spark: Optional[SparkSession] = None,
@@ -270,7 +270,7 @@ def make_business_ready(
     :param source_format: Source read format: 'auto', 'delta', 'parquet', or 'csv'.
     :param partition_by: Optional target partition columns, resolved after
         business-friendly column renaming.
-    :param auto_partition: Enable automatic partition detection on write.
+    :param auto_partition: Enable automatic partition detection on write. Default ``False``.
     :param auto_partition_threshold_bytes: Minimum estimated size before automatic
         partition cardinality checks run.
     :param max_workers: Maximum number of tables processed concurrently. If ``None``,

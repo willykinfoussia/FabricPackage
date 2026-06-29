@@ -440,7 +440,7 @@ def write_lakehouse(
     upsert_key_columns: Optional[Sequence[str]] = None,
     normalize_column_names: bool = True,
     enable_column_mapping: bool = False,
-    auto_partition: bool = True,
+    auto_partition: bool = False,
     auto_partition_threshold_bytes: int = 1_073_741_824,
 ) -> None:
     """Write a ``DataFrame`` to a Fabric Lakehouse (default format: Delta).
@@ -467,8 +467,8 @@ def write_lakehouse(
     :param enable_column_mapping: If ``True`` and ``format="delta"``, writes table
         properties required for Delta column mapping (mode ``name``), allowing
         column names with spaces or special characters.
-    :param auto_partition: If ``True`` (default), automatically partition the data
-        by detected date columns if they exist.
+    :param auto_partition: If ``True``, automatically partition the data by detected
+        date columns if they exist. Default ``False``.
     :param merge_condition: For ``mode="upsert"`` / ``"merge"``: Delta merge
         predicate (e.g. ``"src.order_id = tgt.order_id"``). When set, overrides
         ``upsert_key_columns`` entirely. Use this when every column in the join must
@@ -535,7 +535,7 @@ def _write_lakehouse_to_base(
     upsert_key_columns: Optional[Sequence[str]] = None,
     normalize_column_names: bool = True,
     enable_column_mapping: bool = False,
-    auto_partition: bool = True,
+    auto_partition: bool = False,
     auto_partition_threshold_bytes: int = 1_073_741_824,
 ) -> tuple[str, str]:
     """Write a Lakehouse path using a pre-resolved Lakehouse base path."""

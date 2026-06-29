@@ -34,7 +34,7 @@ def write_ifs_data_to_lakehouse(
     upsert_key_columns: Optional[Sequence[str]] = None,
     normalize_column_names: bool = True,
     enable_column_mapping: bool = False,
-    auto_partition: bool = True,
+    auto_partition: bool = False,
     auto_partition_threshold_bytes: int = 1_073_741_824,
 ) -> DataFrame:
     """Convert an IFS JSON string to a Spark DataFrame and write it to a Lakehouse.
