@@ -14,6 +14,7 @@ __all__ = [
     "Order",
     "Percentage",
     "Int64",
+    "Currency",
     "type",
     "resolve_column",
     "resolve_columns",
@@ -95,6 +96,18 @@ class Int64:
     Type = "long"
 
 
+class Currency:
+    """Power Query ``Currency.Type`` — stored as Spark ``decimal(19,4)``.
+
+    .. rubric:: Example
+
+    >>> from fabrictools import Table, Currency  # doctest: +SKIP
+    >>> df = Table.TransformColumnTypes(df, {"Montant": Currency.Type})  # doctest: +SKIP
+    """
+
+    Type = "decimal(19,4)"
+
+
 _PQ_TYPE_ALIASES: dict[Any, str] = {
     type.text: "string",
     type.number: "double",
@@ -105,11 +118,13 @@ _PQ_TYPE_ALIASES: dict[Any, str] = {
     type.integer: "long",
     Percentage.Type: "double",
     Int64.Type: "long",
+    Currency.Type: "decimal(19,4)",
     "text": "string",
     "number": "double",
     "date": "date",
     "percentage": "double",
     "int64": "long",
+    "currency": "decimal(19,4)",
 }
 
 

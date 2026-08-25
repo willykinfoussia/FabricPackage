@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Sequence, Union
 
 from pyspark.sql import Column
@@ -181,3 +182,66 @@ class Text:
         >>> df.withColumn("id_text", Text.From(F.col("id")))  # doctest: +SKIP
         """
         return F.coalesce(_as_column(expr).cast("string"), F.lit(""))
+
+    @staticmethod
+    def StartsWith(expr: Union[Column, str], substring: str) -> Column:
+        """Test whether text starts with a prefix (Power Query ``Text.StartsWith``).
+
+        :param expr: Spark column or string literal.
+        :param substring: Prefix to look for (case-sensitive).
+        :type expr: ~pyspark.sql.Column | str
+        :type substring: str
+
+        :returns: Boolean column expression (null when ``expr`` is null).
+        :rtype: ~pyspark.sql.Column
+
+        .. rubric:: Example
+
+        >>> from fabrictools import Table, Text  # doctest: +SKIP
+        >>> from pyspark.sql import functions as F  # doctest: +SKIP
+        >>> df = Table.SelectRows(df, ~Text.StartsWith(F.col("Article"), "SG"))  # doctest: +SKIP
+        """
+        return _as_column(expr).cast("string").startswith(substring)
+
+    @staticmethod
+    def AfterDelimiter(
+        expr: Union[Column, str],
+        delimiter: str,
+        index: int = 0,
+    ) -> Column:
+        """Return the substring after a delimiter occurrence (Power Query ``Text.AfterDelimiter``).
+
+        ``index`` is 0-based from the start: ``0`` is after the first delimiter,
+        ``1`` after the second, and so on. If the occurrence is missing, returns
+        an empty string. Null input stays null.
+
+        :param expr: Spark column or string literal.
+        :param delimiter: Delimiter to search for.
+        :param index: 0-based occurrence index (Power Query ``index``).
+        :type expr: ~pyspark.sql.Column | str
+        :type delimiter: str
+        :type index: int
+
+        :returns: String column expression.
+        :rtype: ~pyspark.sql.Column
+
+        .. rubric:: Example
+
+        >>> from fabrictools import Table, Text  # doctest: +SKIP
+        >>> from pyspark.sql import functions as F  # doctest: +SKIP
+        >>> df = Table.AddColumn(  # doctest: +SKIP
+        ...     df, "Chef de projet", Text.AfterDelimiter(F.col("Chef projet"), " ", 1),
+        ... )
+        """
+        c = _as_column(expr)
+        occurrence = int(index)
+        if occurrence < 0:
+            raise ValueError("Text.AfterDelimiter index must be >= 0")
+        limit = occurrence + 2
+        rest = F.element_at(
+            F.split(c.cast("string"), re.escape(delimiter), limit),
+            limit,
+        )
+        return F.when(c.isNull(), F.lit(None).cast("string")).otherwise(
+            F.coalesce(rest, F.lit(""))
+        )

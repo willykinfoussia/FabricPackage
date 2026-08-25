@@ -71,7 +71,9 @@ from fabrictools.quality.pipeline import (
 from fabrictools.quality.scan import scan_data_errors
 from fabrictools.excel import Excel
 from fabrictools.powerquery import (
+    Currency,
     Date,
+    DateTime,
     Int64,
     List,
     Number,
@@ -185,7 +187,9 @@ _EXPORT_REGISTRY = {
 }
 
 _PQ_EXPORTS = {
+    "Currency": Currency,
     "Date": Date,
+    "DateTime": DateTime,
     "Excel": Excel,
     "Int64": Int64,
     "List": List,

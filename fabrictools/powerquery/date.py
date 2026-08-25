@@ -7,7 +7,7 @@ from typing import Union
 from pyspark.sql import Column
 from pyspark.sql import functions as F
 
-__all__ = ["Date"]
+__all__ = ["Date", "DateTime"]
 
 
 def _as_column(expr: Union[Column, str]) -> Column:
@@ -112,3 +112,38 @@ class Date:
         >>> df.withColumn("due_date", Date.AddDays(F.col("order_date"), 30))  # doctest: +SKIP
         """
         return F.date_add(_as_column(expr), days)
+
+
+class DateTime:
+    """Namespace for Power Query ``DateTime.*`` functions."""
+
+    @staticmethod
+    def LocalNow() -> Column:
+        """Current local timestamp (Power Query ``DateTime.LocalNow``).
+
+        :returns: Timestamp column expression (``current_timestamp``).
+        :rtype: ~pyspark.sql.Column
+
+        .. rubric:: Example
+
+        >>> from fabrictools import DateTime  # doctest: +SKIP
+        >>> DateTime.Date(DateTime.LocalNow())  # doctest: +SKIP
+        """
+        return F.current_timestamp()
+
+    @staticmethod
+    def Date(expr: Union[Column, str]) -> Column:
+        """Extract the date part of a datetime (Power Query ``DateTime.Date``).
+
+        :param expr: Timestamp column or string literal.
+        :type expr: ~pyspark.sql.Column | str
+
+        :returns: Date column expression.
+        :rtype: ~pyspark.sql.Column
+
+        .. rubric:: Example
+
+        >>> from fabrictools import DateTime  # doctest: +SKIP
+        >>> today = DateTime.Date(DateTime.LocalNow())  # doctest: +SKIP
+        """
+        return F.to_date(_as_column(expr))

@@ -60,3 +60,38 @@ class Number:
         ... ])
         """
         return _from_text_expr(expr)
+
+    @staticmethod
+    def ToText(expr: Union[Column, str, int, float], format: str | None = None) -> Column:
+        """Convert a number to text (Power Query ``Number.ToText``).
+
+        When ``format`` is a zero-padded mask such as ``"0000"`` or ``"00"``,
+        the value is left-padded with zeros to that width (e.g. month ``1`` →
+        ``"01"``). Null input stays null.
+
+        :param expr: Numeric column, string column, or numeric literal.
+        :param format: Optional custom format (``"0"`` digits = pad width).
+        :type expr: ~pyspark.sql.Column | str | int | float
+        :type format: str | None
+
+        :returns: String column expression.
+        :rtype: ~pyspark.sql.Column
+
+        .. rubric:: Example
+
+        >>> from fabrictools import Number, Date  # doctest: +SKIP
+        >>> from pyspark.sql import functions as F  # doctest: +SKIP
+        >>> Number.ToText(Date.Month(F.col("Date contractuelle")), "00")  # doctest: +SKIP
+        """
+        if isinstance(expr, (int, float)):
+            col = F.lit(expr)
+        elif isinstance(expr, str):
+            col = F.lit(expr)
+        else:
+            col = expr
+        if format is None:
+            return col.cast("string")
+        mask = str(format)
+        if mask and set(mask) <= {"0"}:
+            return F.lpad(col.cast("long").cast("string"), len(mask), "0")
+        return col.cast("string")
