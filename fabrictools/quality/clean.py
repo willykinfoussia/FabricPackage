@@ -157,6 +157,10 @@ _TIMESTAMP_FORMATS: tuple[str, ...] = (
     "M/d/yyyy h:mm a",
     "MM/dd/yyyy h:mm a",
     "yyyy-MM-dd'T'HH:mm:ss",
+    "yyyy-MM-dd'T'HH:mm:ssX",
+    "yyyy-MM-dd'T'HH:mm:ssXXX",
+    "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+    "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
 )
 
 
