@@ -202,12 +202,16 @@ def _build_periode_dataframe(spark: SparkSession):
         ]
     )
     rows = [
-        ("7 jours", 7, "7_30_90"),
-        ("30 jours", 30, "7_30_90"),
-        ("30 jours", 30, "30_90"),
-        ("90 jours", 90, "7_30_90"),
-        ("90 jours", 90, "30_90"),
-        ("90 jours", 90, "90"),
+        ("7 jours", 7, "7_30_90_365"),
+        ("30 jours", 30, "7_30_90_365"),
+        ("30 jours", 30, "30_90_365"),
+        ("90 jours", 90, "7_30_90_365"),
+        ("90 jours", 90, "30_90_365"),
+        ("90 jours", 90, "90_365"),
+        ("1 an", 365, "7_30_90_365"),
+        ("1 an", 365, "30_90_365"),
+        ("1 an", 365, "90_365"),
+        ("1 an", 365, "365"),
     ]
     return spark.createDataFrame(rows, schema)
 
@@ -247,7 +251,7 @@ def make_business_ready(
     (source path leaf matching ``Dimension_Date`` / ``DimensionDate`` style names),
     a small Delta lookup ``Periode`` is also written (always ``overwrite``,
     ``auto_partition=False``): columns ``PeriodeLabel``, ``Jours``, and
-    ``periode_relation_key`` (six rows keyed like :py:func:`fabrictools.dimensions.date.build_dimension_date`
+    ``periode_relation_key`` (ten rows keyed like :py:func:`fabrictools.dimensions.date.build_dimension_date`
     ``periode_relation_key``) so the semantic model can relate ``DimensionDate`` to ``Periode``.
 
     :param source_lakehouse_name: Source Lakehouse (e.g. Silver).
