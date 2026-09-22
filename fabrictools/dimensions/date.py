@@ -46,6 +46,9 @@ def build_dimension_date(
     client/report "today"). Re-run the dimension job when those flags must stay
     aligned with the operational calendar day.
 
+    Column ``Year * 12 + Mois`` is the integer ``calendar year * 12 + month``
+    (month 1–12), a sequential month index.
+
     Column ``periode_relation_key`` is a string bridge key for relating to the small
     ``Periode`` lookup written by :py:func:`fabrictools.make_business_ready`:
     ``7_30_90_365`` if in the last-7-days window, else ``30_90_365`` if in last 30
@@ -147,6 +150,7 @@ def build_dimension_date(
         F.date_format(F.col("date"), "MMM").alias("short_month"),
         F.year("date").alias("calendar_year"),
         F.month("date").alias("calendar_month"),
+        (F.year("date") * F.lit(12) + F.month("date")).alias("year_12_plus_month"),
         fiscal_year_expr.alias("fiscal_year"),
         fiscal_month_expr.alias("fiscal_month"),
         F.concat(F.lit("CY"), F.year("date").cast("string")).alias(
