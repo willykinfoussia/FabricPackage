@@ -364,7 +364,7 @@ ft.write_warehouse(df_wh, warehouse_name="RetailWarehouse", table="dbo.orders_sn
 
 #### `build_dimension_date`
 
-Ajoute notamment les indicateurs glissants (`is_last_7days`, `is_last_30days`, `is_last_90days`, `is_last_365days`) et la colonne `periode_relation_key` (`7_30_90_365`, `30_90_365`, `90_365`, `365`, `0`) pour relier la dimension à la table `Periode` publiée par `make_business_ready`.
+Ajoute notamment les indicateurs glissants (`is_last_7days`, `is_last_30days`, `is_last_90days`, `is_last_365days`), `is_today_or_before` (1 si la date est aujourd'hui ou avant, sinon 0) et `is_current_month_or_before` (1 si le mois est le mois courant ou un mois antérieur, y compris les jours suivants du mois courant, sinon 0), `is_trailing_14_calendar_months` (1 du 1er jour du mois situé 13 mois avant le mois courant jusqu'au dernier jour du mois courant : le 15 octobre 2026 couvre du 1er septembre 2025 au 31 octobre 2026, sinon 0), ainsi que la colonne `periode_relation_key` (`7_30_90_365`, `30_90_365`, `90_365`, `365`, `0`) pour relier la dimension à la table `Periode` publiée par `make_business_ready`.
 
 ```python
 dim_date = ft.build_dimension_date(start_date="2020-01-01", end_date="2030-12-31")

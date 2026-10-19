@@ -46,6 +46,18 @@ def build_dimension_date(
     client/report "today"). Re-run the dimension job when those flags must stay
     aligned with the operational calendar day.
 
+    Columns ``is_today_or_before`` and ``is_current_month_or_before`` are also
+    integers 0 or 1, using the same Spark ``current_date()``.
+    ``is_today_or_before`` is 1 when ``date`` is on or before that day, else 0.
+    ``is_current_month_or_before`` is 1 when the row's calendar month is the
+    current month or any earlier month (including later days of the current
+    month), else 0.
+
+    Column ``is_trailing_14_calendar_months`` is 1 when ``date`` falls in the
+    inclusive calendar-month window from the first day of the month 13 months
+    before the current month through the last day of the current month, else 0.
+    On 15 October 2026 that window is 1 September 2025 through 31 October 2026.
+
     Column ``Year * 12 + Mois`` is the integer ``calendar year * 12 + month``
     (month 1–12), a sequential month index.
 
@@ -121,6 +133,8 @@ def build_dimension_date(
     ).otherwise(F.year("date") - F.lit(1))
 
     ref_date = F.current_date()
+    trailing_14_months_start = F.add_months(F.trunc(ref_date, "month"), -13)
+    trailing_14_months_end = F.last_day(ref_date)
 
     date_df = df.select(
         F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
@@ -192,6 +206,17 @@ def build_dimension_date(
         .between(F.date_sub(ref_date, 365), ref_date)
         .cast("int")
         .alias("is_last_365days"),
+        (F.col("date") <= ref_date).cast("int").alias("is_today_or_before"),
+        (
+            (F.year("date") * F.lit(12) + F.month("date"))
+            <= (F.year(ref_date) * F.lit(12) + F.month(ref_date))
+        )
+        .cast("int")
+        .alias("is_current_month_or_before"),
+        F.col("date")
+        .between(trailing_14_months_start, trailing_14_months_end)
+        .cast("int")
+        .alias("is_trailing_14_calendar_months"),
         F.when(
             F.col("date").between(F.date_sub(ref_date, 7), ref_date),
             F.lit("7_30_90_365"),
