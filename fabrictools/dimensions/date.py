@@ -53,10 +53,15 @@ def build_dimension_date(
     current month or any earlier month (including later days of the current
     month), else 0.
 
-    Column ``is_trailing_14_calendar_months`` is 1 when ``date`` falls in the
-    inclusive calendar-month window from the first day of the month 13 months
-    before the current month through the last day of the current month, else 0.
-    On 15 October 2026 that window is 1 September 2025 through 31 October 2026.
+    Columns ``is_prior_year_plus_month_through_current_month`` and
+    ``is_prior_year_plus_month_through_previous_month`` share the same start:
+    the first day of the month 13 months before the current month (previous
+    year, plus one extra month). They differ only at the end.
+    ``through_current_month`` is 1 through the last day of the current month.
+    ``through_previous_month`` is 1 through the last day of the previous month
+    and is 0 for the whole current month. On 15 October 2026 the shared start
+    is 1 September 2025; the first column runs through 31 October 2026 and the
+    second through 30 September 2026.
 
     Column ``Year * 12 + Mois`` is the integer ``calendar year * 12 + month``
     (month 1–12), a sequential month index.
@@ -133,8 +138,9 @@ def build_dimension_date(
     ).otherwise(F.year("date") - F.lit(1))
 
     ref_date = F.current_date()
-    trailing_14_months_start = F.add_months(F.trunc(ref_date, "month"), -13)
-    trailing_14_months_end = F.last_day(ref_date)
+    prior_year_plus_month_start = F.add_months(F.trunc(ref_date, "month"), -13)
+    through_current_month_end = F.last_day(ref_date)
+    through_previous_month_end = F.date_sub(F.trunc(ref_date, "month"), 1)
 
     date_df = df.select(
         F.date_format(F.col("date"), "yyyyMMdd").cast("int").alias("date_key"),
@@ -214,9 +220,13 @@ def build_dimension_date(
         .cast("int")
         .alias("is_current_month_or_before"),
         F.col("date")
-        .between(trailing_14_months_start, trailing_14_months_end)
+        .between(prior_year_plus_month_start, through_current_month_end)
         .cast("int")
-        .alias("is_trailing_14_calendar_months"),
+        .alias("is_prior_year_plus_month_through_current_month"),
+        F.col("date")
+        .between(prior_year_plus_month_start, through_previous_month_end)
+        .cast("int")
+        .alias("is_prior_year_plus_month_through_previous_month"),
         F.when(
             F.col("date").between(F.date_sub(ref_date, 7), ref_date),
             F.lit("7_30_90_365"),
