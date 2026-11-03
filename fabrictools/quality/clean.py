@@ -57,18 +57,38 @@ def _build_unique_column_names(columns: List[str]) -> List[str]:
     normalized = [_to_snake_case(col_name) for col_name in columns]
     is_odata = "odata_context" in normalized
 
-    seen: dict[str, int] = {}
-    result: List[str] = []
+    bases: List[str] = []
     for base in normalized:
         if is_odata and base != "odata_context" and base.startswith("value_"):
             base = base[len("value_") :]
-        count = seen.get(base, 0) + 1
-        seen[base] = count
-        if count == 1:
-            result.append(base)
+        bases.append(base)
+
+    # First occurrence of each base keeps that name. Later copies take the
+    # smallest ``{base}_2``, ``{base}_3``, … that is not already reserved, so a
+    # generated suffix cannot collide with another column's own base
+    # (e.g. ``Marge à terminaison`` / ``% Marge à terminaison`` /
+    # ``Marge à terminaison_2``).
+    used: set[str] = set()
+    result: List[Optional[str]] = [None] * len(bases)
+    pending: List[tuple[int, str]] = []
+    for index, base in enumerate(bases):
+        if base not in used:
+            result[index] = base
+            used.add(base)
         else:
-            result.append(f"{base}_{count}")
-    return result
+            pending.append((index, base))
+
+    for index, base in pending:
+        suffix = 2
+        while True:
+            candidate = f"{base}_{suffix}"
+            if candidate not in used:
+                result[index] = candidate
+                used.add(candidate)
+                break
+            suffix += 1
+
+    return [name for name in result if name is not None]
 
 
 def _normalized_name_collisions(columns: List[str]) -> dict[str, List[str]]:

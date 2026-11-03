@@ -57,6 +57,23 @@ def test_build_unique_column_names_never_strips_odata_context() -> None:
     assert _build_unique_column_names(columns) == ["odata_context"]
 
 
+def test_build_unique_column_names_skips_suffix_already_used_by_another_column() -> None:
+    columns = [
+        "Marge à terminaison",
+        "% Marge à terminaison",
+        "Marge à terminaison_2",
+    ]
+    assert _build_unique_column_names(columns) == [
+        "marge_a_terminaison",
+        "marge_a_terminaison_3",
+        "marge_a_terminaison_2",
+    ]
+
+
+def test_build_unique_column_names_suffixes_plain_duplicates() -> None:
+    assert _build_unique_column_names(["A", "A", "A"]) == ["a", "a_2", "a_3"]
+
+
 def test_clean_data_strips_value_prefix_for_odata_payload(spark) -> None:
     df = spark.createDataFrame(
         [
